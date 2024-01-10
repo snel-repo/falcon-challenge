@@ -24,10 +24,11 @@ multiday aggregation decoding
 
 test day decoding
 
-TODO build out the utilities we want to provide...
+TODO build out the utilities lib and upload lib we want to provide...
 
 ## Bug bash
 - Not expecting any odd numbers in start/time times, but seeing odd numbers in epoch labels
+- Expecting 5-7 DoF, but reliably receiving 7 active dimensions
 
 """
 
@@ -48,6 +49,9 @@ sample = files[0]
 #%%
 # Load nwb file
 def load_nwb(fn: str):
+    r"""
+        Load NWB for Human Motor ARAT dataset. Kinematic timestamps are provided at 100Hz.
+    """
     with NWBHDF5IO(fn, 'r') as io:
         nwbfile = io.read()
         # print(nwbfile)
@@ -64,7 +68,7 @@ def load_nwb(fn: str):
 
 def bin_units(
         units: pd.DataFrame,
-        bin_size_s: float = 0.001,
+        bin_size_s: float = 0.01,
         bin_end_timestamps: np.ndarray | None = None
     ) -> np.ndarray:
     r"""
@@ -97,7 +101,7 @@ print(binned.shape)
 all_tags = [tag for sublist in epochs['tags'] for tag in sublist]
 unique_tags = list(set(all_tags))
 epoch_palette = sns.color_palette(n_colors=len(unique_tags))
-# Some tags have "Presentation" in their string, mute colors and alpha if so
+# Mute colors of "Presentation" phases
 for idx, tag in enumerate(unique_tags):
     if 'Presentation' in tag:
         epoch_palette[idx] = (0.5, 0.5, 0.5, 0.5)
@@ -145,7 +149,6 @@ plt.xlim([0, 10])
 
 #%%
 # Basic quantitative
-
 # Neural: check for dead channels, firing rate distribution
 DEAD_THRESHOLD = 0.001 # Firing less than 0.1Hz is dead - which is 0.001 spikes per 10ms.
 mean_firing_rates = binned.mean(axis=0)
@@ -158,26 +161,44 @@ ax.hist(mean_firing_rates, bins=30, alpha=0.75)
 ax.set_xticklabels([f'{x*100:.0f}' for x in plt.xticks()[0]])
 ax.set_xlabel('Mean Firing Rate (Hz)')
 ax.set_ylabel('Channel Count')
-ax.set_title(f'Firing Rates')
+ax.set_title(f'{sample.stem} Firing Rates')
 ax.text(0.95, 0.95, f' {len(dead_channels)} Dead channel(s) < 0.1Hz:\n{dead_channels}', transform=ax.transAxes, ha='right', va='top')
 
 #%%
 # Kinematics: check for range on each dimension, overall time spent in active/nonactive phases
-# Calculate range for each kinematic dimension
-kin_range = np.ptp(kin, axis=0)  # Peak-to-peak (max-min) for each dimension
+
+# Calculate range for each kinematic dimension (x,y,z,roll,pitch,yaw,grasp).
+# Units inferred as virtual meters and radians. Grasp is arbitrary.
+# TODO Ask: Grasp dimension isn't making a ton of sense to me. Why is there no weight at 1?
+# TODO Feedback: Violinplot is not ideal
+ax = plt.gca()
+ax.scatter(np.arange(7), np.min(kin, axis=0), c='k', marker='_', s=100)
+ax.scatter(np.arange(7), np.max(kin, axis=0), c='k', marker='_', s=100)
+ax = sns.violinplot(kin, truncate=True, ax=ax)
+
+ax.set_ylabel('Recorded Units')
+ax.set_xticks(np.arange(7))
+ax.set_xticklabels(['x', 'y', 'z', 'roll', 'pitch', 'yaw', 'grasp'])
+
+# * Active times
+print(f"Total time (s): {timestamps[-1]}")
+# Label active if epoch does not contain "presentation"
+active_phases = epochs.apply(lambda epoch: 'Presentation' not in epoch.tags[0], axis=1)
+# Sum active phases
+time_active = np.sum(epochs[active_phases].stop_time - epochs[active_phases].start_time)
+time_inactive = np.sum(epochs[~active_phases].stop_time - epochs[~active_phases].start_time)
+print(f"Seconds active (s) (Phase labeled): {time_active:.2f}")
+print(f"Percent active (Phase labeled): {time_active / (time_active + time_inactive) * 100:.2f}%")
 
 # Define active phase criteria and calculate time spent
-# Example: Active if velocity > threshold
+velocity_threshold = 0.002 # ~ noise threshold
 velocity = np.diff(kin, axis=0)  # Simple velocity estimate
 active_phases = np.sum(np.abs(velocity) > velocity_threshold, axis=0)
 time_active = np.sum(active_phases) * (timestamps[1] - timestamps[0])  # Total active time
-
+print(f"Percent active (Variance inferred): {time_active / timestamps[-1] * 100:.2f}%")
 #%%
 # Smooth data, make base decoder
 
-
-#%%
-# Make base decoder
 
 
 #%%
