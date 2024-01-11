@@ -283,7 +283,8 @@ velocity = np.gradient(kin_targets, axis=0)  # Simple velocity estimate
 ax.set_xlim([5, 10])
 
 #%%
-NEURAL_TAU = 60. # exponential filter (per human motor practice), in units of ms
+NEURAL_TAU = 200. # exponential filter (per human motor practice), in units of ms
+# NEURAL_TAU = 60. # exponential filter (per human motor practice), in units of ms
 
 def apply_exponential_filter(signal, tau, bin_size=10):
     """
@@ -295,11 +296,15 @@ def apply_exponential_filter(signal, tau, bin_size=10):
     :return: Filtered signal
     """
     # Time array (considering the length to be sufficiently long for the decay)
-    t = np.arange(0, 5 * tau, bin_size)  # 5*tau ensures capturing most of the decay
+    t = np.arange(0, 3 * tau, bin_size)  # 3*tau to parity matlab
+    # t = np.arange(0, 3 * tau, bin_size)  # 3*tau to parity matlab
+    # t = np.arange(0, 5 * tau, bin_size)  # 5*tau ensures capturing most of the decay
     # Exponential filter kernel
     kernel = np.exp(-t / tau)
     # Normalize the kernel
     kernel /= np.sum(kernel)
+    # Matlab parity
+    kernel = np.array([0.0636, 0.0615, 0.0594, 0.0574, 0.0555, 0.0536, 0.0518, 0.0501, 0.0484, 0.0467, 0.0452, 0.0436, 0.0422, 0.0408, 0.0394, 0.0381, 0.0368, 0.0355, 0.0343, 0.0331, 0.0321, 0.0310])
     # Apply the filter
     filtered_signal = np.array([convolve(signal[:, ch], kernel, mode='full')[-len(signal):] for ch in range(signal.shape[1])]).T
     return filtered_signal
@@ -310,19 +315,18 @@ ax = f.gca()
 kinplot(filtered_signal[:, 3:4] * 100, timestamps, ax=ax, palette=palette)
 # kinplot(binned[:, 3:4] * 100, timestamps, ax=ax, palette=palette)
 ax.set_xlim([0, 10])
-#%%
-# compute first pc of filtered signal
-from sklearn.decomposition import PCA
-pca = PCA(n_components=1)
-pca.fit(binned)
-# pca.fit(filtered_signal)
-print(pca.explained_variance_ratio_)
-print(pca.components_)
-# Plot timecourse of 1st PC
-f = plt.figure(figsize=(20, 10))
-ax = f.gca()
-ax.plot(pca.transform(binned)[:100])
 
+# Reproduce and plot the kernel
+# t = np.arange(0, 3 * NEURAL_TAU, BIN_SIZE_MS)  # 5*tau ensures capturing most of the decay
+# # Exponential filter kernel
+# kernel = np.exp(-t / NEURAL_TAU)
+# # Normalize the kernel
+# kernel /= np.sum(kernel)
+# # Plot
+# f = plt.figure(figsize=(20, 10))
+# ax = f.gca()
+# ax.plot(t, kernel)
+# print(kernel)
 #%%
 # Make and eval train test splits
 # From NLB tools
@@ -381,33 +385,207 @@ def fit_and_eval_decoder(
     decoder.fit(train_rates, train_behavior)
     return decoder.score(eval_rates, eval_behavior), decoder
 
-print(filtered_signal.shape)
-print(kin_targets.shape)
 TRAIN_TEST = (0.8, 0.2)
-train_x, test_x = np.split(filtered_signal, [int(TRAIN_TEST[0] * filtered_signal.shape[0])])
-train_y, test_y = np.split(velocity, [int(TRAIN_TEST[0] * kin_targets.shape[0])])
-score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
-pred_y = decoder.predict(test_x)
-print(score)
 
+# Remove timepoints where nothing is happening in the kinematics
+still_times = np.all(np.abs(velocity) < 0.001, axis=1)
 
-#%%
-print(pred_y.shape)
-print(test_y.shape)
-from sklearn.metrics import r2_score
+final_signal = filtered_signal[~still_times]
+final_target = velocity[~still_times]
 
-decoder = Ridge(alpha=0.0)
+train_x, test_x = np.split(final_signal, [int(TRAIN_TEST[0] * final_signal.shape[0])])
+train_y, test_y = np.split(final_target, [int(TRAIN_TEST[0] * final_target.shape[0])])
+x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
+x_std[x_std == 0] = 1
+y_mean, y_std = np.nanmean(train_y, axis=0), np.nanstd(train_y, axis=0)
+y_std[y_std == 0] = 1
+
+train_x = (train_x - x_mean) / x_std
+test_x = (test_x - x_mean) / x_std
+train_y = (train_y - y_mean) / y_std
+test_y = (test_y - y_mean) / y_std
+
+print(np.isnan(train_x).any())
 is_nan_y = np.isnan(train_y).any(axis=1)
 train_x = train_x[~is_nan_y]
 train_y = train_y[~is_nan_y]
-decoder.fit(train_x, train_y)
 
-# compute r2
-print(test_x.shape, test_y.shape)
 is_nan_y = np.isnan(test_y).any(axis=1)
 test_x = test_x[~is_nan_y]
 test_y = test_y[~is_nan_y]
 
+score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
+pred_y = decoder.predict(test_x)
+print(score)
+
+#%%
+# Inverse OLE - strict translation of matlab
+from scipy import stats
+
+# def ControlSpaceToDomainCells(K):
+
+K_train = train_y  # Time x Dims
+F_train = train_x  # Time x Channels
+K_val = test_y
+F_val = test_x
+NUM_DOMAINS = 6
+IgnoreIdx = np.zeros(30, dtype=bool)
+IgnoreIdx[7:] = 1
+# Kt = ControlSpaceToDomainCells(K_train)
+# Kv = ControlSpaceToDomainCells(K_val)
+# K = ControlSpaceToDomainCells(np.vstack([KinematicSig, KinematicSig_val]))
+# I = ControlSpaceToDomainCells(IgnoreIdx)
+
+invSigma = np.zeros((F_train.shape[1], F_train.shape[1], NUM_DOMAINS))
+import numpy as np
+from scipy import stats
+
+# Assuming F_train is your neural signals matrix (Time x Channels)
+# and K_train is your kinematic signals matrix (Time x Kinematic Dimensions)
+num_kin_dims = K_train.shape[1]
+num_neural_units = F_train.shape[1]
+# Initialize the invSigma matrix
+invSigma = np.zeros((num_neural_units, num_neural_units, num_kin_dims))
+
+# Loop over each neural unit
+for i in range(num_neural_units):
+    # Loop over each kinematic dimension
+    for k in range(num_kin_dims):
+        # Add a column of ones to K_train for the intercept
+        # Perform linear regression
+        slope, intercept, r_value, p_value, std_err = stats.linregress(K_train[:, k], F_train[:, i])
+
+        # Calculate residuals
+        residuals = F_train[:, i] - (intercept + slope * K_train[:, k])
+        # Calculate variance of residuals and store its inverse
+        Sigma = np.var(residuals)
+        invSigma[i, i, k] = 1 / Sigma if Sigma != 0 else 0
+# for i in range(train_x.shape[1]):
+#     for d in range(NUM_DOMAINS):
+#         _, _, _, _, residuals = stats.linregress(np.hstack([np.ones((Kt[d].shape[0], 1)), Kt[d][:, ~I[d]]]), F_train[:, i].astype(np.float32))
+#         Sigma = np.var(residuals)
+#         invSigma[i, i, d] = 1 / Sigma
+
+lambda_ = 4.
+lambda1 = 1. # skip cross val, no major impact in Pitt data and complex to implement
+
+# lambda_ = np.concatenate(([0], np.logspace(-3, 6, 100)))
+# lambda1 = np.concatenate(([0], np.logspace(-3, 6, 100)))
+# idx1 = range(len(lambda1))
+# idx = range(len(lambda_))
+# metric = np.full((max(idx), max(idx1)), np.inf)
+
+import numpy as np
+
+# Assuming KinematicSig is the kinematic signals matrix (Time x Kinematic Dimensions)
+# NeuralSig is the neural signals matrix (Time x Channels)
+# lambda1 and lambda are regularization parameters
+# IgnoreIdx is a boolean array indicating which kinematic dimensions to ignore
+
+KinematicSig = K_train
+NeuralSig = F_train
+# Initial ridge regression
+X = np.hstack([np.ones((KinematicSig.shape[0], 1)), KinematicSig])
+W = np.linalg.pinv(X.T @ X + lambda1 * np.eye(KinematicSig.shape[1] + 1)) @ X.T @ NeuralSig
+baselines = W[0, :]
+W1 = W[1:, :]
+
+# Adjusting for ignored indices
+W1_ = np.zeros((W1.shape[1], len(IgnoreIdx)))
+W1_[:, ~IgnoreIdx] = W1.T
+
+# Ridge regression per kinematic dimension
+num_kin_dims = KinematicSig.shape[1]
+final_weights = []
+
+for k in range(num_kin_dims):
+    if not IgnoreIdx[k]:
+        w1invSigma = W1_[:, k].T @ invSigma[:, :, k]
+        Wt = np.linalg.pinv(w1invSigma @ W1_[:, k] + lambda_ * np.eye(W1_[:, k].shape[0])) @ w1invSigma
+        final_weights.append(Wt.T)
+
+# Concatenate the weights for each dimension
+final_weights = np.stack(final_weights, axis=1)
+
+from sklearn.base import BaseEstimator, RegressorMixin
+
+class CustomPredictor(BaseEstimator, RegressorMixin):
+    def __init__(self, weights, baselines):
+        self.weights = weights
+        self.baselines = baselines
+
+    def predict(self, X):
+        return (X - self.baselines) @ self.weights
+
+# Assuming final_weights and baselines are the weights and baselines computed earlier
+predictor = CustomPredictor(final_weights, baselines)
+
+
+
+print(train_x.shape, test_x.shape)
+"""
+    Parity notes:
+
+    # PrepData
+    Pitt:
+    Full Prep: Original timepoint is 12922 * 2 = 25.8440
+    Their split prep:
+    - 12922, and 2290 (with nans in between)
+        - Their val is 3 random trials (floor 20% of 18 trials = 3)
+
+    Our dimensions:
+    - Train - 20592 x C
+    - Val - 5144 x C
+        - Roughly 25.736s
+
+    # OK, so extracting the relevant fields
+    - Pitt:
+        - 2006 non-nan bins = 4.012s
+        - Pitt then further kills non-calibration (defined by TaskState) and non-moving samples, which brings to about just 800 bins of activity
+
+    - Ours:
+        -
+
+
+
+    After data loading:
+    Pitt dimensions:
+    - Train - 4507 x C=175
+    - Val - 815 x C
+    # ! After some processing, we've lost some data, down to 4465 timepoints
+    # ! And val is 861 - 5326 in total, vs 5322 before
+
+    # ---
+
+    - # ! How is their split computed? - Make parity on their side
+    - # ! Why do they have so few timepoints?
+    - Get parity on channels!
+    - Looks like their crossval uses lambda=1e6
+    - Looks like inverse OLE is substantial other regularization?
+
+    Other high level notes
+    - [x] Pitt uses NEURAL signal AND KIN signal zscore (does nothing useful)
+    - [x] Final scores computed on train sets
+        - When switching to val set, reported score is 0.2-0.3 (vs 0.4-0.5).
+"""
+
+
+print(pred_y.shape)
+print(test_y.shape)
+from sklearn.metrics import r2_score
+
+decoder = Ridge(alpha=200.0)
+# decoder = Ridge(alpha=20000.0)
+decoder.fit(train_x, train_y)
+
+# compute r2
+# print(test_x.shape, test_y.shape)
+is_nan_y = np.isnan(test_y).any(axis=1)
+test_x = test_x[~is_nan_y]
+test_y = test_y[~is_nan_y]
+
+# pred_y = predictor.predict(test_x)
+# train_pred_y = predictor.predict(train_x)
 
 pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
