@@ -48,7 +48,7 @@ import torch
 import torch.nn.functional as F
 from scipy.signal import convolve
 
-from pynwb import NWBFile, NWBHDF5IO, TimeSeries
+from pynwb import NWBHDF5IO
 
 root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
 # root = Path('./data/human_motor')
@@ -60,8 +60,19 @@ sample = files[0]
 print(sample)
 session_query = 'S53_set_1'
 # session_query = 'S77'
+# session_query = 'S591_set_1'
 train_files = [f for f in files if session_query in str(f)]
 print(train_files)
+
+is_5dof = lambda f: int(f.stem[len('pitt_thin_session_S'):].split('_')[0]) in range(364, 605)
+is_5dof_files = np.array([is_5dof(f) for f in train_files])
+
+# check if not uniform and report
+if not all(is_5dof_files) and not all(~is_5dof_files):
+    print("Warning: Not all files are same DoF")
+    uniform_dof = 5
+else:
+    uniform_dof = 5 if is_5dof_files[0] else 7
 
 #%%
 # Load nwb file
@@ -128,6 +139,11 @@ timestamps = np.concatenate(all_timestamps, axis=0)
 epochs = pd.concat(epochs, axis=0)
 #%%
 # Basic qualitative
+palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
+dim_canon = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'grasp']
+to_plot = dim_canon
+if uniform_dof == 5:
+    to_plot = ['tx', 'ty', 'tz', 'rx', 'grasp']
 
 all_tags = [tag for sublist in epochs['tags'] for tag in sublist]
 unique_tags = list(set(all_tags))
@@ -135,7 +151,10 @@ epoch_palette = sns.color_palette(n_colors=len(unique_tags))
 # Mute colors of "Presentation" phases
 for idx, tag in enumerate(unique_tags):
     if 'Presentation' in tag:
-        epoch_palette[idx] = (0.5, 0.5, 0.5, 0.5)
+        epoch_palette[idx] = (0.9, 0.9, 0.9, 0.1)
+    else:
+        # white
+        epoch_palette[idx] = (1, 1, 1, 0.5)
 
 def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
     if ax is None:
@@ -150,16 +169,16 @@ def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
     ax.set_ylabel('Neuron #')
     # ax.set_title(sample.stem)
 
-def kinplot(kin, timestamps, ax=None, palette=None):
+def kinplot(kin, timestamps, ax=None, palette=None, to_plot=to_plot):
     if ax is None:
         ax = plt.gca()
-    num_dims = kin.shape[1]  # Assuming kin is a 2D array with shape (time, dimensions)
 
     if palette is None:
-        palette = plt.cm.viridis(np.linspace(0, 1, num_dims))
-
-    for i in range(num_dims):
-        ax.plot(timestamps, kin[:, i], color=palette[i])
+        palette = plt.cm.viridis(np.linspace(0, 1, len(dim_canon)))
+    for kin_label in to_plot:
+        kin_idx = dim_canon.index(kin_label)
+        ax.plot(timestamps, kin[:, kin_idx], color=palette[kin_idx])
+    print(timestamps.min(), timestamps.max())
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Kinematics')
     # ax.set_title(sample.stem)
@@ -170,23 +189,48 @@ def epoch_annote(epochs, ax=None):
     for _, epoch in epochs.iterrows():
         # print(epoch.start_time, epoch.stop_time, epoch.tags)
         epoch_idx = unique_tags.index(epoch.tags[0])
-        ax.axvspan(epoch['start_time'], epoch['stop_time'], color=epoch_palette[epoch_idx], alpha=0.5)
+        # ax.axvspan(epoch['start_time'], epoch['stop_time'], color=epoch_palette[epoch_idx], alpha=0.5)
 
 # Plot together
 # Increase font sizes
-plt.rcParams.update({'font.size': 16})
+custom_params = {"axes.spines.right": False, "axes.spines.top": False}
+sns.set_theme(style="ticks", rc=custom_params)
+# sns.barplot(x=["A", "B", "C"], y=[1, 3, 2])
+plt.rcParams.update({
+    'font.size': 16,
+    'axes.labelsize': 16,
+})
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+
 rasterplot(binned, ax=ax1)
-kinplot(kin, timestamps, ax=ax2)
+kinplot(kin, timestamps, palette=palette, ax=ax2)
+ax2.set_ylabel('Raw Visual Position')
 epoch_annote(epochs, ax=ax1)
 epoch_annote(epochs, ax=ax2)
-plt.suptitle(session_query)
+plt.suptitle(f'{session_query} (DoF: {uniform_dof})')
 plt.tight_layout()
-# plt.xlim([0, 10])
+
+xticks = np.arange(0, 50, 10)
+plt.xlim(xticks[0], xticks[-1])
+plt.xticks(xticks, labels=xticks.round(2))
+
 
 print(binned.shape)
 print(kin.shape)
 print(timestamps.shape, timestamps.max())
+
+#%%
+# Just show kinematics
+fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+kinplot(kin, timestamps, palette=palette, ax=ax)
+ax.set_ylabel('Raw Visual Position')
+epoch_annote(epochs, ax=ax)
+plt.suptitle(f'{session_query} (DoF: {uniform_dof})')
+plt.tight_layout()
+
+xticks = np.arange(0, 50, 10)
+plt.xlim(xticks[0], xticks[-1])
+plt.xticks(xticks, labels=xticks.round(2))
 
 
 #%%
@@ -247,7 +291,7 @@ print(f"Percent active (Variance inferred): {time_active / timestamps[-1] * 100:
 # Smooth data for decoding make base linear decoder
 BIN_SIZE_MS = 10
 DEFAULT_TARGET_SMOOTH_MS = 490
-palette = sns.color_palette(n_colors=kin.shape[1])
+palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
 
 def gaussian_kernel(size, sigma):
     """
@@ -275,12 +319,24 @@ ax = plt.gca()
 kin_targets = smooth(kin)
 # Compute velocity
 # Plot together to compare
-kinplot(kin, timestamps, ax=ax, palette=palette)
-kinplot(kin_targets - 0.05, timestamps, ax=ax, palette=palette) # Offset for visual clarity
+# kinplot(kin, timestamps, ax=ax, palette=palette)
+kinplot(kin_targets, timestamps, ax=ax, palette=palette) # Offset for visual clarity
 
+xticks = np.arange(0, 50, 10)
+plt.xlim(xticks[0], xticks[-1])
+plt.xticks(xticks, labels=xticks.round(2))
+
+#%%
+ax = plt.gca()
 velocity = np.gradient(kin_targets, axis=0)  # Simple velocity estimate
-# kinplot(velocity, timestamps, ax=ax)
-ax.set_xlim([5, 10])
+kinplot(velocity, timestamps, ax=ax, palette=palette)
+
+xticks = np.arange(0, 50, 10)
+plt.xlim(xticks[0], xticks[-1])
+plt.xticks(xticks, labels=xticks.round(2))
+
+
+
 
 #%%
 NEURAL_TAU = 200. # exponential filter (per human motor practice), in units of ms

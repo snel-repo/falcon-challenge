@@ -50,7 +50,7 @@ def to_nwb(fn):
     # Align all times to start of 1st bin of data.
     for recording_box in range(bin_time.shape[0]):
         raw_spike_time[payload['source_index'] == recording_box] -= bin_time[recording_box][0] - BIN_SIZE_MS/1000
-        bin_time[recording_box] -= bin_time[recording_box][0]
+        bin_time[recording_box] -= bin_time[recording_box][0] - BIN_SIZE_MS/1000
         # Clip other recorded spikes to timestep 0, assuming not too negative
         # assert np.all(raw_spike_time[payload['source_index'] == recording_box] >= -(BIN_SIZE_MS/1000)/4)
         # raw_spike_time[payload['source_index'] == recording_box] = np.clip(raw_spike_time[payload['source_index'] == recording_box], 0, None)

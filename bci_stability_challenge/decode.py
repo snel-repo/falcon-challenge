@@ -89,7 +89,7 @@ def main():
         ],
     )
 
-    decoder_cfg = MyConfig()
+    decoder_cfg = MyConfig('added_to_docker_cfg.cfg')
     decoder_cfg.model_path = args.model_path
 
     decoder = RandomDecoder(task_config=config)
