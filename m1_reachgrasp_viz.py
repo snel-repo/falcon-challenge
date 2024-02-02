@@ -7,6 +7,7 @@ from filtering import apply_butter_filt
 from pynwb import NWBHDF5IO
 import torch
 import torch.nn.functional as F
+from scipy.signal import resample_poly
 
 root = Path('/snel/share/share/derived/rouse/RTG/NWB')
 files = list(root.glob('*.nwb'))
@@ -64,11 +65,16 @@ def load_nwb(fn: str):
         fs = 1/(emg_timestamps[1] - emg_timestamps[0])
         # apply a lowpass filter to the emg_data 
         emg_data = apply_butter_filt(emg_data, fs, 'low', 10)
+        # resample the emg data to 100 Hz from 1000Hz 
+        emg_data_resample = resample_poly(emg_data, 1, 10, axis=0)
+
+        trial_info.start_time = trial_info.start_time.round(2)
+        trial_info.end_time = trial_info.end_time.round(2)
 
         return (
             bin_units(units),
-            emg_data,
-            emg_timestamps,
+            emg_data_resample,
+            emg_timestamps[::10],
             muscles,
             trial_info,
         )
@@ -121,7 +127,7 @@ def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
 
 rasterplot(units[:4001, :], ax=ax[0])
 
-ax[1].plot(time[:40001], emg[:40001, :], linewidth=0.75, color='k', alpha=0.7)
+ax[1].plot(time[:4001], emg[:4001, :], linewidth=0.75, color='k', alpha=0.7)
 ax[1].set_xlabel('Time (s)')
 ax[1].set_ylabel('EMG')
 ax[1].spines['top'].set_visible(False)
@@ -175,5 +181,97 @@ def smooth(position, kernel_size=DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS, sigma=D
 
 #%% 
 smoothed_spikes = smooth(units)
+
+# %%
+
+# Assuming smoothed_spikes and emg are 2D arrays with the same number of rows as time
+smoothed_spikes_trials = []
+emg_trials = []
+
+for _, trial in trials.iterrows():
+    start_time = trial['start_time']
+    end_time = trial['end_time']
+
+    # Find the indices in the time array that correspond to the start and end times
+    start_idx = np.searchsorted(time, start_time)
+    end_idx = np.searchsorted(time, end_time)
+
+    # Extract the regions of smoothed_spikes and emg that fall between start_time and end_time
+    smoothed_spikes_region = smoothed_spikes[start_idx:end_idx, :]
+    emg_region = emg[start_idx:end_idx, :]
+
+    # Append the regions to the lists
+    smoothed_spikes_trials.append(smoothed_spikes_region)
+    emg_trials.append(emg_region)
+
+# %% split into train and valid 
+from sklearn.model_selection import train_test_split
+
+# Split the smoothed_spikes_regions into training and validation sets
+smoothed_spikes_train, smoothed_spikes_valid = train_test_split(smoothed_spikes_trials, test_size=0.2, random_state=42)
+
+# Split the emg_regions into training and validation sets
+emg_train, emg_valid = train_test_split(emg_trials, test_size=0.2, random_state=42)
+
+#%% train a decoder 
+
+from sklearn.linear_model import Ridge 
+
+# Create a decoder
+decoder = Ridge(alpha=1.0)
+X = np.vstack(smoothed_spikes_train)
+y = np.vstack(emg_train)
+
+decoder.fit(X, y)
+decoder.score(X, y)
+
+# %%
+
+from sklearn.metrics import r2_score
+
+# Initialize a list to store the scores
+scores = []
+preds = []
+
+# Loop through each example in smoothed_spikes_valid
+for i in range(len(smoothed_spikes_valid)):
+    # Use the decoder to predict an output
+    y_pred = decoder.predict(smoothed_spikes_valid[i])
+
+    # Score the prediction using the corresponding example from emg_valid
+    score = r2_score(emg_valid[i], y_pred, multioutput='variance_weighted')
+
+    # Append the score to the list
+    scores.append(score)
+    preds.append(y_pred)
+
+# Print the average score
+print('Average score:', np.mean(scores))
+
+# %%
+# Get the number of dimensions in the second axis of emg_valid
+trial_id = 0
+num_dims = emg_valid[trial_id].shape[1]
+
+# Create a grid of subplots with num_dims rows and 1 column
+fig, ax = plt.subplots(num_dims//2, 2, figsize=(7, 7), sharex=True, sharey=True)
+axs = ax.flatten()
+
+# Loop through each dimension
+for i in range(num_dims):
+    # Get the true and predicted data for the trial and dimension
+    true_data = emg_valid[trial_num][:, i]
+    predicted_data = preds[trial_num][:, i]
+
+    # Plot the data in the subplot
+    axs[i].plot(true_data, label='True', color='k', linewidth=0.75, alpha=0.7)
+    axs[i].plot(predicted_data, label='Predicted', color='r', linewidth=0.75, alpha=0.7)
+    axs[i].set_ylabel(muscle_names[i])
+    if i == 0:
+        axs[i].legend()
+
+plt.suptitle(f'R2: {np.around(scores[trial_id], 3)}')
+plt.tight_layout()
+plt.show()
 
 # %%
