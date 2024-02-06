@@ -368,7 +368,8 @@ def apply_exponential_filter(signal, tau, bin_size=10):
 filtered_signal = apply_exponential_filter(binned, NEURAL_TAU)
 f = plt.figure(figsize=(20, 10))
 ax = f.gca()
-kinplot(filtered_signal[:, 3:4] * 100, timestamps, ax=ax, palette=palette)
+kinplot(filtered_signal[:, :] * 100, timestamps, ax=ax, palette=palette, to_plot=['rx'])
+# kinplot(filtered_signal[:, 3:4] * 100, timestamps, ax=ax, palette=palette)
 # kinplot(binned[:, 3:4] * 100, timestamps, ax=ax, palette=palette)
 ax.set_xlim([0, 10])
 
@@ -435,7 +436,7 @@ def fit_and_eval_decoder(
         "fit_and_eval_decoder: NaNs found in rate predictions within required trial times"
 
     if grid_search:
-        decoder = GridSearchCV(Ridge(), {"alpha": np.logspace(-4, 1, 9)})
+        decoder = GridSearchCV(Ridge(), {"alpha": np.logspace(0, 9, 9)})
     else:
         decoder = Ridge(alpha=1e-2)
     decoder.fit(train_rates, train_behavior)
@@ -472,8 +473,8 @@ test_y = test_y[~is_nan_y]
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 pred_y = decoder.predict(test_x)
-print(score)
-
+print(f"Final R2: {score}")
+# ! This is more or less at parity with Pitt OLE / preprocessing (i.e. additional smoothing / feature selection is for moot)
 #%%
 # Inverse OLE - strict translation of matlab
 from scipy import stats
@@ -522,8 +523,8 @@ for i in range(num_neural_units):
 #         Sigma = np.var(residuals)
 #         invSigma[i, i, d] = 1 / Sigma
 
-lambda_ = 4.
-lambda1 = 1. # skip cross val, no major impact in Pitt data and complex to implement
+lambda_ = 10.
+lambda1 = 10. # skip cross val, no major impact in Pitt data and complex to implement
 
 # lambda_ = np.concatenate(([0], np.logspace(-3, 6, 100)))
 # lambda1 = np.concatenate(([0], np.logspace(-3, 6, 100)))
@@ -576,7 +577,13 @@ class CustomPredictor(BaseEstimator, RegressorMixin):
 # Assuming final_weights and baselines are the weights and baselines computed earlier
 predictor = CustomPredictor(final_weights, baselines)
 
-
+# test the predictor
+pred_y = predictor.predict(test_x)
+print(pred_y.shape)
+from sklearn.metrics import r2_score
+r2 = r2_score(test_y, pred_y)
+# r2 = r2_score(test_y, pred_y, multioutput='raw_values')
+print(f'iOLE: {r2}')
 
 print(train_x.shape, test_x.shape)
 """
