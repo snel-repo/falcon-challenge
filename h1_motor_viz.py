@@ -114,7 +114,7 @@ def load_nwb(fn: str):
         )
 
 def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
-    binned, kin, timestamps, epochs, labels = zip(*[load_nwb(str(f)) for f in train_files])
+    binned, kin, timestamps, epochs, labels = zip(*[load_nwb(str(f)) for f in files])
     # Merge data by simple concat
     binned = np.concatenate(binned, axis=0)
     kin = np.concatenate(kin, axis=0)
@@ -186,15 +186,7 @@ def epoch_annote(epochs, ax=None):
 
 # Plot together
 # Increase font sizes
-custom_params = {"axes.spines.right": False, "axes.spines.top": False}
-sns.set_theme(style="ticks", rc=custom_params)
-plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'axes.titlesize': 24,
-    'xtick.labelsize': 24,
-    'ytick.labelsize': 24,
-})
+set_style()
 
 def plot_qualitative(
     binned: np.ndarray,
@@ -322,13 +314,15 @@ def smooth(position, kernel_size=DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS, sigma=D
     smoothed = F.conv1d(position.unsqueeze(1), torch.tensor(kernel).float().unsqueeze(0).unsqueeze(0))
     return smoothed.squeeze().T.numpy()
 
+def create_targets(kin: np.ndarray):
+    kin = smooth(kin)
+    return np.gradient(kin, axis=0)
 ax = plt.gca()
-kin_targets = smooth(train_kin)
 # Compute velocity
 # Plot together to compare
-# kinplot(kin, timestamps, ax=ax, palette=palette)
-# kinplot(kin_targets, train_timestamps, ax=ax, palette=palette, reference_labels=train_labels) # Offset for visual clarity
-velocity = np.gradient(kin_targets, axis=0)  # Simple velocity estimate
+# kinplot(train_kin, timestamps, ax=ax, palette=palette)
+# kinplot(smooth(train_kin), train_timestamps, ax=ax, palette=palette, reference_labels=train_labels) # Offset for visual clarity
+velocity = create_targets(train_kin)  # Simple velocity estimate
 kinplot(velocity, train_timestamps, ax=ax, palette=palette, reference_labels=train_labels)
 
 xticks = np.arange(0, 50, 10)
@@ -426,42 +420,92 @@ def fit_and_eval_decoder(
 
 TRAIN_TEST = (0.8, 0.2)
 
-# Remove timepoints where nothing is happening in the kinematics
-still_times = np.all(np.abs(velocity) < 0.001, axis=1)
-# final_signal = filtered_signal
-# final_target = velocity
-final_signal = filtered_signal[~still_times]
-final_target = velocity[~still_times]
+def prepare_train_test(
+        binned_spikes: np.ndarray,
+        behavior: np.ndarray
+        ):
+    signal = apply_exponential_filter(binned_spikes, NEURAL_TAU_MS)
+    targets = create_targets(behavior)
 
-train_x, test_x = np.split(final_signal, [int(TRAIN_TEST[0] * final_signal.shape[0])])
-train_y, test_y = np.split(final_target, [int(TRAIN_TEST[0] * final_target.shape[0])])
-x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
-x_std[x_std == 0] = 1
-y_mean, y_std = np.nanmean(train_y, axis=0), np.nanstd(train_y, axis=0)
-y_std[y_std == 0] = 1
-train_x = (train_x - x_mean) / x_std
-test_x = (test_x - x_mean) / x_std
-train_y = (train_y - y_mean) / y_std
-test_y = (test_y - y_mean) / y_std
+    # Remove timepoints where nothing is happening in the kinematics
+    still_times = np.all(np.abs(targets) < 0.001, axis=1)
+    # final_signal = filtered_signal
+    # final_target = velocity
+    signal = signal[~still_times]
+    targets = targets[~still_times]
 
-# print(np.isnan(train_x).any())
-is_nan_y = np.isnan(train_y).any(axis=1)
-train_x = train_x[~is_nan_y]
-train_y = train_y[~is_nan_y]
+    train_x, test_x = np.split(signal, [int(TRAIN_TEST[0] * signal.shape[0])])
+    train_y, test_y = np.split(targets, [int(TRAIN_TEST[0] * targets.shape[0])])
+    x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
+    x_std[x_std == 0] = 1
+    y_mean, y_std = np.nanmean(train_y, axis=0), np.nanstd(train_y, axis=0)
+    y_std[y_std == 0] = 1
+    train_x = (train_x - x_mean) / x_std
+    test_x = (test_x - x_mean) / x_std
+    train_y = (train_y - y_mean) / y_std
+    test_y = (test_y - y_mean) / y_std
 
-is_nan_y = np.isnan(test_y).any(axis=1)
-test_x = test_x[~is_nan_y]
-test_y = test_y[~is_nan_y]
+    is_nan_y = np.isnan(train_y).any(axis=1)
+    if np.any(is_nan_y):
+        print(f"NaNs found in train_y, removing {np.sum(is_nan_y)} timepoints")
+    train_x = train_x[~is_nan_y]
+    train_y = train_y[~is_nan_y]
+
+    is_nan_y = np.isnan(test_y).any(axis=1)
+    if np.any(is_nan_y):
+        print(f"NaNs found in test_y, removing {np.sum(is_nan_y)} timepoints")
+    test_x = test_x[~is_nan_y]
+    test_y = test_y[~is_nan_y]
+
+    return train_x, train_y, test_x, test_y, x_mean, x_std, y_mean, y_std
+
+def prepare_test(
+        binned_spikes: np.ndarray,
+        behavior: np.ndarray,
+        x_mean: np.ndarray,
+        x_std: np.ndarray,
+        y_mean: np.ndarray,
+        y_std: np.ndarray
+        ):
+    signal = apply_exponential_filter(binned_spikes, NEURAL_TAU_MS)
+    targets = create_targets(behavior)
+
+    # Remove timepoints where nothing is happening in the kinematics
+    still_times = np.all(np.abs(targets) < 0.001, axis=1)
+    signal = signal[~still_times]
+    targets = targets[~still_times]
+
+    signal = (signal - x_mean) / x_std
+    targets = (targets - y_mean) / y_std
+
+    is_nan_y = np.isnan(targets).any(axis=1)
+    if np.any(is_nan_y):
+        print(f"NaNs found in test_y, removing {np.sum(is_nan_y)} timepoints")
+    signal = signal[~is_nan_y]
+    targets = targets[~is_nan_y]
+
+    return signal, targets
+
+(
+    train_x,
+    train_y,
+    test_x,
+    test_y,
+    x_mean,
+    x_std,
+    y_mean,
+    y_std
+) = prepare_train_test(train_bins, train_kin)
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
-print(f"Final R2: {score}")
+print(f"Final R2: {score:.2f}")
 
 r2 = r2_score(test_y, pred_y, multioutput='raw_values')
 r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
 train_r2 = r2_score(train_y, train_pred_y, multioutput='raw_values')
-print(f"Test : {r2}")
+print(f"Val : {r2}")
 print(f"Train: {train_r2}")
 
 palette = sns.color_palette(n_colors=train_kin.shape[1])
@@ -477,4 +521,14 @@ f.tight_layout()
 
 #%%
 # Multi-day decoder
-test
+print(train_kin.shape)
+print(test_kin_short.shape)
+print(test_kin_long.shape)
+
+x_short, y_short = prepare_test(test_bins_short, test_kin_short, x_mean, x_std, y_mean, y_std)
+x_long, y_long = prepare_test(test_bins_long, test_kin_long, x_mean, x_std, y_mean, y_std)
+
+score_short = decoder.score(x_short, y_short)
+score_long = decoder.score(x_long, y_long)
+print(f"Short Zero-shot: {score_short:.2f}")
+print(f"Long Zero-shot: {score_long:.2f}")
