@@ -28,6 +28,7 @@ sample = files[0]
 #%%
 CHANNELS_PER_SOURCE = 128
 BIN_SIZE_MS = 20
+TARGET_BIN_SIZE_MS = 10
 def to_nwb(fn):
     # if fn.with_suffix('.nwb').exists():
         # return
@@ -89,12 +90,12 @@ def to_nwb(fn):
     # Add position information - upsample from 50 to 100Hz.
     # print(bin_time)
     assert(bin_kin.shape[0] == bin_time_native.shape[0])
-    bin_kin = interp1d(bin_time_native, bin_kin, axis=0)(np.arange(0, bin_time_native[-1], 0.01))
+    bin_kin = interp1d(bin_time_native, bin_kin, axis=0, bounds_error=False)(np.arange(0, bin_time_native[-1], 0.01))
     bin_time = np.arange(0, bin_time_native[-1], 0.01)
 
     position_spatial_series = TimeSeries(
         name="OpenLoopKinematics",
-        description="Open Loop Kinematic Labels (x,y,z, roll, pitch, yaw, grasp)",
+        description="tx,ty,tz,rx,ry,rz,grasp",
         timestamps=bin_time,
         data=bin_kin,
         unit="arbitrary",

@@ -8,37 +8,22 @@ Demo notebook for human motor dataset.
     and the subject is asked to move that degree in pace with the virtual arm.
     Multi-unit activity is provided for several calibration blocks.
 
-- cf the aspirational NLB standard of https://github.com/neurallatents/neurallatents.github.io/blob/master/notebooks/mc_maze.ipynb
-    - Overview of task, data collection/preprocessing.
-    - Exploring each field in text, plotting reach conds, PSTH, hand decoding, and neural trajs.
-
-
-    Need a normalization step for training…
-
-# **Need to figure out why the cross val score is so low**
-
 1. Test on new days
 2. Merge multiday data
-3. Update linear decoder until nontrivial
 
 ```python
 ## Bug bash
 TODO build out the utilities lib and upload lib we want to provide...
 - Not expecting any odd numbers in start/time times, but seeing odd numbers in epoch labels
 - Expecting 5-7 DoF, but reliably receiving 7 active dimensions
-- Data labels should come from NWB, not from custom hardcode
-- [ ]  What is data discontinuity in S53?
 ```
-
-- [ ]  Use Pitt OLE logic - see my OLE baselines in NDT2 codebase
-    - [ ]  Then try to apply exponential smoothing to make it better etc
-
 - Design choices to discuss
     - Temporally blocked splits
     - Causal smoothing in baseline
 """
 
 # 1. Extract raw datapoints
+from typing import Tuple
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -49,6 +34,7 @@ import torch.nn.functional as F
 from scipy.signal import convolve
 
 from pynwb import NWBHDF5IO
+from styleguide import set_style
 
 root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
 # root = Path('./data/human_motor')
@@ -58,14 +44,22 @@ files = list(root.glob('*.nwb'))
 print(files)
 sample = files[0]
 print(sample)
-session_query = 'S53_set_1'
-# session_query = 'S77'
-# session_query = 'S591_set_1'
-train_files = [f for f in files if session_query in str(f)]
+# session_query = 'S53_set_1'
+train_query = ['S53_set_1']
+train_query = ['S53_set']
+train_query = ['S53_set', 'S63_set']
+test_query_short = ['S77']
+test_query_long = ['S91', 'S95', 'S99']
+
+def get_files(query):
+    return [f for f in files if any(sq in str(f) for sq in query)]
+train_files = get_files(train_query)
+test_files_short = get_files(test_query_short)
+test_files_long = get_files(test_query_long)
 print(train_files)
 
 is_5dof = lambda f: int(f.stem[len('pitt_thin_session_S'):].split('_')[0]) in range(364, 605)
-is_5dof_files = np.array([is_5dof(f) for f in train_files])
+is_5dof_files = np.array([is_5dof(f) for f in [*train_files, *test_files_short, *test_files_long]])
 
 # check if not uniform and report
 if not all(is_5dof_files) and not all(~is_5dof_files):
@@ -73,6 +67,7 @@ if not all(is_5dof_files) and not all(~is_5dof_files):
     uniform_dof = 5
 else:
     uniform_dof = 5 if is_5dof_files[0] else 7
+print(f"Uniform DoF: {uniform_dof}")
 
 #%%
 # Load nwb file
@@ -108,44 +103,43 @@ def load_nwb(fn: str):
         units = nwbfile.units.to_dataframe()
         kin = nwbfile.acquisition['OpenLoopKinematics'].data[:]
         timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
+        labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
         epochs = nwbfile.epochs.to_dataframe()
         return (
             bin_units(units, bin_end_timestamps=timestamps),
             kin,
             timestamps,
             epochs,
+            labels
         )
-all_binned = []
-all_kin = []
-all_timestamps = []
-all_epochs = []
-for f in train_files:
-    binned, kin, timestamps, epochs = load_nwb(str(f))
-    all_binned.append(binned)
-    all_kin.append(kin)
-    all_timestamps.append(timestamps)
-    all_epochs.append(epochs)
-binned, kin, timestamps, epochs = zip(*[load_nwb(str(f)) for f in train_files])
-# Merge data by simple concat
-binned = np.concatenate(binned, axis=0)
-kin = np.concatenate(kin, axis=0)
-# Offset timestamps and epochs
-all_timestamps = [timestamps[0]]
-for idx, current_times in enumerate(timestamps[1:]):
-    epochs[idx]['start_time'] += all_timestamps[-1][-1] + 0.01 # 1 bin
-    epochs[idx]['stop_time'] += all_timestamps[-1][-1] + 0.01 # 1 bin
-    all_timestamps.append(current_times + all_timestamps[-1][-1] + 0.01)
-timestamps = np.concatenate(all_timestamps, axis=0)
-epochs = pd.concat(epochs, axis=0)
+
+def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
+    binned, kin, timestamps, epochs, labels = zip(*[load_nwb(str(f)) for f in train_files])
+    # Merge data by simple concat
+    binned = np.concatenate(binned, axis=0)
+    kin = np.concatenate(kin, axis=0)
+    # Offset timestamps and epochs
+    all_timestamps = [timestamps[0]]
+    for idx, current_times in enumerate(timestamps[1:]):
+        epochs[idx]['start_time'] += all_timestamps[-1][-1] + 0.01 # 1 bin
+        epochs[idx]['stop_time'] += all_timestamps[-1][-1] + 0.01 # 1 bin
+        all_timestamps.append(current_times + all_timestamps[-1][-1] + 0.01)
+    timestamps = np.concatenate(all_timestamps, axis=0)
+    epochs = pd.concat(epochs, axis=0)
+    for l in labels[1:]:
+        assert l == labels[0]
+    return binned, kin, timestamps, epochs, labels[0]
+
+train_bins, train_kin, train_timestamps, train_epochs, train_labels = load_files(train_files)
+test_bins_short, test_kin_short, test_timestamps_short, test_epochs_short, test_labels_short = load_files(test_files_short)
+test_bins_long, test_kin_long, test_timestamps_long, test_epochs_long, test_labels_long = load_files(test_files_long)
+
 #%%
 # Basic qualitative
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
-dim_canon = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'grasp']
-to_plot = dim_canon
-if uniform_dof == 5:
-    to_plot = ['tx', 'ty', 'tz', 'rx', 'grasp']
+to_plot = train_labels
 
-all_tags = [tag for sublist in epochs['tags'] for tag in sublist]
+all_tags = [tag for sublist in train_epochs['tags'] for tag in sublist]
 unique_tags = list(set(all_tags))
 epoch_palette = sns.color_palette(n_colors=len(unique_tags))
 # Mute colors of "Presentation" phases
@@ -169,19 +163,18 @@ def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
     ax.set_ylabel('Neuron #')
     # ax.set_title(sample.stem)
 
-def kinplot(kin, timestamps, ax=None, palette=None, to_plot=to_plot):
+def kinplot(kin, timestamps, ax=None, palette=None, reference_labels=[], to_plot=to_plot):
     if ax is None:
         ax = plt.gca()
 
     if palette is None:
-        palette = plt.cm.viridis(np.linspace(0, 1, len(dim_canon)))
+        palette = plt.cm.viridis(np.linspace(0, 1, len(reference_labels)))
     for kin_label in to_plot:
-        kin_idx = dim_canon.index(kin_label)
+        kin_idx = reference_labels.index(kin_label)
         ax.plot(timestamps, kin[:, kin_idx], color=palette[kin_idx])
     print(timestamps.min(), timestamps.max())
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Kinematics')
-    # ax.set_title(sample.stem)
 
 def epoch_annote(epochs, ax=None):
     if ax is None:
@@ -195,37 +188,52 @@ def epoch_annote(epochs, ax=None):
 # Increase font sizes
 custom_params = {"axes.spines.right": False, "axes.spines.top": False}
 sns.set_theme(style="ticks", rc=custom_params)
-# sns.barplot(x=["A", "B", "C"], y=[1, 3, 2])
 plt.rcParams.update({
-    'font.size': 16,
-    'axes.labelsize': 16,
+    'font.size': 24,
+    'axes.labelsize': 24,
+    'axes.titlesize': 24,
+    'xtick.labelsize': 24,
+    'ytick.labelsize': 24,
 })
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
 
-rasterplot(binned, ax=ax1)
-kinplot(kin, timestamps, palette=palette, ax=ax2)
-ax2.set_ylabel('Raw Visual Position')
-epoch_annote(epochs, ax=ax1)
-epoch_annote(epochs, ax=ax2)
-plt.suptitle(f'{session_query} (DoF: {uniform_dof})')
-plt.tight_layout()
+def plot_qualitative(
+    binned: np.ndarray,
+    kin: np.ndarray,
+    timestamps: np.ndarray,
+    epochs: pd.DataFrame,
+    labels: list,
+    palette: list,
+    to_plot: list,
+):
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+    rasterplot(binned, ax=ax1)
+    kinplot(kin, timestamps, palette=palette, ax=ax2, reference_labels=labels, to_plot=to_plot)
+    ax2.set_ylabel('Position')
+    epoch_annote(epochs, ax=ax1)
+    epoch_annote(epochs, ax=ax2)
+    fig.suptitle(f'(DoF: {labels})')
+    fig.tight_layout()
 
-xticks = np.arange(0, 50, 10)
-plt.xlim(xticks[0], xticks[-1])
-plt.xticks(xticks, labels=xticks.round(2))
+    xticks = np.arange(0, 50, 10)
+    plt.xlim(xticks[0], xticks[-1])
+    plt.xticks(xticks, labels=xticks.round(2))
 
-
-print(binned.shape)
-print(kin.shape)
-print(timestamps.shape, timestamps.max())
-
+plot_qualitative(
+    train_bins,
+    train_kin,
+    train_timestamps,
+    train_epochs,
+    train_labels,
+    palette,
+    to_plot
+)
 #%%
 # Just show kinematics
 fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-kinplot(kin, timestamps, palette=palette, ax=ax)
+kinplot(train_kin, train_timestamps, palette=palette, ax=ax, reference_labels=train_labels)
 ax.set_ylabel('Raw Visual Position')
-epoch_annote(epochs, ax=ax)
-plt.suptitle(f'{session_query} (DoF: {uniform_dof})')
+epoch_annote(train_epochs, ax=ax)
+plt.suptitle(f'{train_query} (DoF: {uniform_dof})')
 plt.tight_layout()
 
 xticks = np.arange(0, 50, 10)
@@ -238,7 +246,7 @@ plt.xticks(xticks, labels=xticks.round(2))
 # Neural: check for dead channels, firing rate distribution
 DEAD_THRESHOLD_HZ = 0.001 # Firing less than 0.1Hz is dead - which is 0.001 spikes per 10ms.
 MUTE_THRESHOLD_HZ = 1 # Mute firing rates above 100Hz
-mean_firing_rates = binned.mean(axis=0)
+mean_firing_rates = train_bins.mean(axis=0)
 dead_channels = np.where(mean_firing_rates < DEAD_THRESHOLD_HZ)[0]
 mute_channels = np.where(mean_firing_rates > MUTE_THRESHOLD_HZ)[0]
 mean_firing_rates[dead_channels] = 0
@@ -250,7 +258,7 @@ ax.hist(mean_firing_rates, bins=30, alpha=0.75)
 ax.set_xticklabels([f'{x*100:.0f}' for x in plt.xticks()[0]])
 ax.set_xlabel('Mean Firing Rate (Hz)')
 ax.set_ylabel('Channel Count')
-ax.set_title(f'{session_query} Firing Rates')
+ax.set_title(f'{train_query} Firing Rates')
 ax.text(0.95, 0.95, f' {len(dead_channels)} Dead channel(s) < 0.1Hz:\n{dead_channels}', transform=ax.transAxes, ha='right', va='top')
 ax.text(0.95, 0.55, f' {len(mute_channels)} Mute channel(s) > 100Hz:\n{mute_channels}', transform=ax.transAxes, ha='right', va='top')
 
@@ -259,34 +267,33 @@ ax.text(0.95, 0.55, f' {len(mute_channels)} Mute channel(s) > 100Hz:\n{mute_chan
 
 # Calculate range for each kinematic dimension (x,y,z,roll,pitch,yaw,grasp).
 # Units inferred as virtual meters and radians. Grasp is arbitrary.
-# TODO Ask: Grasp dimension isn't making a ton of sense to me. Why is there no weight at 1?
 # TODO Feedback: Violinplot is not ideal
 ax = plt.gca()
-ax.scatter(np.arange(7), np.min(kin, axis=0), c='k', marker='_', s=100)
-ax.scatter(np.arange(7), np.max(kin, axis=0), c='k', marker='_', s=100)
-ax = sns.violinplot(kin, truncate=True, ax=ax)
+ax.scatter(np.arange(7), np.min(train_kin, axis=0), c='k', marker='_', s=100)
+ax.scatter(np.arange(7), np.max(train_kin, axis=0), c='k', marker='_', s=100)
+ax = sns.violinplot(train_kin, truncate=True, ax=ax)
 
 ax.set_ylabel('Recorded Units')
 ax.set_xticks(np.arange(7))
 ax.set_xticklabels(['x', 'y', 'z', 'roll', 'pitch', 'yaw', 'grasp'])
-ax.set_title(f'{session_query} Kinematic Range')
+ax.set_title(f'{train_query} Kinematic Range')
 
 # * Active times
-print(f"Total time (s): {timestamps[-1]}")
+print(f"Total time (s): {train_timestamps[-1]}")
 # Label active if epoch does not contain "presentation"
-active_phases = epochs.apply(lambda epoch: 'Presentation' not in epoch.tags[0], axis=1)
+active_phases = train_epochs.apply(lambda epoch: 'Presentation' not in epoch.tags[0], axis=1)
 # Sum active phases
-time_active = np.sum(epochs[active_phases].stop_time - epochs[active_phases].start_time)
-time_inactive = np.sum(epochs[~active_phases].stop_time - epochs[~active_phases].start_time)
+time_active = np.sum(train_epochs[active_phases].stop_time - train_epochs[active_phases].start_time)
+time_inactive = np.sum(train_epochs[~active_phases].stop_time - train_epochs[~active_phases].start_time)
 print(f"Seconds active (s) (Phase labeled): {time_active:.2f}")
 print(f"Percent active (Phase labeled): {time_active / (time_active + time_inactive) * 100:.2f}%")
 
 # Define active phase criteria and calculate time spent
 velocity_threshold = 0.002 # ~ noise threshold
-velocity = np.diff(kin, axis=0)  # Simple velocity estimate
+velocity = np.diff(train_kin, axis=0)  # Simple velocity estimate
 active_phases = np.sum(np.abs(velocity) > velocity_threshold, axis=0)
-time_active = np.sum(active_phases) * (timestamps[1] - timestamps[0])  # Total active time
-print(f"Percent active (Variance inferred): {time_active / timestamps[-1] * 100:.2f}%")
+time_active = np.sum(active_phases) * (train_timestamps[1] - train_timestamps[0])  # Total active time
+print(f"Percent active (Variance inferred): {time_active / train_timestamps[-1] * 100:.2f}%")
 #%%
 # Smooth data for decoding make base linear decoder
 BIN_SIZE_MS = 10
@@ -316,33 +323,24 @@ def smooth(position, kernel_size=DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS, sigma=D
     return smoothed.squeeze().T.numpy()
 
 ax = plt.gca()
-kin_targets = smooth(kin)
+kin_targets = smooth(train_kin)
 # Compute velocity
 # Plot together to compare
 # kinplot(kin, timestamps, ax=ax, palette=palette)
-kinplot(kin_targets, timestamps, ax=ax, palette=palette) # Offset for visual clarity
-
-xticks = np.arange(0, 50, 10)
-plt.xlim(xticks[0], xticks[-1])
-plt.xticks(xticks, labels=xticks.round(2))
-
-#%%
-ax = plt.gca()
+# kinplot(kin_targets, train_timestamps, ax=ax, palette=palette, reference_labels=train_labels) # Offset for visual clarity
 velocity = np.gradient(kin_targets, axis=0)  # Simple velocity estimate
-kinplot(velocity, timestamps, ax=ax, palette=palette)
+kinplot(velocity, train_timestamps, ax=ax, palette=palette, reference_labels=train_labels)
 
 xticks = np.arange(0, 50, 10)
 plt.xlim(xticks[0], xticks[-1])
 plt.xticks(xticks, labels=xticks.round(2))
 
-
-
-
 #%%
-NEURAL_TAU = 200. # exponential filter (per human motor practice), in units of ms
-# NEURAL_TAU = 60. # exponential filter (per human motor practice), in units of ms
+NEURAL_TAU_MS = 240. # exponential filter from H1 Lab
 
-def apply_exponential_filter(signal, tau, bin_size=10):
+def apply_exponential_filter(
+        signal, tau, bin_size=10, extent: int=1
+    ):
     """
     Apply a **causal** exponential filter to the neural signal.
 
@@ -350,81 +348,65 @@ def apply_exponential_filter(signal, tau, bin_size=10):
     :param tau: Decay rate (time constant) of the exponential filter
     :param bin_size: Bin size in ms (default is 10ms)
     :return: Filtered signal
+    :param extent: Number of time constants to extend the filter kernel
+
+    Implementation notes:
+    # extent should be 3 for reporting parity, but reference hardcodes a kernel that's equivalent to extent=1
     """
-    # Time array (considering the length to be sufficiently long for the decay)
-    t = np.arange(0, 3 * tau, bin_size)  # 3*tau to parity matlab
-    # t = np.arange(0, 3 * tau, bin_size)  # 3*tau to parity matlab
-    # t = np.arange(0, 5 * tau, bin_size)  # 5*tau ensures capturing most of the decay
+    t = np.arange(0, extent * tau, bin_size)
     # Exponential filter kernel
     kernel = np.exp(-t / tau)
-    # Normalize the kernel
     kernel /= np.sum(kernel)
-    # Matlab parity
-    kernel = np.array([0.0636, 0.0615, 0.0594, 0.0574, 0.0555, 0.0536, 0.0518, 0.0501, 0.0484, 0.0467, 0.0452, 0.0436, 0.0422, 0.0408, 0.0394, 0.0381, 0.0368, 0.0355, 0.0343, 0.0331, 0.0321, 0.0310])
     # Apply the filter
     filtered_signal = np.array([convolve(signal[:, ch], kernel, mode='full')[-len(signal):] for ch in range(signal.shape[1])]).T
     return filtered_signal
 
-filtered_signal = apply_exponential_filter(binned, NEURAL_TAU)
+filtered_signal = apply_exponential_filter(train_bins, NEURAL_TAU_MS)
 f = plt.figure(figsize=(20, 10))
 ax = f.gca()
-kinplot(filtered_signal[:, :] * 100, timestamps, ax=ax, palette=palette, to_plot=['rx'])
-# kinplot(filtered_signal[:, 3:4] * 100, timestamps, ax=ax, palette=palette)
-# kinplot(binned[:, 3:4] * 100, timestamps, ax=ax, palette=palette)
+
+sample = 1
+palette = sns.color_palette(n_colors=filtered_signal.shape[1])
+ax.plot(train_timestamps, filtered_signal[:, sample], color=palette[sample])
+ax.set_xlabel('Time (s)')
+ax.set_yticklabels([f'{x*(1000 / BIN_SIZE_MS):.0f}' for x in plt.yticks()[0]])
+ax.set_ylabel('Firing Rate (Hz)')
 ax.set_xlim([0, 10])
 
-# Reproduce and plot the kernel
-# t = np.arange(0, 3 * NEURAL_TAU, BIN_SIZE_MS)  # 5*tau ensures capturing most of the decay
-# # Exponential filter kernel
-# kernel = np.exp(-t / NEURAL_TAU)
-# # Normalize the kernel
-# kernel /= np.sum(kernel)
-# # Plot
-# f = plt.figure(figsize=(20, 10))
-# ax = f.gca()
-# ax.plot(t, kernel)
-# print(kernel)
 #%%
-# Make and eval train test splits
-# From NLB tools
 # Make single day linear decoder
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import r2_score
 
 def fit_and_eval_decoder(
-    train_rates,
-    train_behavior,
-    eval_rates,
-    eval_behavior,
-    grid_search=True,
+    train_rates: np.ndarray,
+    train_behavior: np.ndarray,
+    eval_rates: np.ndarray,
+    eval_behavior: np.ndarray,
+    grid_search: bool=True,
 ):
     """Fits ridge regression on train data passed
     in and evaluates on eval data
 
     Parameters
     ----------
-    train_rates : np.ndarray
-        2d array with 1st dimension being samples (time) and
-        2nd dimension being input variables (units).
-        Used to train regressor
-    train_behavior : np.ndarray
-        2d array with 1st dimension being samples (time) and
-        2nd dimension being output variables (channels).
-        Used to train regressor
-    eval_rates : np.ndarray
-        2d array with same dimension ordering as train_rates.
-        Used to evaluate regressor
-    eval_behavior : np.ndarray
-        2d array with same dimension ordering as train_behavior.
-        Used to evaluate regressor
-    grid_search : bool
+    train_rates :
+        2d array time x units.
+    train_behavior :
+        2d array time x output dims.
+    eval_rates :
+        2d array time x units
+    eval_behavior :
+        2d array time x output dims
+    grid_search :
         Whether to perform a cross-validated grid search to find
         the best regularization hyperparameters.
 
     Returns
     -------
     float
-        R2 score on eval data
+        Uniform average R2 score on eval data
     """
     if np.any(np.isnan(train_behavior)):
         train_rates = train_rates[~np.isnan(train_behavior)[:, 0]]
@@ -436,7 +418,7 @@ def fit_and_eval_decoder(
         "fit_and_eval_decoder: NaNs found in rate predictions within required trial times"
 
     if grid_search:
-        decoder = GridSearchCV(Ridge(), {"alpha": np.logspace(0, 9, 9)})
+        decoder = GridSearchCV(Ridge(), {"alpha": np.logspace(-5, 5, 20)})
     else:
         decoder = Ridge(alpha=1e-2)
     decoder.fit(train_rates, train_behavior)
@@ -446,7 +428,8 @@ TRAIN_TEST = (0.8, 0.2)
 
 # Remove timepoints where nothing is happening in the kinematics
 still_times = np.all(np.abs(velocity) < 0.001, axis=1)
-
+# final_signal = filtered_signal
+# final_target = velocity
 final_signal = filtered_signal[~still_times]
 final_target = velocity[~still_times]
 
@@ -456,13 +439,12 @@ x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
 x_std[x_std == 0] = 1
 y_mean, y_std = np.nanmean(train_y, axis=0), np.nanstd(train_y, axis=0)
 y_std[y_std == 0] = 1
-
 train_x = (train_x - x_mean) / x_std
 test_x = (test_x - x_mean) / x_std
 train_y = (train_y - y_mean) / y_std
 test_y = (test_y - y_mean) / y_std
 
-print(np.isnan(train_x).any())
+# print(np.isnan(train_x).any())
 is_nan_y = np.isnan(train_y).any(axis=1)
 train_x = train_x[~is_nan_y]
 train_y = train_y[~is_nan_y]
@@ -473,197 +455,26 @@ test_y = test_y[~is_nan_y]
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 pred_y = decoder.predict(test_x)
-print(f"Final R2: {score}")
-# ! This is more or less at parity with Pitt OLE / preprocessing (i.e. additional smoothing / feature selection is for moot)
-#%%
-# Inverse OLE - strict translation of matlab
-from scipy import stats
-
-# def ControlSpaceToDomainCells(K):
-
-K_train = train_y  # Time x Dims
-F_train = train_x  # Time x Channels
-K_val = test_y
-F_val = test_x
-NUM_DOMAINS = 6
-IgnoreIdx = np.zeros(30, dtype=bool)
-IgnoreIdx[7:] = 1
-# Kt = ControlSpaceToDomainCells(K_train)
-# Kv = ControlSpaceToDomainCells(K_val)
-# K = ControlSpaceToDomainCells(np.vstack([KinematicSig, KinematicSig_val]))
-# I = ControlSpaceToDomainCells(IgnoreIdx)
-
-invSigma = np.zeros((F_train.shape[1], F_train.shape[1], NUM_DOMAINS))
-import numpy as np
-from scipy import stats
-
-# Assuming F_train is your neural signals matrix (Time x Channels)
-# and K_train is your kinematic signals matrix (Time x Kinematic Dimensions)
-num_kin_dims = K_train.shape[1]
-num_neural_units = F_train.shape[1]
-# Initialize the invSigma matrix
-invSigma = np.zeros((num_neural_units, num_neural_units, num_kin_dims))
-
-# Loop over each neural unit
-for i in range(num_neural_units):
-    # Loop over each kinematic dimension
-    for k in range(num_kin_dims):
-        # Add a column of ones to K_train for the intercept
-        # Perform linear regression
-        slope, intercept, r_value, p_value, std_err = stats.linregress(K_train[:, k], F_train[:, i])
-
-        # Calculate residuals
-        residuals = F_train[:, i] - (intercept + slope * K_train[:, k])
-        # Calculate variance of residuals and store its inverse
-        Sigma = np.var(residuals)
-        invSigma[i, i, k] = 1 / Sigma if Sigma != 0 else 0
-# for i in range(train_x.shape[1]):
-#     for d in range(NUM_DOMAINS):
-#         _, _, _, _, residuals = stats.linregress(np.hstack([np.ones((Kt[d].shape[0], 1)), Kt[d][:, ~I[d]]]), F_train[:, i].astype(np.float32))
-#         Sigma = np.var(residuals)
-#         invSigma[i, i, d] = 1 / Sigma
-
-lambda_ = 10.
-lambda1 = 10. # skip cross val, no major impact in Pitt data and complex to implement
-
-# lambda_ = np.concatenate(([0], np.logspace(-3, 6, 100)))
-# lambda1 = np.concatenate(([0], np.logspace(-3, 6, 100)))
-# idx1 = range(len(lambda1))
-# idx = range(len(lambda_))
-# metric = np.full((max(idx), max(idx1)), np.inf)
-
-import numpy as np
-
-# Assuming KinematicSig is the kinematic signals matrix (Time x Kinematic Dimensions)
-# NeuralSig is the neural signals matrix (Time x Channels)
-# lambda1 and lambda are regularization parameters
-# IgnoreIdx is a boolean array indicating which kinematic dimensions to ignore
-
-KinematicSig = K_train
-NeuralSig = F_train
-# Initial ridge regression
-X = np.hstack([np.ones((KinematicSig.shape[0], 1)), KinematicSig])
-W = np.linalg.pinv(X.T @ X + lambda1 * np.eye(KinematicSig.shape[1] + 1)) @ X.T @ NeuralSig
-baselines = W[0, :]
-W1 = W[1:, :]
-
-# Adjusting for ignored indices
-W1_ = np.zeros((W1.shape[1], len(IgnoreIdx)))
-W1_[:, ~IgnoreIdx] = W1.T
-
-# Ridge regression per kinematic dimension
-num_kin_dims = KinematicSig.shape[1]
-final_weights = []
-
-for k in range(num_kin_dims):
-    if not IgnoreIdx[k]:
-        w1invSigma = W1_[:, k].T @ invSigma[:, :, k]
-        Wt = np.linalg.pinv(w1invSigma @ W1_[:, k] + lambda_ * np.eye(W1_[:, k].shape[0])) @ w1invSigma
-        final_weights.append(Wt.T)
-
-# Concatenate the weights for each dimension
-final_weights = np.stack(final_weights, axis=1)
-
-from sklearn.base import BaseEstimator, RegressorMixin
-
-class CustomPredictor(BaseEstimator, RegressorMixin):
-    def __init__(self, weights, baselines):
-        self.weights = weights
-        self.baselines = baselines
-
-    def predict(self, X):
-        return (X - self.baselines) @ self.weights
-
-# Assuming final_weights and baselines are the weights and baselines computed earlier
-predictor = CustomPredictor(final_weights, baselines)
-
-# test the predictor
-pred_y = predictor.predict(test_x)
-print(pred_y.shape)
-from sklearn.metrics import r2_score
-r2 = r2_score(test_y, pred_y)
-# r2 = r2_score(test_y, pred_y, multioutput='raw_values')
-print(f'iOLE: {r2}')
-
-print(train_x.shape, test_x.shape)
-"""
-    Parity notes:
-
-    # PrepData
-    Pitt:
-    Full Prep: Original timepoint is 12922 * 2 = 25.8440
-    Their split prep:
-    - 12922, and 2290 (with nans in between)
-        - Their val is 3 random trials (floor 20% of 18 trials = 3)
-
-    Our dimensions:
-    - Train - 20592 x C
-    - Val - 5144 x C
-        - Roughly 25.736s
-
-    # OK, so extracting the relevant fields
-    - Pitt:
-        - 2006 non-nan bins = 4.012s
-        - Pitt then further kills non-calibration (defined by TaskState) and non-moving samples, which brings to about just 800 bins of activity
-
-    - Ours:
-        -
-
-
-
-    After data loading:
-    Pitt dimensions:
-    - Train - 4507 x C=175
-    - Val - 815 x C
-    # ! After some processing, we've lost some data, down to 4465 timepoints
-    # ! And val is 861 - 5326 in total, vs 5322 before
-
-    # ---
-
-    - # ! How is their split computed? - Make parity on their side
-    - # ! Why do they have so few timepoints?
-    - Get parity on channels!
-    - Looks like their crossval uses lambda=1e6
-    - Looks like inverse OLE is substantial other regularization?
-
-    Other high level notes
-    - [x] Pitt uses NEURAL signal AND KIN signal zscore (does nothing useful)
-    - [x] Final scores computed on train sets
-        - When switching to val set, reported score is 0.2-0.3 (vs 0.4-0.5).
-"""
-
-
-print(pred_y.shape)
-print(test_y.shape)
-from sklearn.metrics import r2_score
-
-decoder = Ridge(alpha=200.0)
-# decoder = Ridge(alpha=20000.0)
-decoder.fit(train_x, train_y)
-
-# compute r2
-# print(test_x.shape, test_y.shape)
-is_nan_y = np.isnan(test_y).any(axis=1)
-test_x = test_x[~is_nan_y]
-test_y = test_y[~is_nan_y]
-
-# pred_y = predictor.predict(test_x)
-# train_pred_y = predictor.predict(train_x)
-
-pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
+print(f"Final R2: {score}")
+
 r2 = r2_score(test_y, pred_y, multioutput='raw_values')
+r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
 train_r2 = r2_score(train_y, train_pred_y, multioutput='raw_values')
 print(f"Test : {r2}")
 print(f"Train: {train_r2}")
 
-palette = sns.color_palette(n_colors=kin.shape[1])
-f, axes = plt.subplots(kin.shape[1], figsize=(12, 10))
+palette = sns.color_palette(n_colors=train_kin.shape[1])
+f, axes = plt.subplots(train_kin.shape[1], figsize=(6, 12))
 # Plot true vs predictions
 for idx, (true, pred) in enumerate(zip(test_y.T, pred_y.T)):
     axes[idx].plot(true, label=f'{idx}', color=palette[idx])
     axes[idx].plot(pred, linestyle='--', color=palette[idx])
-
+    axes[idx].set_title(f"{train_labels[idx]} $R^2$: {r2[idx]:.2f}")
+# f.supxlabel('Time (10ms)')
+f.suptitle(f'Val $R^2$: {score:.2f}')
+f.tight_layout()
 
 #%%
-# Make multiday decoder
+# Multi-day decoder
+test
