@@ -64,9 +64,6 @@ def to_nwb(fn):
         identifier=str(uuid4()),
         # This experiment occurred on 5/2/17
         session_start_time=datetime(2017, 5, 2, 12, tzinfo=tzlocal()),
-        experimenter=[
-            "Sharlene Flesher",
-        ],
         lab="Rehab Neural Engineering Labs",
         institution="University of Pittsburgh",
         experiment_description="Open loop calibration for Action Research Arm Test (ARAT) for human motor BCI",
