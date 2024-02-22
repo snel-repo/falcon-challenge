@@ -37,7 +37,7 @@ class SKLearnDecoder(BCIDecoder):
         smth_history = apply_exponential_filter(self.raw_history_buffer, NEURAL_TAU_MS)
         self.observation_buffer = np.roll(self.observation_buffer, -1)
         self.observation_buffer[-1] = (smth_history[-1] - self.x_mean) / self.x_std
-        decoder_in = self.observation_buffer.flatten().reshape(1, -1)
+        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1)
         out = self.clf.predict(decoder_in)[0]
         out = out * self.y_std + self.y_mean
         return out
