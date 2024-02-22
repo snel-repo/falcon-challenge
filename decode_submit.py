@@ -25,6 +25,7 @@ from falcon_challenge.interface import BCIDecoder
 
 from decoder_demos.random_decoder import RandomDecoder
 from decoder_demos.rnn_decoder import SimpleRNNDecoder, MyConfig
+from decoder_demos.sklearn_decoder import SKLearnDecoder
 
 def main():
     parser = argparse.ArgumentParser()
@@ -52,11 +53,11 @@ def main():
     dataset = args.phase.split('_')[0]
     config = FalconConfig(
         task=getattr(FalconTask, dataset),
-        n_channels=192,
+        n_channels=176,
     )
 
-    decoder = RandomDecoder(task_config=config)
-
+    # decoder = RandomDecoder(task_config=config)
+    decoder = SKLearnDecoder(task_config=config, model_path=f'data/sklearn_{dataset}.pkl')
     # decoder_cfg = MyConfig('added_to_docker_cfg.cfg')
     # decoder_cfg.model_path = args.model_path
     # decoder = SimpleRNNDecoder(task_config=config, decoder_cfg=decoder_cfg)

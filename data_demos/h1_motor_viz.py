@@ -25,6 +25,7 @@ from scipy.signal import convolve
 from pynwb import NWBHDF5IO
 from data_demos.styleguide import set_style
 from falcon_challenge.dataloaders import bin_units
+from falcon_challenge.config import FalconTask
 
 # root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
 root = Path('./data/h1')
@@ -538,6 +539,7 @@ def prepare_test(
 
     return signal, targets
 
+# HISTORY = 0
 HISTORY = 5
 
 (
@@ -552,36 +554,13 @@ HISTORY = 5
 ) = prepare_train_test(train_bins, train_kin, history=HISTORY)
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
+print(f"CV Score: {score:.2f}")
+
+# Same-day eval
 pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
-print(f"CV Score: {score:.2f}")
-r2 = r2_score(test_y, pred_y, multioutput='raw_values')
-r2_weighted = r2_score(test_y, pred_y, multioutput='variance_weighted')
-r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
-train_r2 = r2_score(train_y, train_pred_y, multioutput='variance_weighted') #multioutput='raw_values')
-print(f"Val R2 Weighted: {r2_weighted}")
-print(f"Val R2 Uniform: {r2_uniform}")
-print(f"Train: {train_r2}")
 
-#%%
-palette = sns.color_palette(n_colors=train_kin.shape[1])
-f, axes = plt.subplots(train_kin.shape[1], figsize=(6, 12), sharex=True)
-# Plot true vs predictions
-for idx, (true, pred) in enumerate(zip(test_y.T, pred_y.T)):
-    axes[idx].plot(true, label=f'{idx}', color=palette[idx])
-    axes[idx].plot(pred, linestyle='--', color=palette[idx])
-    axes[idx].set_title(f"{train_labels[idx]} $R^2$: {r2[idx]:.2f}")
-    axes[idx].set_xticklabels([f'{x/1000 * BIN_SIZE_MS:.0f}' for x in axes[idx].get_xticks()])
-axes[-1].set_xlabel('Time (s)')
-f.suptitle(f'Val $R^2$: {score:.2f}')
-f.tight_layout()
-
-#%%
-# Multi-day decoder
-print(train_kin.shape)
-print(test_kin_short.shape)
-print(test_kin_long.shape)
-
+# Multi-day eval
 x_short, y_short = prepare_test(
     test_bins_short,
     test_kin_short,
@@ -601,7 +580,42 @@ x_long, y_long = prepare_test(
     history=HISTORY
     )
 
+r2 = r2_score(test_y, pred_y, multioutput='raw_values')
+r2_weighted = r2_score(test_y, pred_y, multioutput='variance_weighted')
+r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
+train_r2 = r2_score(train_y, train_pred_y, multioutput='variance_weighted') #multioutput='raw_values')
+print(f"Val R2 Weighted: {r2_weighted}")
+print(f"Val R2 Uniform: {r2_uniform}")
+print(f"Train: {train_r2}")
+
 score_short = decoder.score(x_short, y_short)
 score_long = decoder.score(x_long, y_long)
-print(f"Short Zero-shot: {score_short:.2f}") # 0.06
-print(f"Long Zero-shot: {score_long:.2f}") # 0.0
+print(f"Short Zero-shot: {score_short:.2f}")
+print(f"Long Zero-shot: {score_long:.2f}")
+
+palette = sns.color_palette(n_colors=train_kin.shape[1])
+f, axes = plt.subplots(train_kin.shape[1], figsize=(6, 12), sharex=True)
+# Plot true vs predictions
+for idx, (true, pred) in enumerate(zip(test_y.T, pred_y.T)):
+    axes[idx].plot(true, label=f'{idx}', color=palette[idx])
+    axes[idx].plot(pred, linestyle='--', color=palette[idx])
+    axes[idx].set_title(f"{train_labels[idx]} $R^2$: {r2[idx]:.2f}")
+    xticks = axes[idx].get_xticks()
+    axes[idx].set_xticks(xticks)
+    axes[idx].set_xticklabels([f'{x/1000 * BIN_SIZE_MS:.0f}' for x in xticks])
+axes[-1].set_xlabel('Time (s)')
+f.suptitle(f'Val $R^2$: {score:.2f}')
+f.tight_layout()
+
+# Save decoder for use in sklearn_decoder example agent
+import pickle
+with open(f'data/sklearn_h1.pkl', 'wb') as f:
+    pickle.dump({
+        'decoder': decoder,
+        'task': FalconTask.h1,
+        'history': HISTORY,
+        'x_mean': x_mean,
+        'x_std': x_std,
+        'y_mean': y_mean,
+        'y_std': y_std,
+    }, f)
