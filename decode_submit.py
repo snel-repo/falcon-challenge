@@ -17,11 +17,11 @@ import numpy as np
 import torch
 
 # from config import HabitatChallengeConfigPlugin
-from omegaconf import DictConfig
+# from omegaconf import DictConfig
 
-from falcon_challenge.config import DecodeConfig
+from falcon_challenge.config import FalconConfig
+from falcon_challenge.evaluator import FalconEvaluator
 from falcon_challenge.interface import BCIDecoder
-from falcon_challenge.evaluator import Evaluator
 
 class RandomDecoder(BCIDecoder):
     r"""
@@ -32,7 +32,7 @@ class RandomDecoder(BCIDecoder):
             - Determine the task and find the action space (defining a Gym env, use RLLib, TensorDict?)
             - Sample a random action
     """
-    def __init__(self, task_config: DecodeConfig):
+    def __init__(self, task_config: FalconConfig):
         self._task_config = task_config
 
     def predict(self, neural_observations: np.ndarray):
@@ -40,28 +40,22 @@ class RandomDecoder(BCIDecoder):
             neural_observations: array of shape (n_channels), 10ms binned spike counts
             TODO ideally the action spaces are extracted from task config specified in main package
         """
-        if self._task_config.task == "falcon_h1":
-            return {
-                "action": np.random.rand(7),
-            }
+        if self._task_config.task == "falcon_h1_7d":
+            return np.random.rand(7)
         elif self._task_config.task == "falcon_h2":
-            return {
-                "action": np.random.rand(28), # Or whatever the action space is
-            }
+            return np.random.rand(28) # Or whatever the action space is
         elif self._task_config.task == "falcon_m1":
-            return {
-                "action": np.random.rand(2),
-            }
+            return np.random.rand(2)
         elif self._task_config.task == "falcon_m2":
-            return {
-                "action": np.random.rand(2),
-            }
+            return np.random.rand(2)
+        else:
+            raise ValueError(f"Unknown task {self._task_config.task}")
 
 class MyConfig:
     model_path: str = ""
 
 class SimpleRNNDecoder(BCIDecoder):
-    def __init__(self, task_config: DecodeConfig, decoder_cfg: MyConfig):
+    def __init__(self, task_config: FalconConfig, decoder_cfg: MyConfig):
         self._task_config = task_config
         self.dnn = torch.load(decoder_cfg.model_path)
 
@@ -82,16 +76,19 @@ def main():
     )
     args = parser.parse_args()
 
-    benchmark_config_path = os.environ["CHALLENGE_CONFIG_FILE"]
+    # benchmark_config_path = os.environ["CHALLENGE_CONFIG_FILE"]
 
     # TODO resolve how we specifically get the task config - it shouldn't be complex for us, so we likely don't need this plugin logic, could even just maintain in Dockefiles
-    register_hydra_plugin(HabitatChallengeConfigPlugin) # TODO what to do with this.
-
-    config = get_config( # TODO what to do with this?
-        benchmark_config_path,
-        overrides=[
-            "habitat/task/actions=" + args.action_space,
-        ],
+    # register_hydra_plugin(HabitatChallengeConfigPlugin) # TODO what to do with this.
+    # config = get_config( # TODO what to do with this?
+    #     benchmark_config_path,
+    #     overrides=[
+    #         "habitat/task/actions=" + args.action_space,
+    #     ],
+    # )
+    config = FalconConfig(
+        task="falcon_h1_7d",
+        n_channels=192,
     )
 
     decoder = RandomDecoder(task_config=config)
@@ -100,10 +97,9 @@ def main():
     # decoder_cfg.model_path = args.model_path
     # decoder = SimpleRNNDecoder(task_config=config, decoder_cfg=decoder_cfg)
 
-    # TODO see Challenge/Benchmark implementation
-    # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-lab/habitat/core/challenge.py
-    # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-lab/habitat/core/benchmark.py
-    evaluator = Evaluator(eval_remote=args.evaluation == "remote")
+    evaluator = FalconEvaluator(
+        eval_remote=args.evaluation == "remote",
+        phase='h1_short')
     evaluator.evaluate(decoder)
 
 

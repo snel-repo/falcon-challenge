@@ -1,14 +1,14 @@
 import logging
-import pickle
 import numpy as np
-
+from pathlib import Path
 from sklearn.metrics import r2_score
 
 from falcon_challenge.interface import BCIDecoder
+from falcon_challenge.dataloaders import load_nwb
 
 logger = logging.getLogger(__name__)
 
-class Evaluator:
+class FalconEvaluator:
 
     def __init__(self, eval_remote=False, phase='h1_short'):
         self.eval_remote = eval_remote
@@ -16,12 +16,12 @@ class Evaluator:
         self.dataset = phase.split('_')[0]
         self.eval_short = phase.split('_')[1] == 'short'
 
-    def retrieve_gt_for_eval(self):
+    def get_eval_files(self):
         if self.eval_remote:
-            decoding_gt = pickle.load(f"GT_{self.phase}.pkl") # TODO is this secure? Not sure if this is the right pattern
+            eval_dir = f"data/{self.dataset}/test_{self.phase}" # TODO is this secure? Not sure if this is the right pattern
         else:
-            decoding_gt = pickle.load(f"GT_{self.dataset}_minival.pkl")
-        return decoding_gt
+            eval_dir = f"data/{self.dataset}/minival/"
+        return sorted(list(Path(eval_dir).glob("*.nwb")))
 
     def evaluate(self, decoder: BCIDecoder):
         r"""
@@ -29,15 +29,24 @@ class Evaluator:
             # TODO how does eval-ai specifically get metrics beyond what we print?
             # * That should exist in the original NLB logic, or check Habitat further
         """
-        decoding_gt = self.retrieve_gt_for_eval()
+        np.random.seed(0)
+        # ! TODO ideally seed other libraries as well...? Is that our responsibility?
+        eval_files = self.get_eval_files()
         all_preds = []
-        for trial in decoding_gt:
+        all_targets = []
+        for datafile in eval_files:
+            if not datafile.exists():
+                raise FileNotFoundError(f"File {datafile} not found.")
+            neural_data, decoding_gt = load_nwb(datafile, dataset=self.dataset)
             decoder.reset()
             trial_preds = []
-            for neural_observations in trial:
+            for neural_observations in neural_data:
                 trial_preds.append(decoder.predict(neural_observations))
-            all_preds.append(np.array(trial_preds))
-        metrics = self.compute_metrics(all_preds, decoding_gt)
+            all_preds.append(np.stack(trial_preds))
+            all_targets.append(decoding_gt)
+        all_preds = np.concatenate(all_preds, axis=0)
+        all_targets = np.concatenate(all_targets, axis=0)
+        metrics = self.compute_metrics(all_preds, all_targets)
         for k, v in metrics.items():
             logger.info("{}: {}".format(k, v))
         return metrics
@@ -54,16 +63,18 @@ class Evaluator:
             "accuracy": np.mean(all_preds == decoding_gt)
         }
 
-    def compute_metrics(self, all_preds, decoding_gt):
+    def compute_metrics(self, all_preds, all_targets):
         r"""
-            all_preds: list of arrays of shape (n_timesteps, n_channels)
-            decoding_gt: list of arrays of shape (n_timesteps, n_channels)
+            all_preds: arrays of shape (n_timesteps, k_dim)
+            all_targets: arrays of shape (n_timesteps, k_dim)
         """
         if self.dataset in ['h1', 'm1', 'm2']:
-            return self.compute_metrics_regression(all_preds, decoding_gt)
+            metrics = self.compute_metrics_regression(all_preds, all_targets)
         elif self.dataset in ['h2']:
-            return self.compute_metrics_classification(all_preds, decoding_gt)
-        raise ValueError(f"Unknown dataset {self.dataset}")
+            metrics = self.compute_metrics_classification(all_preds, all_targets)
+        else:
+            raise ValueError(f"Unknown dataset {self.dataset}")
+        return metrics
 
 r"""
     JY isn't too clear what happens eval-server side on submission but 1 of 2 patterns seem plausible:

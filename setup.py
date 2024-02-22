@@ -1,8 +1,5 @@
 from setuptools import setup, find_packages
 
-with open('requirements.txt') as f:
-    requires = f.read().splitlines()
-
 setup(
     name='falcon_challenge',
     version='0.0.1',
@@ -12,14 +9,14 @@ setup(
     author_email='joelye9@gmail.com',
 
     packages=find_packages(where='falcon_challenge'),
-    requires=[
+    install_requires=[
         'numpy',
-        'hydra',
+        'hydra-core',
         'matplotlib',
         'tqdm',
         'scipy',
         'pandas',
         'seaborn',
-        'scikit-learn',
+        'scikit-learn'
     ],
 )

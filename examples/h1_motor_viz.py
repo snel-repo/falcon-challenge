@@ -24,6 +24,7 @@ from scipy.signal import convolve
 
 from pynwb import NWBHDF5IO
 from examples.styleguide import set_style
+from falcon_challenge.dataloaders import bin_units
 
 # root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
 root = Path('./data/h1')
@@ -43,29 +44,6 @@ print(train_files)
 
 uniform_dof = 7
 print(f"Uniform DoF: {uniform_dof}")
-
-# Load nwb file
-def bin_units(
-        units: pd.DataFrame,
-        bin_size_s: float = 0.01,
-        bin_end_timestamps: np.ndarray | None = None
-    ) -> np.ndarray:
-    r"""
-        units: df with only index (spike index) and spike times (list of times in seconds). From nwb.units.
-        bin_end_timestamps: array of timestamps indicating end of bin
-
-        Returns:
-        - array of spike counts per bin, per unit. Shape is (bins x units)
-    """
-    if bin_end_timestamps is None:
-        end_time = units.spike_times.apply(lambda s: max(s) if len(s) else 0).max() + bin_size_s
-        bin_end_timestamps = np.arange(0, end_time, bin_size_s)
-    spike_arr = np.zeros((len(bin_end_timestamps), len(units)), dtype=np.uint8)
-    bin_edges = np.concatenate([np.array([-np.inf]), bin_end_timestamps])
-    for idx, (_, unit) in enumerate(units.iterrows()):
-        spike_cnt, _ = np.histogram(unit.spike_times, bins=bin_edges)
-        spike_arr[:, idx] = spike_cnt
-    return spike_arr
 
 def load_nwb(fn: str):
     r"""
