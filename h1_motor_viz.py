@@ -134,6 +134,21 @@ train_bins, train_kin, train_timestamps, train_epochs, train_labels = load_files
 test_bins_short, test_kin_short, test_timestamps_short, test_epochs_short, test_labels_short = load_files(test_files_short)
 test_bins_long, test_kin_long, test_timestamps_long, test_epochs_long, test_labels_long = load_files(test_files_long)
 
+print(train_bins.shape)
+print(train_epochs.shape)
+print(train_timestamps.shape)
+print(train_labels)
+#%%
+print(train_epochs.iloc[0])
+print(train_epochs.iloc[1])
+print(train_epochs.iloc[2])
+print(train_epochs.iloc[3])
+print(train_epochs.iloc[5])
+print(train_epochs.iloc[8])
+print(train_epochs.iloc[9])
+print(train_epochs.iloc[11])
+print(train_epochs.iloc[12])
+print(train_epochs.iloc[13])
 #%%
 # Basic qualitative
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
