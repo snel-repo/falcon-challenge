@@ -35,44 +35,50 @@ class FalconEvaluator:
         eval_files = self.get_eval_files()
         all_preds = []
         all_targets = []
+        all_eval_mask = []
         for datafile in eval_files:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
-            neural_data, decoding_gt = load_nwb(datafile, dataset=self.dataset)
+            neural_data, decoding_targets, eval_mask = load_nwb(datafile, dataset=self.dataset)
             decoder.reset()
             trial_preds = []
             for neural_observations in neural_data:
                 trial_preds.append(decoder.predict(neural_observations))
             all_preds.append(np.stack(trial_preds))
-            all_targets.append(decoding_gt)
-        all_preds = np.concatenate(all_preds, axis=0)
-        all_targets = np.concatenate(all_targets, axis=0)
-        metrics = self.compute_metrics(all_preds, all_targets)
+            all_targets.append(decoding_targets)
+            all_eval_mask.append(eval_mask)
+        all_preds = np.concatenate(all_preds)
+        all_targets = np.concatenate(all_targets)
+        all_eval_mask = np.concatenate(all_eval_mask)
+        metrics = self.compute_metrics(all_preds, all_targets, all_eval_mask)
         for k, v in metrics.items():
             logger.info("{}: {}".format(k, v))
         return metrics
 
     @staticmethod
-    def compute_metrics_regression(all_preds, decoding_gt):
+    def compute_metrics_regression(preds, targets, eval_mask):
+        targets = targets[eval_mask]
+        preds = preds[eval_mask]
         return {
-            "r2": r2_score(decoding_gt, all_preds, multioutput='uniform_average')
+            "r2": r2_score(targets, preds, multioutput='uniform_average')
         }
 
     @staticmethod
-    def compute_metrics_classification(all_preds, decoding_gt):
+    def compute_metrics_classification(preds, targets, eval_mask):
         return {
-            "accuracy": np.mean(all_preds == decoding_gt)
+            "accuracy": np.mean(preds == targets)
         }
 
-    def compute_metrics(self, all_preds, all_targets):
+    def compute_metrics(self, all_preds, all_targets, all_eval_mask=None):
         r"""
-            all_preds: arrays of shape (n_timesteps, k_dim)
-            all_targets: arrays of shape (n_timesteps, k_dim)
+            all_preds: array of shape (n_timesteps, k_dim)
+            all_targets: array of shape (n_timesteps, k_dim)
+            all_eval_mask: array of shape (n_timesteps, k_dim). True if we should evaluate this timestep.
         """
         if self.dataset in ['h1', 'm1', 'm2']:
-            metrics = self.compute_metrics_regression(all_preds, all_targets)
+            metrics = self.compute_metrics_regression(all_preds, all_targets, all_eval_mask)
         elif self.dataset in ['h2']:
-            metrics = self.compute_metrics_classification(all_preds, all_targets)
+            metrics = self.compute_metrics_classification(all_preds, all_targets, all_eval_mask)
         else:
             raise ValueError(f"Unknown dataset {self.dataset}")
         return metrics

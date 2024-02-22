@@ -16,6 +16,8 @@ from dateutil.tz import tzlocal
 
 from pynwb import NWBFile, NWBHDF5IO, TimeSeries
 
+from data_demos.filtering import smooth
+
 root = Path('./data/h1')
 # List files
 files = list(root.glob('*.mat'))
@@ -28,6 +30,15 @@ TARGET_BIN_SIZE_S = TARGET_BIN_SIZE_MS / 1000
 FEW_SHOT_CALIBRATION_RATIO = 0.2
 EVAL_RATIO = 0.4
 INTERTRIAL_NAME = 'Intertrial'
+
+DEFAULT_TARGET_SMOOTH_MS = 490
+KERNEL_SIZE = int(DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS)
+KERNEL_SIGMA = DEFAULT_TARGET_SMOOTH_MS / (3 * TARGET_BIN_SIZE_MS)
+
+def create_targets(kin: np.ndarray):
+    kin = smooth(kin, KERNEL_SIZE, KERNEL_SIGMA)
+    out = np.gradient(kin, axis=0)
+    return out
 
 CURATED_SETS = {
     'S53_set_1': 'train',
@@ -123,11 +134,20 @@ def to_nwb(fn):
     payload = loadmat(str(fn), simplify_cells=True, variable_names=['thin_data'])['thin_data']
     state_names = payload['state_names'] # Shape is ~15 (arbitrary, exp dependent)
     state_names[0] = INTERTRIAL_NAME
+    blacklist_states = [INTERTRIAL_NAME, 'FailSafe', 'FailSafe1', 'SnapTo']
+    blacklist_index = []
+    for name in blacklist_states:
+        if name in state_names:
+            blacklist_index.append(list(state_names).index(name))
+
     raw_spike_channel = payload['source_index'] * CHANNELS_PER_SOURCE + payload['channel']
     raw_spike_time = payload['source_timestamp']
     bin_time = payload['spm_source_timestamp'] # Indicates end of 20ms bin, in seconds. Shape is (recording devices x Timebin), each has own clock
     bin_kin = payload['open_loop_kin'] # Shape is (Timebin x K)
     bin_state = payload['state_num'] -1 # Shape is (Timebin), 1-index -> 0-index
+    blacklist_timesteps = np.isin(bin_state, blacklist_index)
+    print(f'% blacklist phases: {np.sum(blacklist_timesteps) / len(blacklist_timesteps) * 100:.2f}')
+
     bin_trial = payload['trial_num'] # Shape is (Timebin)
 
     # Align all times to start of 1st bin of data.
@@ -153,6 +173,7 @@ def to_nwb(fn):
     bin_kin = bin_kin[keep_indices]
     bin_state = bin_state[keep_indices]
     bin_trial = bin_trial[keep_indices]
+    blacklist_timesteps = blacklist_timesteps[keep_indices]
 
     # count number of dead channels with no spikes
     # channel_cts = np.unique(raw_spike_channel, return_counts=True)
@@ -191,24 +212,42 @@ def to_nwb(fn):
                 break
     else:
         crop_right = 0
+
+    # Instead of true cropping, we merely notify that these kin time labels are not reliable by adding to blacklist.
+    # Models are responsible for acknowledging this.
+
+    if crop_left:
+        blacklist_timesteps[:crop_left] = True
+        bin_kin[:crop_left] = bin_kin[crop_left]
+        nan_kin_mask[:crop_left] = False
     if crop_right:
-        bin_kin = bin_kin[crop_left:crop_right]
-        bin_trial = bin_trial[crop_left:crop_right]
-        bin_state = bin_state[crop_left:crop_right]
-        bin_time_native = bin_time_native[crop_left:crop_right]
-        nan_kin_mask = nan_kin_mask[crop_left:crop_right]
-    else:
-        bin_kin = bin_kin[crop_left:]
-        bin_trial = bin_trial[crop_left:]
-        bin_state = bin_state[crop_left:]
-        bin_time_native = bin_time_native[crop_left:]
-        nan_kin_mask = nan_kin_mask[crop_left:]
-    raw_spike_time, raw_spike_channel = crop_spikes(raw_spike_time, raw_spike_channel, bin_time_native, bin_size_s=BIN_SIZE_MS)
+        blacklist_timesteps[crop_right:] = True
+        bin_kin[crop_right:] = bin_kin[crop_right - 1]
+        nan_kin_mask[crop_right:] = False
+
+    # if crop_right:
+    #     bin_kin = bin_kin[crop_left:crop_right]
+    #     bin_trial = bin_trial[crop_left:crop_right]
+    #     bin_state = bin_state[crop_left:crop_right]
+    #     bin_time_native = bin_time_native[crop_left:crop_right]
+    #     nan_kin_mask = nan_kin_mask[crop_left:crop_right]
+    #     blacklist_timesteps = blacklist_timesteps[crop_left:crop_right]
+    # else:
+    #     bin_kin = bin_kin[crop_left:]
+    #     bin_trial = bin_trial[crop_left:]
+    #     bin_state = bin_state[crop_left:]
+    #     bin_time_native = bin_time_native[crop_left:]
+    #     nan_kin_mask = nan_kin_mask[crop_left:]
+    #     blacklist_timesteps = blacklist_timesteps[crop_left:]
+
+    # raw_spike_time, raw_spike_channel = crop_spikes(raw_spike_time, raw_spike_channel, bin_time_native, bin_size_s=BIN_SIZE_MS)
+
     bin_time_native = bin_time_native - bin_time_native[0]
 
     if crop_left or crop_right:
-        print(f"Edge kin Nans: Removed {crop_left} from left, {crop_right} from right")
+        print(f"Edge kin Nans: {crop_left} bins on left, {crop_right} on right, masking")
     if nan_kin_mask.any():
+        print(nan_kin_mask.nonzero())
         print(f"Remaining kin NaNs: {nan_kin_mask.sum()} (% {np.mean(nan_kin_mask)*100:.2f})")
     cum_nan_kin_mask = np.zeros_like(nan_kin_mask)
     count = 0
@@ -226,6 +265,7 @@ def to_nwb(fn):
         Resample position information - upsample from 50 to 100Hz.
         Wrap in kin NaN interp
     """
+    print(f'Pre NaNs: {np.isnan(bin_kin).sum()}')
     assert(bin_kin.shape[0] == bin_time_native.shape[0])
     bin_time = np.arange(0, bin_time_native[-1], TARGET_BIN_SIZE_S)
     if nan_kin_mask.any():
@@ -233,10 +273,11 @@ def to_nwb(fn):
         bin_kin = interp1d(bin_time_native[~nan_kin_mask], bin_kin[~nan_kin_mask], axis=0, bounds_error=False)(bin_time)
     else:
         bin_kin = interp1d(bin_time_native, bin_kin, axis=0, bounds_error=False)(bin_time)
-        # bin_kin = interp1d(bin_time_native, bin_kin, axis=0, bounds_error=False, fill_value='extrapolate')(bin_time)
-    # Assert all times are unique...
+    bin_vel = create_targets(bin_kin)
+    # print(bin_kin.shape, bin_vel.shape)
     bin_trial_native = bin_trial
     bin_trial = interp1d(bin_time_native, bin_trial, bounds_error=False, kind='nearest', fill_value='extrapolate')(bin_time)
+    bin_blacklist = interp1d(bin_time_native, blacklist_timesteps, bounds_error=False, kind='nearest', fill_value='extrapolate')(bin_time)
 
     # bin_state kept at native time
     def create_nwb_container(
@@ -245,8 +286,10 @@ def to_nwb(fn):
         bin_time: np.ndarray, # Resampled
         bin_time_native: np.ndarray, # For state
         bin_kin: np.ndarray, # Resampled
+        bin_vel: np.ndarray,
         bin_trial: np.ndarray, # Resampled
         bin_state: np.ndarray, # Native resolution
+        bin_blacklist: np.ndarray,
     ):
         # Recenter timestamps in case data is subsetted
         nwbfile = create_nwb_shell()
@@ -262,6 +305,19 @@ def to_nwb(fn):
         )
         nwbfile.add_acquisition(position_spatial_series)
 
+        # Add filtered kinematics
+        # print(bin_vel.shape, bin_time.shape)
+        velocity_spatial_series = TimeSeries(
+            name="OpenLoopKinematicsVelocity",
+            description="tx,ty,tz,rx,ry,rz,grasp",
+            timestamps=bin_time,
+            data=bin_vel,
+            unit="arbitrary",
+        )
+
+        nwbfile.add_acquisition(velocity_spatial_series)
+        # Note we are abusing the acquisition field to store derivative data, which is not ideal
+
         # Create a TimeSeries for trial num, semi-hack - states should likely not be its own TimeSeries
         trial_series = TimeSeries(
             name="TrialNum",
@@ -271,13 +327,16 @@ def to_nwb(fn):
             unit="arbitrary",
         )
         nwbfile.add_acquisition(trial_series)
+        blacklist_series = TimeSeries(
+            name="Blacklist",
+            description="Timesteps to ignore covariates (for training, eval). Neural data is not affected.",
+            timestamps=bin_time,
+            data=bin_blacklist,
+            unit="bool",
+        )
+        nwbfile.add_acquisition(blacklist_series)
 
         # Convert states to epoch data
-        # print("Start + end")
-        # print(bin_time[:2], bin_time[-2:])
-        # print(bin_time_native[:2], bin_time_native[-2:])
-        # print(bin_state.shape, bin_time_native.shape, bin_time.shape)
-        # print("done")
         epoch_start = bin_time_native[0]
         cur_state = bin_state[0]
         for i in range(1, len(bin_state)):
@@ -310,8 +369,10 @@ def to_nwb(fn):
             sub_bin_time - start_time,
             bin_time_native[trial_mask_native] - start_time,
             bin_kin[trial_mask],
+            bin_vel[trial_mask],
             bin_trial[trial_mask],
             bin_state[trial_mask_native],
+            bin_blacklist[trial_mask],
         )
     def create_and_write(trial_mask, trial_mask_native, suffix, folder=CURATED_SETS[tag]):
         nwbfile = create_cropped_container(trial_mask, trial_mask_native)
@@ -343,8 +404,10 @@ def to_nwb(fn):
             bin_time,
             bin_time_native,
             bin_kin,
+            bin_vel,
             bin_trial,
             bin_state,
+            bin_blacklist,
         )
 
         out_fn = create_nwb_name(fn)

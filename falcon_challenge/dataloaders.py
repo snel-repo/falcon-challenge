@@ -38,14 +38,15 @@ def load_nwb(fn: str | Path, dataset: str = 'h1') -> Tuple[np.ndarray, np.ndarra
         Returns:
         - neural_data: binned spike counts. Shape is (time x units)
         - covariates (e.g. kinematics). Shape is (time x n_kinematic_dims)
+        - eval_mask: boolean array indicating whether to evaluate each time step
     """
     if dataset == 'h1':
         with NWBHDF5IO(str(fn), 'r') as io:
             nwbfile = io.read()
             # print(nwbfile)
             units = nwbfile.units.to_dataframe()
-            kin = nwbfile.acquisition['OpenLoopKinematics'].data[:]
+            kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
-            return bin_units(units, bin_end_timestamps=timestamps), kin
+            return bin_units(units, bin_end_timestamps=timestamps), kin, np.ones(len(kin), dtype=bool)
     else:
         raise ValueError(f"Unknown dataset {dataset}")

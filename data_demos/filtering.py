@@ -1,5 +1,63 @@
 import scipy.signal as signal
 import numpy as np
+import torch
+import torch.nn.functional as F
+
+r"""
+    H1 filtering
+"""
+NEURAL_TAU_MS = 240. # exponential filter from H1 Lab
+def apply_exponential_filter(
+        x, tau=NEURAL_TAU_MS, bin_size=10, extent: int=1
+    ):
+    """
+    Apply a **causal** exponential filter to the neural signal.
+
+    :param x: NumPy array of shape (time, channels)
+    :param tau: Decay rate (time constant) of the exponential filter
+    :param bin_size: Bin size in ms (default is 10ms)
+    :return: Filtered signal
+    :param extent: Number of time constants to extend the filter kernel
+
+    Implementation notes:
+    # extent should be 3 for reporting parity, but reference hardcodes a kernel that's equivalent to extent=1
+    """
+    t = np.arange(0, extent * tau, bin_size)
+    # Exponential filter kernel
+    kernel = np.exp(-t / tau)
+    kernel /= np.sum(kernel)
+    # Apply the filter
+    filtered_signal = np.array([signal.convolve(x[:, ch], kernel, mode='full')[-len(x):] for ch in range(x.shape[1])]).T
+    return filtered_signal
+
+
+
+def gaussian_kernel(size, sigma):
+    """
+    Create a 1D Gaussian kernel.
+    """
+    size = int(size)
+    x = np.linspace(-size // 2, size // 2, size)
+    kernel = np.exp(-0.5 * (x / sigma) ** 2)
+    kernel /= kernel.sum()
+    return kernel
+
+def smooth(position, kernel_size: int, sigma: float):
+    """
+    Apply Gaussian smoothing on the position data (dim 0)
+    kernel_size: size of the kernel
+    sigma: standard deviation of the Gaussian kernel
+    """
+    kernel = gaussian_kernel(kernel_size, sigma)
+    pad_total = kernel_size - 1
+    pad_left = pad_total // 2
+    pad_right = pad_total - pad_left
+
+    position = torch.as_tensor(position, dtype=torch.float32)
+    position = F.pad(position.T, (pad_left, pad_right), 'replicate')
+    smoothed = F.conv1d(position.unsqueeze(1), torch.as_tensor(kernel, dtype=torch.float32).unsqueeze(0).unsqueeze(0), padding=0)
+    return smoothed.squeeze().T.numpy()
+
 
 # -- frequency filtering functions
 def _filter(b, a, x):

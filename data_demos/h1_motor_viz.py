@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 import torch.nn.functional as F
-from scipy.signal import convolve
 
 from pynwb import NWBHDF5IO
 from data_demos.styleguide import set_style
@@ -56,6 +55,7 @@ def load_nwb(fn: str):
         units = nwbfile.units.to_dataframe()
         kin = nwbfile.acquisition['OpenLoopKinematics'].data[:]
         timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
+        blacklist = nwbfile.acquisition['Blacklist'].data[:].astype(bool)
         epochs = nwbfile.epochs.to_dataframe()
         trials = nwbfile.acquisition['TrialNum'].data[:]
         labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
@@ -63,13 +63,14 @@ def load_nwb(fn: str):
             bin_units(units, bin_end_timestamps=timestamps),
             kin,
             timestamps,
+            blacklist,
             epochs,
             trials,
             labels
         )
 
 def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
-    binned, kin, timestamps, epochs, trials, labels = zip(*[load_nwb(str(f)) for f in files])
+    binned, kin, timestamps, blacklist, epochs, trials, labels = zip(*[load_nwb(str(f)) for f in files])
     # Merge data by simple concat
     binned = np.concatenate(binned, axis=0)
     kin = np.concatenate(kin, axis=0)
@@ -81,16 +82,19 @@ def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.Data
         current_epochs['stop_time'] += clock_offset
         all_timestamps.append(current_times + clock_offset)
     timestamps = np.concatenate(all_timestamps, axis=0)
+    blacklist = np.concatenate(blacklist, axis=0)
     trials = np.concatenate(trials, axis=0)
     epochs = pd.concat(epochs, axis=0)
     for l in labels[1:]:
         assert l == labels[0]
-    return binned, kin, timestamps, epochs, trials, labels[0]
+    return binned, kin, timestamps, blacklist, epochs, trials, labels[0]
 
-train_bins, train_kin, train_timestamps, train_epochs, train_trials, train_labels = load_files(train_files)
-test_bins_short, test_kin_short, test_timestamps_short, test_epochs_short, test_trials_short, test_labels_short = load_files(test_files_short)
-test_bins_long, test_kin_long, test_timestamps_long, test_epochs_long, test_trials_long, test_labels_long = load_files(test_files_long)
+train_bins, train_kin, train_timestamps, train_blacklist, train_epochs, train_trials, train_labels = load_files(train_files)
+test_bins_short, test_kin_short, test_timestamps_short, test_blacklist_short, test_epochs_short, test_trials_short, test_labels_short = load_files(test_files_short)
+test_bins_long, test_kin_long, test_timestamps_long, test_blacklist_long, test_epochs_long, test_trials_long, test_labels_long = load_files(test_files_long)
 #%%
+BIN_SIZE_MS = 10 # TODO derive from nwb
+
 # Basic qualitative
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
 to_plot = train_labels
@@ -274,36 +278,18 @@ time_active = np.sum(active_phases) * (train_timestamps[1] - train_timestamps[0]
 print(f"Percent active (Variance inferred): {time_active / train_timestamps[-1] * 100:.2f}%")
 #%%
 # Smooth data for decoding make base linear decoder
-BIN_SIZE_MS = 10
-DEFAULT_TARGET_SMOOTH_MS = 490
+from data_demos.filtering import smooth
+
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
-
-def gaussian_kernel(size, sigma):
-    """
-    Create a 1D Gaussian kernel.
-    """
-    size = int(size)
-    x = np.linspace(-size // 2, size // 2, size)
-    kernel = np.exp(-0.5 * (x / sigma) ** 2)
-    kernel /= kernel.sum()
-    return kernel
-
-def smooth(position, kernel_size=DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS, sigma=DEFAULT_TARGET_SMOOTH_MS / (3 * BIN_SIZE_MS)):
-    """
-    Apply Gaussian smoothing on the position data (dim 0)
-    """
-    kernel = gaussian_kernel(kernel_size, sigma)
-    pad_left, pad_right = int(kernel_size // 2), int(kernel_size // 2)
-
-    position = torch.as_tensor(position, dtype=torch.float32)
-    position = F.pad(position.T, (pad_left, pad_right), 'replicate')
-    smoothed = F.conv1d(position.unsqueeze(1), torch.tensor(kernel).float().unsqueeze(0).unsqueeze(0))
-    return smoothed.squeeze().T.numpy()
-
-def create_targets(kin: np.ndarray):
-    kin = smooth(kin)
-    return np.gradient(kin, axis=0)
 ax = plt.gca()
+DEFAULT_TARGET_SMOOTH_MS = 490
+KERNEL_SIZE = int(DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS)
+KERNEL_SIGMA = DEFAULT_TARGET_SMOOTH_MS / (3 * BIN_SIZE_MS)
+def create_targets(kin: np.ndarray):
+    kin = smooth(kin, KERNEL_SIZE, KERNEL_SIGMA)
+    out = np.gradient(kin, axis=0)
+    return out
+
 # Compute velocity
 # Plot together to compare
 # kinplot(train_kin, timestamps, ax=ax, palette=palette)
@@ -316,32 +302,8 @@ plt.xlim(xticks[0], xticks[-1])
 plt.xticks(xticks, labels=xticks.round(2))
 
 #%%
-NEURAL_TAU_MS = 240. # exponential filter from H1 Lab
-
-def apply_exponential_filter(
-        signal, tau, bin_size=10, extent: int=1
-    ):
-    """
-    Apply a **causal** exponential filter to the neural signal.
-
-    :param signal: NumPy array of shape (time, channels)
-    :param tau: Decay rate (time constant) of the exponential filter
-    :param bin_size: Bin size in ms (default is 10ms)
-    :return: Filtered signal
-    :param extent: Number of time constants to extend the filter kernel
-
-    Implementation notes:
-    # extent should be 3 for reporting parity, but reference hardcodes a kernel that's equivalent to extent=1
-    """
-    t = np.arange(0, extent * tau, bin_size)
-    # Exponential filter kernel
-    kernel = np.exp(-t / tau)
-    kernel /= np.sum(kernel)
-    # Apply the filter
-    filtered_signal = np.array([convolve(signal[:, ch], kernel, mode='full')[-len(signal):] for ch in range(signal.shape[1])]).T
-    return filtered_signal
-
-filtered_signal = apply_exponential_filter(train_bins, NEURAL_TAU_MS)
+from data_demos.filtering import apply_exponential_filter
+filtered_signal = apply_exponential_filter(train_bins)
 f = plt.figure(figsize=(20, 10))
 ax = f.gca()
 
@@ -452,35 +414,39 @@ def apply_neural_behavioral_lag(neural_matrix: np.ndarray, behavioral_matrix: np
 def prepare_train_test(
         binned_spikes: np.ndarray,
         behavior: np.ndarray,
+        blacklist: np.ndarray | None=None,
         history: int=0,
         lag: int=0,
         ):
-    signal = apply_exponential_filter(binned_spikes, NEURAL_TAU_MS)
+    signal = apply_exponential_filter(binned_spikes)
     targets = create_targets(behavior)
 
     # Remove timepoints where nothing is happening in the kinematics
     still_times = np.all(np.abs(targets) < 0.001, axis=1)
-    # final_signal = filtered_signal
-    # final_target = velocity
+    still_times = still_times & blacklist if blacklist is not None else still_times
     signal = signal[~still_times]
     targets = targets[~still_times]
 
     train_x, test_x = np.split(signal, [int(TRAIN_TEST[0] * signal.shape[0])])
     train_y, test_y = np.split(targets, [int(TRAIN_TEST[0] * targets.shape[0])])
+    train_blacklist, test_blacklist = np.split(blacklist, [int(TRAIN_TEST[0] * targets.shape[0])])
+
     x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
     x_std[x_std == 0] = 1
-    y_mean, y_std = np.nanmean(train_y, axis=0), np.nanstd(train_y, axis=0)
+    y_mean, y_std = np.nanmean(train_y[~train_blacklist], axis=0), np.nanstd(train_y[~train_blacklist], axis=0)
     y_std[y_std == 0] = 1
     train_x = (train_x - x_mean) / x_std
     test_x = (test_x - x_mean) / x_std
     train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
     test_y = (test_y - y_mean) / y_std
 
-    is_nan_y = np.isnan(train_y).any(axis=1)
-    if np.any(is_nan_y):
-        print(f"NaNs found in train_y, removing {np.sum(is_nan_y)} timepoints")
-    train_x = train_x[~is_nan_y]
-    train_y = train_y[~is_nan_y]
+    blacklist_y = np.isnan(train_y).any(axis=1)
+    if blacklist is not None:
+        blacklist_y = blacklist_y | blacklist[:train_y.shape[0]]
+    if np.any(blacklist_y):
+        print(f"Invalidating {np.sum(is_nan_y)} timepoints with bad kinematics")
+    train_x = train_x[~blacklist_y]
+    train_y = train_y[~blacklist_y]
 
     is_nan_y = np.isnan(test_y).any(axis=1)
     if np.any(is_nan_y):
@@ -490,6 +456,7 @@ def prepare_train_test(
 
     # ? Where are the NaNs? We can't trivially lag if there are NaNs across data...
     if lag > 0:
+        assert False, "not implemented"
         train_x, train_y = apply_neural_behavioral_lag(train_x, train_y, lag)
         test_x, test_y = apply_neural_behavioral_lag(test_x, test_y, lag)
 
@@ -498,6 +465,8 @@ def prepare_train_test(
         test_x = generate_lagged_matrix(test_x, history)
         train_y = train_y[history:]
         test_y = test_y[history:]
+
+    blacklist_y =
 
     return train_x, train_y, test_x, test_y, x_mean, x_std, y_mean, y_std
 
@@ -511,8 +480,9 @@ def prepare_test(
         y_std: np.ndarray,
         use_local_x_stats: bool = True, # Minimal adaptation is to zscore with local statistics
         history: int=0,
+        blacklist: np.ndarray | None=None,
         ):
-    signal = apply_exponential_filter(binned_spikes, NEURAL_TAU_MS)
+    signal = apply_exponential_filter(binned_spikes)
     targets = create_targets(behavior)
 
     # Remove timepoints where nothing is happening in the kinematics
@@ -551,7 +521,7 @@ HISTORY = 5
     x_std,
     y_mean,
     y_std
-) = prepare_train_test(train_bins, train_kin, history=HISTORY)
+) = prepare_train_test(train_bins, train_kin, train_blacklist, history=HISTORY)
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 print(f"CV Score: {score:.2f}")
@@ -568,7 +538,8 @@ x_short, y_short = prepare_test(
     x_std,
     y_mean,
     y_std,
-    history=HISTORY
+    history=HISTORY,
+    blacklist=test_blacklist_short
     )
 x_long, y_long = prepare_test(
     test_bins_long,
@@ -577,7 +548,8 @@ x_long, y_long = prepare_test(
     x_std,
     y_mean,
     y_std,
-    history=HISTORY
+    history=HISTORY,
+    blacklist=test_blacklist_long
     )
 
 r2 = r2_score(test_y, pred_y, multioutput='raw_values')
@@ -588,11 +560,14 @@ print(f"Val R2 Weighted: {r2_weighted}")
 print(f"Val R2 Uniform: {r2_uniform}")
 print(f"Train: {train_r2}")
 
+#%%
+r2_uniform_short = r2_score(y_short, decoder.predict(x_short), multioutput='uniform_average')
 score_short = decoder.score(x_short, y_short)
 score_long = decoder.score(x_long, y_long)
 print(f"Short Zero-shot: {score_short:.2f}")
+print(f"Short Zero-shot: {r2_uniform_short:.2f}")
 print(f"Long Zero-shot: {score_long:.2f}")
-
+#%%
 palette = sns.color_palette(n_colors=train_kin.shape[1])
 f, axes = plt.subplots(train_kin.shape[1], figsize=(6, 12), sharex=True)
 # Plot true vs predictions
