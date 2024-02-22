@@ -3,11 +3,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from examples.filtering import apply_butter_filt
 from pynwb import NWBHDF5IO
 import torch
 import torch.nn.functional as F
 from scipy.signal import resample_poly
+
+from data_demos.filtering import apply_butter_filt
 
 root = Path('/snel/share/share/derived/rouse/RTG/NWB')
 files = list(root.glob('*.nwb'))

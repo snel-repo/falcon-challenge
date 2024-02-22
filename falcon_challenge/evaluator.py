@@ -6,6 +6,7 @@ from sklearn.metrics import r2_score
 from falcon_challenge.interface import BCIDecoder
 from falcon_challenge.dataloaders import load_nwb
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FalconEvaluator:

@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from scipy.signal import convolve
 
 from pynwb import NWBHDF5IO
-from examples.styleguide import set_style
+from data_demos.styleguide import set_style
 from falcon_challenge.dataloaders import bin_units
 
 # root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')

@@ -19,52 +19,12 @@ import torch
 # from config import HabitatChallengeConfigPlugin
 # from omegaconf import DictConfig
 
-from falcon_challenge.config import FalconConfig
+from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 from falcon_challenge.interface import BCIDecoder
 
-class RandomDecoder(BCIDecoder):
-    r"""
-        TODO: Do we want a streaming API, or to provide all neural data at once? (enforce causality at cost of increased inference?)
-        TODO: Should inference be single trial or batched?
-
-        Proposed flow:
-            - Determine the task and find the action space (defining a Gym env, use RLLib, TensorDict?)
-            - Sample a random action
-    """
-    def __init__(self, task_config: FalconConfig):
-        self._task_config = task_config
-
-    def predict(self, neural_observations: np.ndarray):
-        r"""
-            neural_observations: array of shape (n_channels), 10ms binned spike counts
-            TODO ideally the action spaces are extracted from task config specified in main package
-        """
-        if self._task_config.task == "falcon_h1_7d":
-            return np.random.rand(7)
-        elif self._task_config.task == "falcon_h2":
-            return np.random.rand(28) # Or whatever the action space is
-        elif self._task_config.task == "falcon_m1":
-            return np.random.rand(2)
-        elif self._task_config.task == "falcon_m2":
-            return np.random.rand(2)
-        else:
-            raise ValueError(f"Unknown task {self._task_config.task}")
-
-class MyConfig:
-    model_path: str = ""
-
-class SimpleRNNDecoder(BCIDecoder):
-    def __init__(self, task_config: FalconConfig, decoder_cfg: MyConfig):
-        self._task_config = task_config
-        self.dnn = torch.load(decoder_cfg.model_path)
-
-    def reset(self):
-        self.neural_history = np.zeros((0, self._task_config.n_channels))
-
-    def predict(self, neural_observations: np.ndarray):
-        self.neural_history = np.concatenate([self.neural_history, neural_observations[np.newaxis, :]], axis=0)
-        return self.dnn(self.neural_history)
+from decoder_demos.random_decoder import RandomDecoder
+from decoder_demos.rnn_decoder import SimpleRNNDecoder, MyConfig
 
 def main():
     parser = argparse.ArgumentParser()
@@ -73,6 +33,9 @@ def main():
     )
     parser.add_argument(
         "--model-path", type=str, required=False
+    )
+    parser.add_argument(
+        '--phase', type=str, required=False, default='h1_short'
     )
     args = parser.parse_args()
 
@@ -86,8 +49,9 @@ def main():
     #         "habitat/task/actions=" + args.action_space,
     #     ],
     # )
+    dataset = args.phase.split('_')[0]
     config = FalconConfig(
-        task="falcon_h1_7d",
+        task=getattr(FalconTask, dataset),
         n_channels=192,
     )
 
@@ -99,7 +63,7 @@ def main():
 
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",
-        phase='h1_short')
+        phase=args.phase)
     evaluator.evaluate(decoder)
 
 
