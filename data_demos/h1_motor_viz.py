@@ -423,13 +423,14 @@ def prepare_train_test(
 
     # Remove timepoints where nothing is happening in the kinematics
     still_times = np.all(np.abs(targets) < 0.001, axis=1)
-    still_times = still_times & blacklist if blacklist is not None else still_times
-    signal = signal[~still_times]
-    targets = targets[~still_times]
+    if blacklist is not None:
+        blacklist = still_times | blacklist
+    else:
+        blacklist = still_times
 
     train_x, test_x = np.split(signal, [int(TRAIN_TEST[0] * signal.shape[0])])
     train_y, test_y = np.split(targets, [int(TRAIN_TEST[0] * targets.shape[0])])
-    train_blacklist, test_blacklist = np.split(blacklist, [int(TRAIN_TEST[0] * targets.shape[0])])
+    train_blacklist, test_blacklist = np.split(blacklist, [int(TRAIN_TEST[0] * blacklist.shape[0])])
 
     x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
     x_std[x_std == 0] = 1
@@ -440,19 +441,12 @@ def prepare_train_test(
     train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
     test_y = (test_y - y_mean) / y_std
 
-    blacklist_y = np.isnan(train_y).any(axis=1)
-    if blacklist is not None:
-        blacklist_y = blacklist_y | blacklist[:train_y.shape[0]]
-    if np.any(blacklist_y):
-        print(f"Invalidating {np.sum(is_nan_y)} timepoints with bad kinematics")
-    train_x = train_x[~blacklist_y]
-    train_y = train_y[~blacklist_y]
-
-    is_nan_y = np.isnan(test_y).any(axis=1)
-    if np.any(is_nan_y):
-        print(f"NaNs found in test_y, removing {np.sum(is_nan_y)} timepoints")
-    test_x = test_x[~is_nan_y]
-    test_y = test_y[~is_nan_y]
+    train_blacklist = train_blacklist | np.isnan(train_y).any(axis=1)
+    test_blacklist = test_blacklist | np.isnan(test_y).any(axis=1)
+    if np.any(train_blacklist):
+        print(f"Invalidating {np.sum(train_blacklist)} timepoints in train")
+    if np.any(test_blacklist):
+        print(f"Invalidating {np.sum(test_blacklist)} timepoints in test")
 
     # ? Where are the NaNs? We can't trivially lag if there are NaNs across data...
     if lag > 0:
@@ -465,49 +459,17 @@ def prepare_train_test(
         test_x = generate_lagged_matrix(test_x, history)
         train_y = train_y[history:]
         test_y = test_y[history:]
+        if blacklist is not None:
+            train_blacklist = train_blacklist[history:]
+            test_blacklist = test_blacklist[history:]
 
-    blacklist_y =
+    # Now, finally, remove by blacklist
+    train_x = train_x[~train_blacklist]
+    train_y = train_y[~train_blacklist]
+    test_x = test_x[~test_blacklist]
+    test_y = test_y[~test_blacklist]
 
     return train_x, train_y, test_x, test_y, x_mean, x_std, y_mean, y_std
-
-
-def prepare_test(
-        binned_spikes: np.ndarray,
-        behavior: np.ndarray,
-        x_mean: np.ndarray,
-        x_std: np.ndarray,
-        y_mean: np.ndarray,
-        y_std: np.ndarray,
-        use_local_x_stats: bool = True, # Minimal adaptation is to zscore with local statistics
-        history: int=0,
-        blacklist: np.ndarray | None=None,
-        ):
-    signal = apply_exponential_filter(binned_spikes)
-    targets = create_targets(behavior)
-
-    # Remove timepoints where nothing is happening in the kinematics
-    still_times = np.all(np.abs(targets) < 0.001, axis=1)
-    signal = signal[~still_times]
-    targets = targets[~still_times]
-
-    if use_local_x_stats:
-        x_mean = np.nanmean(signal, axis=0)
-        x_std = np.nanstd(signal, axis=0)
-        x_std[x_std == 0] = 1
-    signal = (signal - x_mean) / x_std
-    targets = (targets - y_mean) / y_std
-
-    is_nan_y = np.isnan(targets).any(axis=1)
-    if np.any(is_nan_y):
-        print(f"NaNs found in test_y, removing {np.sum(is_nan_y)} timepoints")
-
-    signal = signal[~is_nan_y]
-    targets = targets[~is_nan_y]
-    if history > 0:
-        signal = generate_lagged_matrix(signal, history)
-        targets = targets[history:]
-
-    return signal, targets
 
 # HISTORY = 0
 HISTORY = 5
@@ -529,6 +491,72 @@ print(f"CV Score: {score:.2f}")
 # Same-day eval
 pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
+
+r2 = r2_score(test_y, pred_y, multioutput='raw_values')
+r2_weighted = r2_score(test_y, pred_y, multioutput='variance_weighted')
+r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
+train_r2 = r2_score(train_y, train_pred_y, multioutput='variance_weighted') #multioutput='raw_values')
+print(f"Val R2 Weighted: {r2_weighted}")
+print(f"Val R2 Uniform: {r2_uniform}")
+print(f"Train: {train_r2}")
+
+palette = sns.color_palette(n_colors=train_kin.shape[1])
+f, axes = plt.subplots(train_kin.shape[1], figsize=(6, 12), sharex=True)
+# Plot true vs predictions
+for idx, (true, pred) in enumerate(zip(test_y.T, pred_y.T)):
+    axes[idx].plot(true, label=f'{idx}', color=palette[idx])
+    axes[idx].plot(pred, linestyle='--', color=palette[idx])
+    axes[idx].set_title(f"{train_labels[idx]} $R^2$: {r2[idx]:.2f}")
+    xticks = axes[idx].get_xticks()
+    axes[idx].set_xticks(xticks)
+    axes[idx].set_xticklabels([f'{x/1000 * BIN_SIZE_MS:.0f}' for x in xticks])
+axes[-1].set_xlabel('Time (s)')
+f.suptitle(f'Val $R^2$: {score:.2f}')
+f.tight_layout()
+
+#%%
+def prepare_test(
+        binned_spikes: np.ndarray,
+        behavior: np.ndarray,
+        x_mean: np.ndarray,
+        x_std: np.ndarray,
+        y_mean: np.ndarray,
+        y_std: np.ndarray,
+        use_local_x_stats: bool = True, # Minimal adaptation is to zscore with local statistics
+        history: int=0,
+        blacklist: np.ndarray | None=None,
+        ):
+    signal = apply_exponential_filter(binned_spikes)
+    targets = create_targets(behavior)
+
+    # Remove timepoints where nothing is happening in the kinematics
+    still_times = np.all(np.abs(targets) < 0.001, axis=1)
+    if blacklist is not None:
+        blacklist = still_times | blacklist
+    else:
+        blacklist = still_times
+
+    if use_local_x_stats:
+        x_mean = np.nanmean(signal[~blacklist], axis=0)
+        x_std = np.nanstd(signal[~blacklist], axis=0)
+        x_std[x_std == 0] = 1
+    signal = (signal - x_mean) / x_std
+    targets = (targets - y_mean) / y_std
+
+    is_nan_y = np.isnan(targets).any(axis=1)
+    if np.any(is_nan_y):
+        print(f"NaNs found in test_y, removing {np.sum(is_nan_y)} timepoints")
+        blacklist = blacklist | is_nan_y
+
+    if history > 0:
+        signal = generate_lagged_matrix(signal, history)
+        targets = targets[history:]
+        blacklist = blacklist[history:]
+
+    signal = signal[~blacklist]
+    targets = targets[~blacklist]
+
+    return signal, targets
 
 # Multi-day eval
 x_short, y_short = prepare_test(
@@ -552,14 +580,6 @@ x_long, y_long = prepare_test(
     blacklist=test_blacklist_long
     )
 
-r2 = r2_score(test_y, pred_y, multioutput='raw_values')
-r2_weighted = r2_score(test_y, pred_y, multioutput='variance_weighted')
-r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
-train_r2 = r2_score(train_y, train_pred_y, multioutput='variance_weighted') #multioutput='raw_values')
-print(f"Val R2 Weighted: {r2_weighted}")
-print(f"Val R2 Uniform: {r2_uniform}")
-print(f"Train: {train_r2}")
-
 #%%
 r2_uniform_short = r2_score(y_short, decoder.predict(x_short), multioutput='uniform_average')
 score_short = decoder.score(x_short, y_short)
@@ -568,20 +588,6 @@ print(f"Short Zero-shot: {score_short:.2f}")
 print(f"Short Zero-shot: {r2_uniform_short:.2f}")
 print(f"Long Zero-shot: {score_long:.2f}")
 #%%
-palette = sns.color_palette(n_colors=train_kin.shape[1])
-f, axes = plt.subplots(train_kin.shape[1], figsize=(6, 12), sharex=True)
-# Plot true vs predictions
-for idx, (true, pred) in enumerate(zip(test_y.T, pred_y.T)):
-    axes[idx].plot(true, label=f'{idx}', color=palette[idx])
-    axes[idx].plot(pred, linestyle='--', color=palette[idx])
-    axes[idx].set_title(f"{train_labels[idx]} $R^2$: {r2[idx]:.2f}")
-    xticks = axes[idx].get_xticks()
-    axes[idx].set_xticks(xticks)
-    axes[idx].set_xticklabels([f'{x/1000 * BIN_SIZE_MS:.0f}' for x in xticks])
-axes[-1].set_xlabel('Time (s)')
-f.suptitle(f'Val $R^2$: {score:.2f}')
-f.tight_layout()
-
 # Save decoder for use in sklearn_decoder example agent
 import pickle
 with open(f'data/sklearn_h1.pkl', 'wb') as f:
