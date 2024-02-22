@@ -46,7 +46,7 @@ test_query_short = 'test_short'
 test_query_long = 'test_long'
 
 def get_files(query):
-    return list((root / query).glob('*.nwb'))
+    return sorted(list((root / query).glob('*.nwb')))
 train_files = get_files(train_query)
 test_files_short = get_files(test_query_short)
 test_files_long = get_files(test_query_long)
@@ -124,17 +124,6 @@ print(train_bins.shape)
 print(train_epochs.shape)
 print(train_timestamps.shape)
 print(train_labels)
-#%%
-print(train_epochs.iloc[0])
-print(train_epochs.iloc[1])
-print(train_epochs.iloc[2])
-print(train_epochs.iloc[3])
-print(train_epochs.iloc[5])
-print(train_epochs.iloc[8])
-print(train_epochs.iloc[9])
-print(train_epochs.iloc[11])
-print(train_epochs.iloc[12])
-print(train_epochs.iloc[13])
 #%%
 # Basic qualitative
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
@@ -264,7 +253,8 @@ ax.text(0.95, 0.55, f' {len(mute_channels)} Mute channel(s) > 100Hz:\n{mute_chan
 ax = plt.gca()
 ax.scatter(np.arange(7), np.min(train_kin, axis=0), c='k', marker='_', s=100)
 ax.scatter(np.arange(7), np.max(train_kin, axis=0), c='k', marker='_', s=100)
-ax = sns.violinplot(train_kin, truncate=True, ax=ax)
+non_nan = ~np.isnan(train_kin)
+ax = sns.violinplot(train_kin, ax=ax)
 
 ax.set_ylabel('Recorded Units')
 ax.set_xticks(np.arange(7))
@@ -554,8 +544,8 @@ def prepare_test(
 
     return signal, targets
 
+HISTORY = 5
 
-#%%
 (
     train_x,
     train_y,
@@ -565,18 +555,18 @@ def prepare_test(
     x_std,
     y_mean,
     y_std
-) = prepare_train_test(train_bins, train_kin, history=0)
+) = prepare_train_test(train_bins, train_kin, history=HISTORY)
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
-print(f"Final R2: {score:.2f}")
+print(f"CV Score: {score:.2f}")
 r2 = r2_score(test_y, pred_y, multioutput='raw_values')
 r2_weighted = r2_score(test_y, pred_y, multioutput='variance_weighted')
 r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
 train_r2 = r2_score(train_y, train_pred_y, multioutput='variance_weighted') #multioutput='raw_values')
-print(f"Val : {r2_weighted}")
-print(f"Val Uniform: {r2_uniform}")
+print(f"Val R2 Weighted: {r2_weighted}")
+print(f"Val R2 Uniform: {r2_uniform}")
 print(f"Train: {train_r2}")
 
 #%%
@@ -605,7 +595,7 @@ x_short, y_short = prepare_test(
     x_std,
     y_mean,
     y_std,
-    history=0
+    history=HISTORY
     )
 x_long, y_long = prepare_test(
     test_bins_long,
@@ -614,7 +604,7 @@ x_long, y_long = prepare_test(
     x_std,
     y_mean,
     y_std,
-    history=0
+    history=HISTORY
     )
 
 score_short = decoder.score(x_short, y_short)
