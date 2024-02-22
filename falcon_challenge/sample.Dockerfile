@@ -32,7 +32,7 @@ ENV AGENT_CONFIG_DOCKER_PATH "configs/my_decoder.yaml"
 ADD configs/my_decoder.yaml $AGENT_CONFIG_DOCKER_PATH
 
 ENV TRACK "stability_23_human_7dof"
-ENV TRACK_CONFIG_FILE "bci_stability_challenge/${TRACK}.yaml"
+ENV TRACK_CONFIG_FILE "falcon_challenge/${TRACK}.yaml"
 ADD configs/${TRACK}.yaml $TRACK_CONFIG_FILE
 
 # Note - user is allowed to modify these however they want

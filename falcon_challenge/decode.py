@@ -19,9 +19,9 @@ import torch
 # from config import HabitatChallengeConfigPlugin
 from omegaconf import DictConfig
 
-from bci_stability_challenge.config import DecodeConfig
-from bci_stability_challenge.interface import BCIDecoder
-from bci_stability_challenge.evaluator import Evaluator
+from falcon_challenge.config import DecodeConfig
+from falcon_challenge.interface import BCIDecoder
+from falcon_challenge.evaluator import Evaluator
 
 class RandomDecoder(BCIDecoder):
     r"""
@@ -40,18 +40,23 @@ class RandomDecoder(BCIDecoder):
             neural_observations: array of shape (n_channels), 10ms binned spike counts
             TODO ideally the action spaces are extracted from task config specified in main package
         """
-        if self._task_config.task == "stability_23_human_7dof":
+        if self._task_config.task == "falcon_h1":
             return {
                 "action": np.random.rand(7),
             }
-        elif self._task_config.task == "stability_23_human_handwriting":
+        elif self._task_config.task == "falcon_h2":
             return {
                 "action": np.random.rand(28), # Or whatever the action space is
             }
-        # etc
+        elif self._task_config.task == "falcon_m1":
+            return {
+                "action": np.random.rand(2),
+            }
+        elif self._task_config.task == "falcon_m2":
+            return {
+                "action": np.random.rand(2),
+            }
 
-
-# TODO for user to define
 class MyConfig:
     model_path: str = ""
 
@@ -89,11 +94,12 @@ def main():
         ],
     )
 
-    decoder_cfg = MyConfig('added_to_docker_cfg.cfg')
-    decoder_cfg.model_path = args.model_path
-
     decoder = RandomDecoder(task_config=config)
-    decoder = SimpleRNNDecoder(task_config=config, decoder_cfg=decoder_cfg)
+
+    # decoder_cfg = MyConfig('added_to_docker_cfg.cfg')
+    # decoder_cfg.model_path = args.model_path
+    # decoder = SimpleRNNDecoder(task_config=config, decoder_cfg=decoder_cfg)
+
     # TODO see Challenge/Benchmark implementation
     # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-lab/habitat/core/challenge.py
     # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-lab/habitat/core/benchmark.py

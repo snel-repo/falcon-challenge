@@ -4,7 +4,7 @@ import numpy as np
 
 from sklearn.metrics import r2_score
 
-from bci_stability_challenge.interface import BCIDecoder
+from falcon_challenge.interface import BCIDecoder
 
 logger = logging.getLogger(__name__)
 
@@ -64,3 +64,15 @@ class Evaluator:
         elif self.dataset in ['h2']:
             return self.compute_metrics_classification(all_preds, decoding_gt)
         raise ValueError(f"Unknown dataset {self.dataset}")
+
+r"""
+    JY isn't too clear what happens eval-server side on submission but 1 of 2 patterns seem plausible:
+    1. Server receives dockerfile and runs it blind.
+    - Submitted docker code should call evaluation with config that points to GT data that only lives remotely.
+    - This is the pattern that the Habitat challenge uses.
+    In order for the image to access the test data, we can mount the data when we run on eval side.
+    `docker run -v /path/on/host:/path/in/container your_image_name`
+    2. Evaluator
+    - Server receives dockerfile, and runs python evaluate.py --code Dockerfile
+    And somehow the evaluator will dynamically import the agent code to run it.
+"""

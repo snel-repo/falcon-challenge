@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from scipy.signal import convolve
 
 from pynwb import NWBHDF5IO
-from styleguide import set_style
+from examples.styleguide import set_style
 
 # root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
 root = Path('./data/h1')
