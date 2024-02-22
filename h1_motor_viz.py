@@ -8,18 +8,7 @@ Demo notebook for human motor dataset.
     and the subject is asked to move that degree in pace with the virtual arm.
     Multi-unit activity is provided for several calibration blocks.
 
-1. Test on new days
-2. Merge multiday data
-
-```python
-## Bug bash
 TODO build out the utilities lib and upload lib we want to provide...
-- Not expecting any odd numbers in start/time times, but seeing odd numbers in epoch labels
-- Expecting 5-7 DoF, but reliably receiving 7 active dimensions
-```
-- Design choices to discuss
-    - Temporally blocked splits
-    - Causal smoothing in baseline
 """
 
 # 1. Extract raw datapoints
@@ -55,7 +44,6 @@ print(train_files)
 uniform_dof = 7
 print(f"Uniform DoF: {uniform_dof}")
 
-#%%
 # Load nwb file
 def bin_units(
         units: pd.DataFrame,
@@ -89,49 +77,51 @@ def load_nwb(fn: str):
         units = nwbfile.units.to_dataframe()
         kin = nwbfile.acquisition['OpenLoopKinematics'].data[:]
         timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
-        labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
         epochs = nwbfile.epochs.to_dataframe()
+        trials = nwbfile.acquisition['TrialNum'].data[:]
+        labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
         return (
             bin_units(units, bin_end_timestamps=timestamps),
             kin,
             timestamps,
             epochs,
+            trials,
             labels
         )
 
 def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
-    binned, kin, timestamps, epochs, labels = zip(*[load_nwb(str(f)) for f in files])
+    binned, kin, timestamps, epochs, trials, labels = zip(*[load_nwb(str(f)) for f in files])
     # Merge data by simple concat
     binned = np.concatenate(binned, axis=0)
     kin = np.concatenate(kin, axis=0)
     # Offset timestamps and epochs
     all_timestamps = [timestamps[0]]
-    for idx, current_times in enumerate(timestamps[1:]):
-        epochs[idx]['start_time'] += all_timestamps[-1][-1] + 0.01 # 1 bin
-        epochs[idx]['stop_time'] += all_timestamps[-1][-1] + 0.01 # 1 bin
-        all_timestamps.append(current_times + all_timestamps[-1][-1] + 0.01)
+    for current_epochs, current_times in zip(epochs[1:], timestamps[1:]):
+        clock_offset = all_timestamps[-1][-1] + 0.01
+        current_epochs['start_time'] += clock_offset
+        current_epochs['stop_time'] += clock_offset
+        all_timestamps.append(current_times + clock_offset)
     timestamps = np.concatenate(all_timestamps, axis=0)
+    trials = np.concatenate(trials, axis=0)
     epochs = pd.concat(epochs, axis=0)
     for l in labels[1:]:
         assert l == labels[0]
-    return binned, kin, timestamps, epochs, labels[0]
+    return binned, kin, timestamps, epochs, trials, labels[0]
 
-train_bins, train_kin, train_timestamps, train_epochs, train_labels = load_files(train_files)
-test_bins_short, test_kin_short, test_timestamps_short, test_epochs_short, test_labels_short = load_files(test_files_short)
-test_bins_long, test_kin_long, test_timestamps_long, test_epochs_long, test_labels_long = load_files(test_files_long)
-
-print(train_bins.shape)
-print(train_epochs.shape)
-print(train_timestamps.shape)
-print(train_labels)
+train_bins, train_kin, train_timestamps, train_epochs, train_trials, train_labels = load_files(train_files)
+test_bins_short, test_kin_short, test_timestamps_short, test_epochs_short, test_trials_short, test_labels_short = load_files(test_files_short)
+test_bins_long, test_kin_long, test_timestamps_long, test_epochs_long, test_trials_long, test_labels_long = load_files(test_files_long)
 #%%
 # Basic qualitative
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
 to_plot = train_labels
 
 all_tags = [tag for sublist in train_epochs['tags'] for tag in sublist]
+all_tags.extend([tag for sublist in test_epochs_short['tags'] for tag in sublist])
+all_tags.extend([tag for sublist in test_epochs_long['tags'] for tag in sublist])
 unique_tags = list(set(all_tags))
 epoch_palette = sns.color_palette(n_colors=len(unique_tags))
+
 # Mute colors of "Presentation" phases
 for idx, tag in enumerate(unique_tags):
     if 'Presentation' in tag:
@@ -151,7 +141,6 @@ def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 40))
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Neuron #')
-    # ax.set_title(sample.stem)
 
 def kinplot(kin, timestamps, ax=None, palette=None, reference_labels=[], to_plot=to_plot):
     if ax is None:
@@ -162,7 +151,7 @@ def kinplot(kin, timestamps, ax=None, palette=None, reference_labels=[], to_plot
     for kin_label in to_plot:
         kin_idx = reference_labels.index(kin_label)
         ax.plot(timestamps, kin[:, kin_idx], color=palette[kin_idx])
-    print(timestamps.min(), timestamps.max())
+    # print(timestamps.min(), timestamps.max())
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Kinematics')
 
@@ -172,10 +161,8 @@ def epoch_annote(epochs, ax=None):
     for _, epoch in epochs.iterrows():
         # print(epoch.start_time, epoch.stop_time, epoch.tags)
         epoch_idx = unique_tags.index(epoch.tags[0])
-        # ax.axvspan(epoch['start_time'], epoch['stop_time'], color=epoch_palette[epoch_idx], alpha=0.5)
+        ax.axvspan(epoch['start_time'], epoch['stop_time'], color=epoch_palette[epoch_idx], alpha=0.5)
 
-# Plot together
-# Increase font sizes
 set_style()
 
 def plot_qualitative(
@@ -183,6 +170,7 @@ def plot_qualitative(
     kin: np.ndarray,
     timestamps: np.ndarray,
     epochs: pd.DataFrame,
+    trials: np.ndarray,
     labels: list,
     palette: list,
     to_plot: list,
@@ -191,26 +179,55 @@ def plot_qualitative(
     rasterplot(binned, ax=ax1)
     kinplot(kin, timestamps, palette=palette, ax=ax2, reference_labels=labels, to_plot=to_plot)
     ax2.set_ylabel('Position')
-    epoch_annote(epochs, ax=ax1)
-    epoch_annote(epochs, ax=ax2)
+    # epoch_annote(epochs, ax=ax1)
+    # epoch_annote(epochs, ax=ax2)
+    trial_changept = np.where(np.diff(trials) != 0)[0]
+    for changept in trial_changept:
+        ax2.axvline(timestamps[changept], color='k', linestyle='-', alpha=0.1)
+
     fig.suptitle(f'(DoF: {labels})')
     fig.tight_layout()
+    return fig, (ax1, ax2)
+    # xticks = np.arange(0, 50, 10)
+    # xticks = np.arange(0, 800, 10)
+    # plt.xlim(xticks[0], xticks[-1])
+    # plt.xticks(xticks, labels=xticks.round(2))
 
-    xticks = np.arange(0, 50, 10)
-    plt.xlim(xticks[0], xticks[-1])
-    plt.xticks(xticks, labels=xticks.round(2))
-
-plot_qualitative(
+f, axes = plot_qualitative(
     train_bins,
     train_kin,
     train_timestamps,
     train_epochs,
+    train_trials,
     train_labels,
     palette,
     to_plot
 )
+
+# f, axes = plot_qualitative(
+#     test_bins_short,
+#     test_kin_short,
+#     test_timestamps_short,
+#     test_epochs_short,
+#     test_trials_short,
+#     test_labels_short,
+#     palette,
+#     to_plot
+# )
+
+# f, axes = plot_qualitative(
+#     test_bins_long,
+#     test_kin_long,
+#     test_timestamps_long,
+#     test_epochs_long,
+#     test_trials_long,
+#     test_labels_long,
+#     palette,
+#     to_plot
+# )
+
 #%%
-# Just show kinematics
+# Just show kinematics with phases
 fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 kinplot(train_kin, train_timestamps, palette=palette, ax=ax, reference_labels=train_labels)
 ax.set_ylabel('Raw Visual Position')
@@ -221,7 +238,6 @@ plt.tight_layout()
 xticks = np.arange(0, 50, 10)
 plt.xlim(xticks[0], xticks[-1])
 plt.xticks(xticks, labels=xticks.round(2))
-
 
 #%%
 # Basic quantitative

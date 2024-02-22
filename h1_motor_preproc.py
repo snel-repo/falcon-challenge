@@ -1,5 +1,4 @@
 #%%
-
 # Preprocessing to go from relatively raw server transfer to NWB format.
 
 # 1. Extract raw datapoints
@@ -21,16 +20,14 @@ root = Path('./data/h1')
 # List files
 files = list(root.glob('*.mat'))
 
-sample = files[0]
-# Files are of the form
-
 #%%
 CHANNELS_PER_SOURCE = 128
 BIN_SIZE_MS = 20
 TARGET_BIN_SIZE_MS = 10
 TARGET_BIN_SIZE_S = TARGET_BIN_SIZE_MS / 1000
 FEW_SHOT_CALIBRATION_RATIO = 0.2
-EVAL_RATIO = 0.2
+EVAL_RATIO = 0.4
+INTERTRIAL_NAME = 'Intertrial'
 
 CURATED_SETS = {
     'S53_set_1': 'train',
@@ -121,10 +118,11 @@ def to_nwb(fn):
     r"""
         Load raws and align clocks
     """
+    print(tag)
 
     payload = loadmat(str(fn), simplify_cells=True, variable_names=['thin_data'])['thin_data']
     state_names = payload['state_names'] # Shape is ~15 (arbitrary, exp dependent)
-    state_names[0] = 'Pretrial'
+    state_names[0] = INTERTRIAL_NAME
     raw_spike_channel = payload['source_index'] * CHANNELS_PER_SOURCE + payload['channel']
     raw_spike_time = payload['source_timestamp']
     bin_time = payload['spm_source_timestamp'] # Indicates end of 20ms bin, in seconds. Shape is (recording devices x Timebin), each has own clock
@@ -156,10 +154,15 @@ def to_nwb(fn):
     bin_state = bin_state[keep_indices]
     bin_trial = bin_trial[keep_indices]
 
+    # count number of dead channels with no spikes
+    # channel_cts = np.unique(raw_spike_channel, return_counts=True)
+    # dead_channels = np.setdiff1d(motor_units, channel_cts[0])
+    # print(dead_channels)
+
+
     r"""
         Clean NaNs from data
     """
-    print(tag)
     # Mark pretrial period as first trial - it's a small buffer
     nan_mask = np.isnan(bin_trial)
     assert np.all(nan_mask[:np.argmax(~nan_mask)])
@@ -234,6 +237,7 @@ def to_nwb(fn):
     # Assert all times are unique...
     bin_trial_native = bin_trial
     bin_trial = interp1d(bin_time_native, bin_trial, bounds_error=False, kind='nearest', fill_value='extrapolate')(bin_time)
+
     # bin_state kept at native time
     def create_nwb_container(
         spike_time: np.ndarray,
@@ -244,11 +248,11 @@ def to_nwb(fn):
         bin_trial: np.ndarray, # Resampled
         bin_state: np.ndarray, # Native resolution
     ):
+        # Recenter timestamps in case data is subsetted
         nwbfile = create_nwb_shell()
         for unit_id in motor_units:
             spike_times = spike_time[spike_channel == unit_id]
             nwbfile.add_unit(spike_times=spike_times)
-
         position_spatial_series = TimeSeries(
             name="OpenLoopKinematics",
             description="tx,ty,tz,rx,ry,rz,grasp",
@@ -269,39 +273,54 @@ def to_nwb(fn):
         nwbfile.add_acquisition(trial_series)
 
         # Convert states to epoch data
+        # print("Start + end")
+        # print(bin_time[:2], bin_time[-2:])
+        # print(bin_time_native[:2], bin_time_native[-2:])
+        # print(bin_state.shape, bin_time_native.shape, bin_time.shape)
+        # print("done")
         epoch_start = bin_time_native[0]
         cur_state = bin_state[0]
         for i in range(1, len(bin_state)):
             if bin_state[i] != cur_state:
                 # End of state, add interval
-                # ! bin_state is not resampled to bin_time_native
-                nwbfile.add_epoch(start_time=epoch_start, stop_time=bin_time_native[i], tags=[state_names[cur_state]], timeseries=[position_spatial_series])
+                nwbfile.add_epoch(
+                    start_time=epoch_start,
+                    stop_time=bin_time_native[i], # ! bin_state is not resampled
+                    tags=[state_names[cur_state]],
+                    timeseries=[position_spatial_series])
                 cur_state = bin_state[i]
                 epoch_start = bin_time_native[i]
+        # Append a final posttrial state
+        if epoch_start < bin_time_native[-1]:
+            nwbfile.add_epoch(
+                start_time=epoch_start,
+                stop_time=bin_time_native[-1],
+                tags=[INTERTRIAL_NAME],
+                timeseries=[position_spatial_series])
         return nwbfile
 
+    def create_cropped_container(trial_mask, trial_mask_native):
+        # print(trial_mask)
+        sub_bin_time = bin_time[trial_mask]
+        sub_spike_times, sub_channels = crop_spikes(raw_spike_time, raw_spike_channel, sub_bin_time)
+        start_time = sub_bin_time[0]
+        return create_nwb_container(
+            sub_spike_times,
+            sub_channels,
+            sub_bin_time - start_time,
+            bin_time_native[trial_mask_native] - start_time,
+            bin_kin[trial_mask],
+            bin_trial[trial_mask],
+            bin_state[trial_mask_native],
+        )
+    def create_and_write(trial_mask, trial_mask_native, suffix, folder=CURATED_SETS[tag]):
+        nwbfile = create_cropped_container(trial_mask, trial_mask_native)
+        out = fn.parent / folder / f"{out_fn.stem}_{suffix}.nwb"
+        write_to_nwb(nwbfile, out)
+
+    trials = sorted(np.unique(bin_trial))
     if CURATED_SETS[tag] != "train":
         out_fn = create_nwb_name(fn)
-
-        def create_cropped_container(trial_mask, trial_mask_native):
-            # print(trial_mask)
-            sub_bin_time = bin_time[trial_mask]
-            sub_spike_times, sub_channels = crop_spikes(raw_spike_time, raw_spike_channel, sub_bin_time)
-            return create_nwb_container(
-                sub_spike_times,
-                sub_channels,
-                sub_bin_time,
-                bin_time_native[trial_mask_native],
-                bin_kin[trial_mask],
-                bin_trial[trial_mask],
-                bin_state[trial_mask_native],
-            )
-        def create_and_write(trial_mask, trial_mask_native, suffix):
-            nwbfile = create_cropped_container(trial_mask, trial_mask_native)
-            out = fn.parent / CURATED_SETS[tag] / f"{out_fn.stem}_{suffix}.nwb"
-            write_to_nwb(nwbfile, out)
-
-        trials = sorted(np.unique(bin_trial))
         calibration_num = math.ceil(len(trials) * FEW_SHOT_CALIBRATION_RATIO)
         calibration_trials = trials[:calibration_num]
         create_and_write(bin_trial < calibration_trials[-1],
@@ -313,12 +332,10 @@ def to_nwb(fn):
                          bin_trial_native >= eval_trials[0],
                          'eval')
 
-        in_day_oracle_num = int(len(trials) * EVAL_RATIO)
-        in_day_oracle = trials[:-in_day_oracle_num]
-        create_and_write(bin_trial < in_day_oracle[-1],
-                         bin_trial_native < in_day_oracle[-1],
+        in_day_oracle = trials[:-eval_num]
+        create_and_write(bin_trial <= in_day_oracle[-1], # Note <= because array end already exclusive
+                         bin_trial_native <= in_day_oracle[-1],
                          'in_day_oracle')
-        # print(f"[0-{calibration_num}) calibration | [-{eval_num}:] eval | [:-{in_day_oracle_num}) oracle")
     else:
         nwbfile = create_nwb_container(
             raw_spike_time,
@@ -333,6 +350,13 @@ def to_nwb(fn):
         out_fn = create_nwb_name(fn)
         out = fn.parent / CURATED_SETS[tag] / out_fn.name
         write_to_nwb(nwbfile, out)
+
+        # Take last eval ratio as arbitrary minival for sanity checking
+        minival_num = int(len(trials) * EVAL_RATIO)
+        minival_trials = trials[-minival_num:]
+        create_and_write(bin_trial >= minival_trials[0],
+                         bin_trial_native >= minival_trials[0],
+                         'minival', folder='minival')
 
 for sample in files:
     to_nwb(sample)
