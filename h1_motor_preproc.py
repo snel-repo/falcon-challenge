@@ -46,6 +46,15 @@ CURATED_SETS = {
     'S99_set_2': 'test_long',
 }
 
+MERGE = {
+    'S53': ['S53_set_1', 'S53_set_2'],
+    'S63': ['S63_set_1', 'S63_set_2'],
+    'S77': ['S77_set_1', 'S77_set_2'],
+    'S91': ['S91_set_1', 'S91_set_2'],
+    'S95': ['S95_set_1', 'S95_set_2'],
+    'S99': ['S99_set_1', 'S99_set_2'],
+}
+
 def create_nwb_name(mat_name: Path) -> Path:
     root = mat_name.parent
     name = mat_name.stem
@@ -88,13 +97,16 @@ def to_nwb(fn):
     raw_spike_channel = payload['source_index'] * CHANNELS_PER_SOURCE + payload['channel']
     raw_spike_time = payload['source_timestamp']
     bin_time = payload['spm_source_timestamp'] # Indicates end of 20ms bin, in seconds. Shape is (recording devices x Timebin), each has own clock
-    bin_kin = payload['open_loop_kin'] # Shape is (K x Timebin)
-    bin_state = payload['state_num'] # Shape is (1 x Timebin)
-    bin_trial = payload['trial_num'] # Shape is (1 x Timebin)
+    bin_kin = payload['open_loop_kin'] # Shape is (Timebin x K)
+    bin_state = payload['state_num'] # Shape is (Timebin)
+    bin_trial = payload['trial_num'] # Shape is (Timebin)
 
     # Mark pretrial period as first trial - it's a small buffer
     # Assert nans only occur at start of array, and are only a few
     nan_mask = np.isnan(bin_trial)
+    print(tag)
+    print(nan_mask.nonzero())
+    print(np.isnan(bin_kin[:, 0]).nonzero())
     assert np.all(nan_mask[:np.argmax(~nan_mask)])
     assert np.sum(nan_mask) < 10
     bin_trial[nan_mask] = 1
@@ -118,9 +130,6 @@ def to_nwb(fn):
         # assert np.all(raw_spike_time[payload['source_index'] == recording_box] >= -(BIN_SIZE_MS/1000)/4)
         # raw_spike_time[payload['source_index'] == recording_box] = np.clip(raw_spike_time[payload['source_index'] == recording_box], 0, None)
     bin_time_native = bin_time[0] # Aligned, there's only need for one clock
-    r"""
-        Create NWB metadata
-    """
 
     motor_units = np.concatenate([
         np.arange(64) + 1,
@@ -136,6 +145,10 @@ def to_nwb(fn):
     # Resample position information - upsample from 50 to 100Hz.
     assert(bin_kin.shape[0] == bin_time_native.shape[0])
     bin_time = np.arange(0, bin_time_native[-1], 0.01)
+    print(bin_kin.shape)
+    print("NaNs: ", np.nonzero(np.isnan(bin_kin)))
+
+
     bin_kin = interp1d(bin_time_native, bin_kin, axis=0, bounds_error=False)(bin_time)
     bin_trial_native = bin_trial
     bin_trial = interp1d(bin_time_native, bin_trial, bounds_error=False, kind='nearest', fill_value='extrapolate')(bin_time)
@@ -190,7 +203,7 @@ def to_nwb(fn):
         out_fn = create_nwb_name(fn)
 
         def create_cropped_container(trial_mask, trial_mask_native):
-            print(trial_mask)
+            # print(trial_mask)
             sub_bin_time = bin_time[trial_mask]
             sub_spike_times, sub_channels = crop_spikes(raw_spike_time, raw_spike_channel, sub_bin_time)
             return create_nwb_container(
@@ -224,7 +237,7 @@ def to_nwb(fn):
         create_and_write(bin_trial < in_day_oracle[-1],
                          bin_trial_native < in_day_oracle[-1],
                          'in_day_oracle')
-        print(f"[0-{calibration_num}) calibration | [-{eval_num}:] eval | [:-{in_day_oracle_num}) oracle")
+        # print(f"[0-{calibration_num}) calibration | [-{eval_num}:] eval | [:-{in_day_oracle_num}) oracle")
     else:
         nwbfile = create_nwb_container(
             raw_spike_time,
@@ -239,5 +252,6 @@ def to_nwb(fn):
         out_fn = create_nwb_name(fn)
         out = fn.parent / CURATED_SETS[tag] / out_fn.name
         write_to_nwb(nwbfile, out)
+
 for sample in files:
     to_nwb(sample)

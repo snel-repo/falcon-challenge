@@ -37,37 +37,22 @@ from pynwb import NWBHDF5IO
 from styleguide import set_style
 
 # root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
-# root = Path('./data/h1')
-root = Path('/snel/home/bkarpo2/pitt_data')
+root = Path('./data/h1')
+# root = Path('/snel/home/bkarpo2/pitt_data')
 
 # List files
-files = list(root.glob('*.nwb'))
-print(files)
-sample = files[0]
-print(sample)
-# session_query = 'S53_set_1'
-train_query = ['S53_set_1']
-train_query = ['S53_set']
-train_query = ['S53_set', 'S63_set']
-test_query_short = ['S77']
-test_query_long = ['S91', 'S95', 'S99']
+train_query = 'train'
+test_query_short = 'test_short'
+test_query_long = 'test_long'
 
 def get_files(query):
-    return [f for f in files if any(sq in str(f) for sq in query)]
+    return list((root / query).glob('*.nwb'))
 train_files = get_files(train_query)
 test_files_short = get_files(test_query_short)
 test_files_long = get_files(test_query_long)
 print(train_files)
 
-is_5dof = lambda f: int(f.stem[len('pitt_thin_session_S'):].split('_')[0]) in range(364, 605)
-is_5dof_files = np.array([is_5dof(f) for f in [*train_files, *test_files_short, *test_files_long]])
-
-# check if not uniform and report
-if not all(is_5dof_files) and not all(~is_5dof_files):
-    print("Warning: Not all files are same DoF")
-    uniform_dof = 5
-else:
-    uniform_dof = 5 if is_5dof_files[0] else 7
+uniform_dof = 7
 print(f"Uniform DoF: {uniform_dof}")
 
 #%%
@@ -435,7 +420,6 @@ def fit_and_eval_decoder(
     return decoder.score(eval_rates, eval_behavior), decoder
 
 TRAIN_TEST = (0.8, 0.2)
-import numpy as np
 
 def generate_lagged_matrix(input_matrix: np.ndarray, lag: int):
     """
@@ -504,8 +488,8 @@ def prepare_train_test(
     y_std[y_std == 0] = 1
     train_x = (train_x - x_mean) / x_std
     test_x = (test_x - x_mean) / x_std
-    # train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
-    # test_y = (test_y - y_mean) / y_std
+    train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
+    test_y = (test_y - y_mean) / y_std
 
     is_nan_y = np.isnan(train_y).any(axis=1)
     if np.any(is_nan_y):
@@ -519,11 +503,12 @@ def prepare_train_test(
     test_x = test_x[~is_nan_y]
     test_y = test_y[~is_nan_y]
 
+    # ? Where are the NaNs? We can't trivially lag if there are NaNs across data...
     if lag > 0:
         train_x, train_y = apply_neural_behavioral_lag(train_x, train_y, lag)
         test_x, test_y = apply_neural_behavioral_lag(test_x, test_y, lag)
 
-    if history > 0: 
+    if history > 0:
         train_x = generate_lagged_matrix(train_x, history)
         test_x = generate_lagged_matrix(test_x, history)
         train_y = train_y[history:]
@@ -539,7 +524,8 @@ def prepare_test(
         x_std: np.ndarray,
         y_mean: np.ndarray,
         y_std: np.ndarray,
-        use_local_x_stats: bool = True # Minimal adaptation is to zscore with local statistics
+        use_local_x_stats: bool = True, # Minimal adaptation is to zscore with local statistics
+        history: int=0,
         ):
     signal = apply_exponential_filter(binned_spikes, NEURAL_TAU_MS)
     targets = create_targets(behavior)
@@ -559,13 +545,17 @@ def prepare_test(
     is_nan_y = np.isnan(targets).any(axis=1)
     if np.any(is_nan_y):
         print(f"NaNs found in test_y, removing {np.sum(is_nan_y)} timepoints")
+
     signal = signal[~is_nan_y]
     targets = targets[~is_nan_y]
+    if history > 0:
+        signal = generate_lagged_matrix(signal, history)
+        targets = targets[history:]
 
     return signal, targets
 
 
-#%% 
+#%%
 (
     train_x,
     train_y,
@@ -575,17 +565,18 @@ def prepare_test(
     x_std,
     y_mean,
     y_std
-) = prepare_train_test(train_bins, train_kin, history=5)
+) = prepare_train_test(train_bins, train_kin, history=0)
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
 print(f"Final R2: {score:.2f}")
-
-r2 = r2_score(test_y, pred_y, multioutput='variance_weighted') #multioutput='raw_values')
+r2 = r2_score(test_y, pred_y, multioutput='raw_values')
+r2_weighted = r2_score(test_y, pred_y, multioutput='variance_weighted')
 r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
 train_r2 = r2_score(train_y, train_pred_y, multioutput='variance_weighted') #multioutput='raw_values')
-print(f"Val : {r2}")
+print(f"Val : {r2_weighted}")
+print(f"Val Uniform: {r2_uniform}")
 print(f"Train: {train_r2}")
 
 #%%
@@ -607,8 +598,24 @@ print(train_kin.shape)
 print(test_kin_short.shape)
 print(test_kin_long.shape)
 
-x_short, y_short = prepare_test(test_bins_short, test_kin_short, x_mean, x_std, y_mean, y_std)
-x_long, y_long = prepare_test(test_bins_long, test_kin_long, x_mean, x_std, y_mean, y_std)
+x_short, y_short = prepare_test(
+    test_bins_short,
+    test_kin_short,
+    x_mean,
+    x_std,
+    y_mean,
+    y_std,
+    history=0
+    )
+x_long, y_long = prepare_test(
+    test_bins_long,
+    test_kin_long,
+    x_mean,
+    x_std,
+    y_mean,
+    y_std,
+    history=0
+    )
 
 score_short = decoder.score(x_short, y_short)
 score_long = decoder.score(x_long, y_long)
