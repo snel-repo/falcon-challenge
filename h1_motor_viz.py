@@ -37,7 +37,8 @@ from pynwb import NWBHDF5IO
 from styleguide import set_style
 
 # root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
-root = Path('./data/h1')
+# root = Path('./data/h1')
+root = Path('/snel/home/bkarpo2/pitt_data')
 
 # List files
 files = list(root.glob('*.nwb'))
@@ -434,10 +435,56 @@ def fit_and_eval_decoder(
     return decoder.score(eval_rates, eval_behavior), decoder
 
 TRAIN_TEST = (0.8, 0.2)
+import numpy as np
+
+def generate_lagged_matrix(input_matrix: np.ndarray, lag: int):
+    """
+    Generate a lagged version of an input matrix.
+
+    Parameters:
+    input_matrix (np.ndarray): The input matrix.
+    lag (int): The number of lags to consider.
+
+    Returns:
+    np.ndarray: The lagged matrix.
+    """
+    # Initialize the lagged matrix
+    lagged_matrix = np.zeros((input_matrix.shape[0] - lag, input_matrix.shape[1] * (lag + 1)))
+
+    # Fill the lagged matrix
+    for i in range(lag + 1):
+        lagged_matrix[:, i*input_matrix.shape[1]:(i+1)*input_matrix.shape[1]] = input_matrix[lag-i : (-i if i != 0 else None)]
+
+    return lagged_matrix
+
+
+def apply_neural_behavioral_lag(neural_matrix: np.ndarray, behavioral_matrix: np.ndarray, lag: int):
+    """
+    Apply a lag to the neural matrix and the behavioral matrix.
+
+    Parameters:
+    neural_matrix (np.ndarray): The neural matrix.
+    behavioral_matrix (np.ndarray): The behavioral matrix.
+    lag (int): The number of lags to consider.
+
+    Returns:
+    np.ndarray: The lagged neural matrix.
+    np.ndarray: The lagged behavioral matrix.
+    """
+    # Apply the lag to the neural matrix
+    neural_matrix = neural_matrix[:-lag]
+
+    # Apply the lag to the behavioral matrix
+    behavioral_matrix = behavioral_matrix[lag:]
+
+    return neural_matrix, behavioral_matrix
+
 
 def prepare_train_test(
         binned_spikes: np.ndarray,
-        behavior: np.ndarray
+        behavior: np.ndarray,
+        history: int=0,
+        lag: int=0,
         ):
     signal = apply_exponential_filter(binned_spikes, NEURAL_TAU_MS)
     targets = create_targets(behavior)
@@ -457,8 +504,8 @@ def prepare_train_test(
     y_std[y_std == 0] = 1
     train_x = (train_x - x_mean) / x_std
     test_x = (test_x - x_mean) / x_std
-    train_y = (train_y - y_mean) / y_std
-    test_y = (test_y - y_mean) / y_std
+    # train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
+    # test_y = (test_y - y_mean) / y_std
 
     is_nan_y = np.isnan(train_y).any(axis=1)
     if np.any(is_nan_y):
@@ -472,7 +519,18 @@ def prepare_train_test(
     test_x = test_x[~is_nan_y]
     test_y = test_y[~is_nan_y]
 
+    if lag > 0:
+        train_x, train_y = apply_neural_behavioral_lag(train_x, train_y, lag)
+        test_x, test_y = apply_neural_behavioral_lag(test_x, test_y, lag)
+
+    if history > 0: 
+        train_x = generate_lagged_matrix(train_x, history)
+        test_x = generate_lagged_matrix(test_x, history)
+        train_y = train_y[history:]
+        test_y = test_y[history:]
+
     return train_x, train_y, test_x, test_y, x_mean, x_std, y_mean, y_std
+
 
 def prepare_test(
         binned_spikes: np.ndarray,
@@ -506,6 +564,8 @@ def prepare_test(
 
     return signal, targets
 
+
+#%% 
 (
     train_x,
     train_y,
@@ -515,18 +575,19 @@ def prepare_test(
     x_std,
     y_mean,
     y_std
-) = prepare_train_test(train_bins, train_kin)
+) = prepare_train_test(train_bins, train_kin, history=5)
 
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 pred_y = decoder.predict(test_x)
 train_pred_y = decoder.predict(train_x)
 print(f"Final R2: {score:.2f}")
 
-r2 = r2_score(test_y, pred_y, multioutput='raw_values')
+r2 = r2_score(test_y, pred_y, multioutput='variance_weighted') #multioutput='raw_values')
 r2_uniform = r2_score(test_y, pred_y, multioutput='uniform_average')
-train_r2 = r2_score(train_y, train_pred_y, multioutput='raw_values')
+train_r2 = r2_score(train_y, train_pred_y, multioutput='variance_weighted') #multioutput='raw_values')
 print(f"Val : {r2}")
 print(f"Train: {train_r2}")
+
 #%%
 palette = sns.color_palette(n_colors=train_kin.shape[1])
 f, axes = plt.subplots(train_kin.shape[1], figsize=(6, 12), sharex=True)
