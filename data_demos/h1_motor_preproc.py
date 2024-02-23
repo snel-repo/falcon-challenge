@@ -41,18 +41,38 @@ def create_targets(kin: np.ndarray):
     return out
 
 CURATED_SETS = {
-    'S53_set_1': 'train',
-    'S53_set_2': 'train',
-    'S63_set_1': 'train',
-    'S63_set_2': 'train',
-    'S77_set_1': 'test_short',
-    'S77_set_2': 'test_short',
-    'S91_set_1': 'test_long',
-    'S91_set_2': 'test_long',
-    'S95_set_1': 'test_long',
-    'S95_set_2': 'test_long',
-    'S99_set_1': 'test_long',
-    'S99_set_2': 'test_long',
+    # 'S53_set_1': 'train',
+    # 'S53_set_2': 'train',
+    # 'S63_set_1': 'train',
+    # 'S63_set_2': 'train',
+    # 'S77_set_1': 'test_short',
+    # 'S77_set_2': 'test_short',
+    # 'S91_set_1': 'test_long',
+    # 'S91_set_2': 'test_long',
+    # 'S95_set_1': 'test_long',
+    # 'S95_set_2': 'test_long',
+    # 'S99_set_1': 'test_long',
+    # 'S99_set_2': 'test_long',
+
+    'S608_set_1': 'train',
+    'S608_set_2': 'train',
+    'S610_set_1': 'train',
+    'S610_set_2': 'train',
+    'S610_set_3': 'train',
+    'S613_set_1': 'test_short',
+    'S613_set_2': 'test_short',
+    'S615_set_1': 'test_short',
+    'S615_set_2': 'test_short',
+    'S641_set_1': 'test_long',
+    'S641_set_2': 'test_long',
+    'S644_set_1': 'test_long',
+    'S644_set_2': 'test_long',
+}
+
+# Misfires according to test log. Trials are one-indexed.
+DROP_SET_TRIALS = {
+    'S608_set_1': [1, 2],
+    'S615_set_1': [1, 2], # Severely corrupted
 }
 
 MERGE = {
@@ -121,8 +141,8 @@ def to_nwb(fn):
     tag = create_nwb_name(fn).stem
     if tag not in CURATED_SETS:
         # Move file to fn.parent / 'archive'
-        os.makedirs(fn.parent / 'archive', exist_ok=True)
-        os.rename(fn, fn.parent / 'archive' / fn.name)
+        # os.makedirs(fn.parent / 'archive', exist_ok=True)
+        # os.rename(fn, fn.parent / 'archive' / fn.name)
         return
 
     r"""
@@ -174,15 +194,6 @@ def to_nwb(fn):
     bin_trial = bin_trial[keep_indices]
     blacklist_timesteps = blacklist_timesteps[keep_indices]
 
-    # count number of dead channels with no spikes
-    # channel_cts = np.unique(raw_spike_channel, return_counts=True)
-    # dead_channels = np.setdiff1d(motor_units, channel_cts[0])
-    # print(dead_channels)
-
-
-    r"""
-        Clean NaNs from data
-    """
     # Mark pretrial period as first trial - it's a small buffer
     nan_mask = np.isnan(bin_trial)
     assert np.all(nan_mask[:np.argmax(~nan_mask)])
@@ -190,6 +201,34 @@ def to_nwb(fn):
     bin_trial[nan_mask] = 1
     bin_trial = bin_trial.astype(int)
 
+    # count number of dead channels with no spikes
+    # channel_cts = np.unique(raw_spike_channel, return_counts=True)
+    # dead_channels = np.setdiff1d(motor_units, channel_cts[0])
+    # print(dead_channels)
+
+    if tag in DROP_SET_TRIALS:
+        # These are serious (neural) corruptions. Drop from data entirely.
+        print(np.isnan(bin_kin).any(-1).nonzero())
+        print(np.unique(bin_trial[np.isnan(bin_kin).any(-1)]))
+        blacklist_timesteps[np.isin(bin_trial, np.array(DROP_SET_TRIALS[tag]))] = True
+        bin_kin[np.isin(bin_trial, np.array(DROP_SET_TRIALS[tag]))] = np.nan
+
+        cut_trial_left = np.nonzero(np.isin(bin_trial, np.array(DROP_SET_TRIALS[tag])))[0][-1] + 1
+        print(f"Cutting {cut_trial_left} bins from {bin_trial.shape[0]} total.")
+        print(cut_trial_left)
+        bin_kin = bin_kin[cut_trial_left:]
+        bin_trial = bin_trial[cut_trial_left:]
+        bin_state = bin_state[cut_trial_left:]
+        bin_time_native = bin_time_native[cut_trial_left:]
+        blacklist_timesteps = blacklist_timesteps[cut_trial_left:]
+
+        raw_spike_time, raw_spike_channel = crop_spikes(raw_spike_time, raw_spike_channel, bin_time_native, bin_size_s=BIN_SIZE_MS)
+        bin_time_native = bin_time_native - bin_time_native[0]
+
+
+    r"""
+        Clean kin NaNs from data
+    """
     nan_kin_mask = np.isnan(bin_kin).any(-1)
     # Remove left edge
     if nan_kin_mask[:LEFT_CROP_BEGIN_MAX_NAN].any():
@@ -396,6 +435,10 @@ def to_nwb(fn):
         create_and_write(bin_trial <= in_day_oracle[-1], # Note <= because array end already exclusive
                          bin_trial_native <= in_day_oracle[-1],
                          'in_day_oracle')
+
+        create_and_write(np.ones_like(bin_trial, dtype=bool), # Note <= because array end already exclusive
+                         np.ones_like(bin_trial_native, dtype=bool),
+                         'full')
     else:
         nwbfile = create_nwb_container(
             raw_spike_time,

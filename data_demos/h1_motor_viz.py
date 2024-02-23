@@ -34,6 +34,8 @@ test_query_short = 'test_short'
 test_query_long = 'test_long'
 
 def get_files(query):
+    if 'test' in query:
+        return sorted(list((root / query).glob('*full.nwb')))
     return sorted(list((root / query).glob('*.nwb')))
 train_files = get_files(train_query)
 test_files_short = get_files(test_query_short)
@@ -90,7 +92,7 @@ def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.Data
 train_bins, train_kin, train_timestamps, train_blacklist, train_epochs, train_trials, train_labels = load_files(train_files)
 test_bins_short, test_kin_short, test_timestamps_short, test_blacklist_short, test_epochs_short, test_trials_short, test_labels_short = load_files(test_files_short)
 test_bins_long, test_kin_long, test_timestamps_long, test_blacklist_long, test_epochs_long, test_trials_long, test_labels_long = load_files(test_files_long)
-#%%
+
 BIN_SIZE_MS = 10 # TODO derive from nwb
 
 # Basic qualitative
@@ -165,7 +167,8 @@ def plot_qualitative(
     trial_changept = np.where(np.diff(trials) != 0)[0]
     for changept in trial_changept:
         ax2.axvline(timestamps[changept], color='k', linestyle='-', alpha=0.1)
-
+        # ax2.text(timestamps[changept], ax2.get_ylim()[1], f'{int(trials[changept])}', ha='right', va='top', rotation=90, fontsize=14)
+    # ax2.set_xlim([0, 1800])
     fig.suptitle(f'(DoF: {labels})')
     fig.tight_layout()
     return fig, (ax1, ax2)
