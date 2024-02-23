@@ -92,6 +92,8 @@ def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.Data
 train_bins, train_kin, train_timestamps, train_blacklist, train_epochs, train_trials, train_labels = load_files(train_files)
 test_bins_short, test_kin_short, test_timestamps_short, test_blacklist_short, test_epochs_short, test_trials_short, test_labels_short = load_files(test_files_short)
 test_bins_long, test_kin_long, test_timestamps_long, test_blacklist_long, test_epochs_long, test_trials_long, test_labels_long = load_files(test_files_long)
+
+
 #%%
 BIN_SIZE_MS = 10 # TODO derive from nwb
 

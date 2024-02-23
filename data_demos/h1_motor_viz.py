@@ -174,16 +174,16 @@ def plot_qualitative(
     # plt.xlim(xticks[0], xticks[-1])
     # plt.xticks(xticks, labels=xticks.round(2))
 
-# f, axes = plot_qualitative(
-#     train_bins,
-#     train_kin,
-#     train_timestamps,
-#     train_epochs,
-#     train_trials,
-#     train_labels,
-#     palette,
-#     to_plot
-# )
+f, axes = plot_qualitative(
+    train_bins,
+    train_kin,
+    train_timestamps,
+    train_epochs,
+    train_trials,
+    train_labels,
+    palette,
+    to_plot
+)
 
 # f, axes = plot_qualitative(
 #     test_bins_short,
@@ -196,16 +196,16 @@ def plot_qualitative(
 #     to_plot
 # )
 
-f, axes = plot_qualitative(
-    test_bins_long,
-    test_kin_long,
-    test_timestamps_long,
-    test_epochs_long,
-    test_trials_long,
-    test_labels_long,
-    palette,
-    to_plot
-)
+# f, axes = plot_qualitative(
+#     test_bins_long,
+#     test_kin_long,
+#     test_timestamps_long,
+#     test_epochs_long,
+#     test_trials_long,
+#     test_labels_long,
+#     palette,
+#     to_plot
+# )
 
 #%%
 # Just show kinematics with phases
