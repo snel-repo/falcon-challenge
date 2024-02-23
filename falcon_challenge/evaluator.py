@@ -19,7 +19,7 @@ class FalconEvaluator:
 
     def get_eval_files(self):
 
-        if self.eval_remote or True:
+        if self.eval_remote:
             eval_dir = f"data/{self.dataset}/test_{self.eval_term}" # TODO is this secure? Not sure if this is the right pattern
             suffix = "*eval.nwb"
         else:
@@ -55,7 +55,6 @@ class FalconEvaluator:
         all_preds = np.concatenate(all_preds)
         all_targets = np.concatenate(all_targets)
         all_eval_mask = np.concatenate(all_eval_mask)
-        breakpoint()
         metrics = self.compute_metrics(all_preds, all_targets, all_eval_mask)
         for k, v in metrics.items():
             logger.info("{}: {}".format(k, v))
