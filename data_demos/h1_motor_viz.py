@@ -469,8 +469,8 @@ def prepare_train_test(
 
     return train_x, train_y, test_x, test_y, x_mean, x_std, y_mean, y_std
 
-HISTORY = 0
-# HISTORY = 5
+# HISTORY = 0
+HISTORY = 5
 
 (
     train_x,
@@ -527,12 +527,9 @@ def prepare_test(
     signal = apply_exponential_filter(binned_spikes)
     targets = create_targets(behavior)
 
-    # Remove timepoints where nothing is happening in the kinematics
-    still_times = np.all(np.abs(targets) < 0.001, axis=1)
-    if blacklist is not None:
-        blacklist = still_times | blacklist
-    else:
-        blacklist = still_times
+    # Remove timepoints where nothing is happening in the kinematics - not good for eval
+    if blacklist is None:
+        blacklist = np.zeros(targets.shape[0], dtype=bool)
 
     if use_local_x_stats:
         x_mean = np.nanmean(signal[~blacklist], axis=0)
@@ -581,6 +578,7 @@ x_long, y_long = prepare_test(
     )
 
 #%%
+print(x_short.shape)
 r2_uniform_short = r2_score(y_short, decoder.predict(x_short), multioutput='uniform_average')
 score_short = decoder.score(x_short, y_short)
 score_long = decoder.score(x_long, y_long)
