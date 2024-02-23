@@ -599,3 +599,102 @@ with open(f'data/sklearn_h1.pkl', 'wb') as f:
         'y_std': y_std,
     }, f)
 
+#%%
+# ! sanity... save these down
+# print(x_mean)
+pred_y = decoder.predict(test_x)
+train_pred_y = decoder.predict(train_x)
+
+r2 = r2_score(test_y, pred_y, multioutput='raw_values')
+with open('test_x.pkl', 'wb') as f:
+    pickle.dump(test_x, f)
+with open('test_y.pkl', 'wb') as f:
+    pickle.dump(test_y, f)
+print(r2)
+
+#%%
+# Sanity minival
+minival_files = get_files('minival')
+minival_x = []
+minival_y = []
+minival_mask = []
+from falcon_challenge.dataloaders import load_nwb
+from falcon_challenge.config import FalconConfig, FalconTask
+from decoder_demos.sklearn_decoder import SKLearnDecoder
+config = FalconConfig(
+    task=getattr(FalconTask, 'h1'),
+    n_channels=176,
+)
+sk_decoder = SKLearnDecoder(task_config=config, model_path=f'data/sklearn_h1.pkl')
+
+for datafile in minival_files:
+    if not datafile.exists():
+        raise FileNotFoundError(f"File {datafile} not found.")
+    neural_data, decoding_targets, eval_mask = load_nwb(datafile, dataset='h1')
+    minival_x.append(neural_data)
+    minival_y.append(decoding_targets)
+    minival_mask.append(eval_mask)
+
+
+sk_decoder.reset()
+stream_out = []
+# Construct stream
+for idx, (neural_data, decoding_targets, eval_mask) in enumerate(zip(minival_x, minival_y, minival_mask)):
+    batch_out = []
+    for obs in neural_data:
+        batch_out.append(sk_decoder.predict(obs))
+    batch_out = np.stack(batch_out, axis=0)
+    stream_out.append(batch_out)
+    sk_decoder.reset()
+stream_preds = np.concatenate(stream_out, axis=0)
+
+#%%
+mock_preds = []
+stream_in = []
+mock_in = []
+for idx, (neural_data, decoding_targets, eval_mask) in enumerate(zip(minival_x, minival_y, minival_mask)):
+    mock_history_buffer = np.zeros((120, config.n_channels))
+    mock_observation_buffer = np.zeros((sk_decoder.history, config.n_channels))
+    batch_preds = []
+    for obs in neural_data:
+        mock_history_buffer = np.roll(mock_history_buffer, -1, 0)
+        mock_history_buffer[-1] = obs
+        smth_history = apply_exponential_filter(mock_history_buffer)
+        # mock_observation_buffer = np.roll(mock_observation_buffer, -1)
+        # mock_observation_buffer[-1] = (smth_history[-1] - x_mean) / x_std
+        mock_in.append(smth_history[-1])
+        decoder_in = smth_history[-1] - x_mean / x_std
+        batch_preds.append(decoder.predict(decoder_in[None, :])[0] * y_std + y_mean)
+    stream_in.append(apply_exponential_filter(neural_data))
+    mock_preds.append(np.stack(batch_preds, axis=0))
+    # decoder_in = apply_exponential_filter(neural_data)
+    # decoder_in = (decoder_in - x_mean) / x_std
+    # batch_preds.append(decoder.predict(decoder_in) * y_std + y_mean)
+stream_in = np.concatenate(stream_in, axis=0)
+mock_in = np.stack(mock_in, axis=0)
+#%%
+#%%
+print(minival_x[0][:, 0].nonzero())
+smth_test = apply_exponential_filter(minival_x[0])
+plt.plot(stream_in[:1000, 0], label='Stream')
+plt.plot(mock_in[:1000, 0], label='Mock')
+plt.plot(smth_test[:1000, 0], label='Test')
+plt.xlim(200, 400)
+
+#%%
+preds = np.concatenate(mock_preds, axis=0)
+# decoder_in = np.concatenate(minival_x, axis=0)
+targets = np.concatenate(minival_y, axis=0)
+eval_mask = np.concatenate(minival_mask, axis=0)
+# decoder_in = apply_exponential_filter(decoder_in)
+# decoder_in = (decoder_in - x_mean) / x_std
+
+# preds = decoder.predict(decoder_in) * y_std + y_mean
+r2 = r2_score(targets[eval_mask], preds[eval_mask], multioutput='uniform_average')
+stream_r2 = r2_score(targets[eval_mask], stream_preds[eval_mask], multioutput='uniform_average')
+print(r2)
+print(stream_r2)
+
+#%%
+# plt.plot(preds[:, 0], label='Mock')
+# plt.plot(stream_preds[:, 0], label='Stream')

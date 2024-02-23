@@ -36,6 +36,7 @@ class FalconEvaluator:
         all_preds = []
         all_targets = []
         all_eval_mask = []
+        breakpoint()
         for datafile in eval_files:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")

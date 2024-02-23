@@ -27,7 +27,7 @@ def apply_exponential_filter(
     kernel = np.exp(-t / tau)
     kernel /= np.sum(kernel)
     # Apply the filter
-    filtered_signal = np.array([signal.convolve(x[:, ch], kernel, mode='full')[-len(x):] for ch in range(x.shape[1])]).T
+    filtered_signal = np.array([signal.convolve(x[:, ch], kernel, mode='full')[:len(x)] for ch in range(x.shape[1])]).T
     return filtered_signal
 
 

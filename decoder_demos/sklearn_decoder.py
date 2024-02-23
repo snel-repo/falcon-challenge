@@ -27,15 +27,19 @@ class SKLearnDecoder(BCIDecoder):
             self.raw_history_buffer = np.zeros((MAX_HISTORY, task_config.n_channels))
             self.observation_buffer = np.zeros((self.history, task_config.n_channels))
 
+    def reset(self):
+        self.raw_history_buffer = np.zeros_like(self.raw_history_buffer)
+        self.observation_buffer = np.zeros_like(self.observation_buffer)
 
     def predict(self, neural_observations: np.ndarray):
         r"""
             neural_observations: array of shape (n_channels), 10ms binned spike counts
         """
-        self.raw_history_buffer = np.roll(self.raw_history_buffer, -1)
+        # breakpoint()
+        self.raw_history_buffer = np.roll(self.raw_history_buffer, -1, axis=0)
         self.raw_history_buffer[-1] = neural_observations
         smth_history = apply_exponential_filter(self.raw_history_buffer, NEURAL_TAU_MS)
-        self.observation_buffer = np.roll(self.observation_buffer, -1)
+        self.observation_buffer = np.roll(self.observation_buffer, -1, axis=0)
         self.observation_buffer[-1] = (smth_history[-1] - self.x_mean) / self.x_std
         decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1)
         out = self.clf.predict(decoder_in)[0]

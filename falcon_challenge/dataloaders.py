@@ -47,6 +47,7 @@ def load_nwb(fn: str | Path, dataset: str = 'h1') -> Tuple[np.ndarray, np.ndarra
             units = nwbfile.units.to_dataframe()
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
-            return bin_units(units, bin_end_timestamps=timestamps), kin, np.ones(len(kin), dtype=bool)
+            blacklist = nwbfile.acquisition['Blacklist'].data[:].astype(bool)
+            return bin_units(units, bin_end_timestamps=timestamps), kin, ~blacklist
     else:
         raise ValueError(f"Unknown dataset {dataset}")
