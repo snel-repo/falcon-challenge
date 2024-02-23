@@ -34,6 +34,8 @@ test_query_short = 'test_short'
 test_query_long = 'test_long'
 
 def get_files(query):
+    if 'test' in query:
+        return sorted(list((root / query).glob('*eval.nwb')))
     return sorted(list((root / query).glob('*.nwb')))
 train_files = get_files(train_query)
 test_files_short = get_files(test_query_short)
@@ -614,7 +616,8 @@ print(r2)
 
 #%%
 # Sanity minival
-minival_files = get_files('minival')
+minival_files = get_files('test_short')
+# minival_files = get_files('minival')
 minival_x = []
 minival_y = []
 minival_mask = []
@@ -647,54 +650,57 @@ for idx, (neural_data, decoding_targets, eval_mask) in enumerate(zip(minival_x, 
     stream_out.append(batch_out)
     sk_decoder.reset()
 stream_preds = np.concatenate(stream_out, axis=0)
-
 #%%
-mock_preds = []
 stream_in = []
-mock_in = []
+stream_preds = []
+batch_in = []
+batch_preds = []
+
 for idx, (neural_data, decoding_targets, eval_mask) in enumerate(zip(minival_x, minival_y, minival_mask)):
     mock_history_buffer = np.zeros((120, config.n_channels))
     mock_observation_buffer = np.zeros((sk_decoder.history, config.n_channels))
-    batch_preds = []
     for obs in neural_data:
         mock_history_buffer = np.roll(mock_history_buffer, -1, 0)
         mock_history_buffer[-1] = obs
         smth_history = apply_exponential_filter(mock_history_buffer)
-        # mock_observation_buffer = np.roll(mock_observation_buffer, -1)
-        # mock_observation_buffer[-1] = (smth_history[-1] - x_mean) / x_std
-        mock_in.append(smth_history[-1])
+        mock_observation_buffer = np.roll(mock_observation_buffer, -1)
+        mock_observation_buffer[-1] = (smth_history[-1] - x_mean) / x_std
+        stream_in.append(smth_history[-1])
         decoder_in = smth_history[-1] - x_mean / x_std
-        batch_preds.append(decoder.predict(decoder_in[None, :])[0] * y_std + y_mean)
-    stream_in.append(apply_exponential_filter(neural_data))
-    mock_preds.append(np.stack(batch_preds, axis=0))
-    # decoder_in = apply_exponential_filter(neural_data)
-    # decoder_in = (decoder_in - x_mean) / x_std
-    # batch_preds.append(decoder.predict(decoder_in) * y_std + y_mean)
-stream_in = np.concatenate(stream_in, axis=0)
-mock_in = np.stack(mock_in, axis=0)
-#%%
+        stream_preds.append(decoder.predict(decoder_in[None, :])[0] * y_std + y_mean)
+    batch_in.append(apply_exponential_filter(neural_data))
+    batch_preds.append(decoder.predict(batch_in[-1] - x_mean / x_std) * y_std + y_mean)
+stream_in = np.stack(stream_in, axis=0)
+stream_preds = np.stack(stream_preds, axis=0)
+batch_in = np.concatenate(batch_in, axis=0)
+batch_preds = np.concatenate(batch_preds, axis=0)
+
 #%%
 print(minival_x[0][:, 0].nonzero())
 smth_test = apply_exponential_filter(minival_x[0])
-plt.plot(stream_in[:1000, 0], label='Stream')
-plt.plot(mock_in[:1000, 0], label='Mock')
+plt.plot(stream_in[:1000, 0] + 0.01, label='Stream')
+plt.plot(batch_in[:1000, 0] + 0.02, label='Batch')
 plt.plot(smth_test[:1000, 0], label='Test')
-plt.xlim(200, 400)
+plt.legend()
+plt.xlim(200, 1000)
 
 #%%
-preds = np.concatenate(mock_preds, axis=0)
 # decoder_in = np.concatenate(minival_x, axis=0)
 targets = np.concatenate(minival_y, axis=0)
 eval_mask = np.concatenate(minival_mask, axis=0)
+#%%
+print(len(stream_preds))
+print(eval_mask.sum())
+
 # decoder_in = apply_exponential_filter(decoder_in)
 # decoder_in = (decoder_in - x_mean) / x_std
 
 # preds = decoder.predict(decoder_in) * y_std + y_mean
-r2 = r2_score(targets[eval_mask], preds[eval_mask], multioutput='uniform_average')
 stream_r2 = r2_score(targets[eval_mask], stream_preds[eval_mask], multioutput='uniform_average')
-print(r2)
+batch_r2 = r2_score(targets[eval_mask], batch_preds[eval_mask], multioutput='uniform_average')
 print(stream_r2)
+print(batch_r2)
 
 #%%
-# plt.plot(preds[:, 0], label='Mock')
-# plt.plot(stream_preds[:, 0], label='Stream')
+plt.plot(preds[:, 0], label='Mock')
+plt.plot(stream_preds[:, 0], label='Stream')

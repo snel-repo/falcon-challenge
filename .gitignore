@@ -2,3 +2,4 @@ data
 *.mat
 __pycache__
 *.egg-info
+*.pkl

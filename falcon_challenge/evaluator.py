@@ -15,14 +15,18 @@ class FalconEvaluator:
         self.eval_remote = eval_remote
         self.phase = phase
         self.dataset = phase.split('_')[0]
-        self.eval_short = phase.split('_')[1] == 'short'
+        self.eval_term = phase.split('_')[1]
 
     def get_eval_files(self):
-        if self.eval_remote:
-            eval_dir = f"data/{self.dataset}/test_{self.phase}" # TODO is this secure? Not sure if this is the right pattern
+
+        if self.eval_remote or True:
+            eval_dir = f"data/{self.dataset}/test_{self.eval_term}" # TODO is this secure? Not sure if this is the right pattern
+            suffix = "*eval.nwb"
         else:
+            logger.info(f"Local evaluation, running minival.")
             eval_dir = f"data/{self.dataset}/minival/"
-        return sorted(list(Path(eval_dir).glob("*.nwb")))
+            suffix = "*minival.nwb"
+        return sorted(list(Path(eval_dir).glob(suffix)))
 
     def evaluate(self, decoder: BCIDecoder):
         r"""
@@ -32,11 +36,11 @@ class FalconEvaluator:
         """
         np.random.seed(0)
         # ! TODO ideally seed other libraries as well...? Is that our responsibility?
+
         eval_files = self.get_eval_files()
         all_preds = []
         all_targets = []
         all_eval_mask = []
-        breakpoint()
         for datafile in eval_files:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
@@ -51,6 +55,7 @@ class FalconEvaluator:
         all_preds = np.concatenate(all_preds)
         all_targets = np.concatenate(all_targets)
         all_eval_mask = np.concatenate(all_eval_mask)
+        breakpoint()
         metrics = self.compute_metrics(all_preds, all_targets, all_eval_mask)
         for k, v in metrics.items():
             logger.info("{}: {}".format(k, v))

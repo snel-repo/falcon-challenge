@@ -565,6 +565,7 @@ x_short, y_short = prepare_test(
     y_mean,
     y_std,
     history=HISTORY,
+    use_local_x_stats=False,
     blacklist=test_blacklist_short
     )
 x_long, y_long = prepare_test(
@@ -575,6 +576,7 @@ x_long, y_long = prepare_test(
     y_mean,
     y_std,
     history=HISTORY,
+    use_local_x_stats=False,
     blacklist=test_blacklist_long
     )
 
