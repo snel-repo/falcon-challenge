@@ -174,16 +174,16 @@ def plot_qualitative(
     # plt.xlim(xticks[0], xticks[-1])
     # plt.xticks(xticks, labels=xticks.round(2))
 
-f, axes = plot_qualitative(
-    train_bins,
-    train_kin,
-    train_timestamps,
-    train_epochs,
-    train_trials,
-    train_labels,
-    palette,
-    to_plot
-)
+# f, axes = plot_qualitative(
+#     train_bins,
+#     train_kin,
+#     train_timestamps,
+#     train_epochs,
+#     train_trials,
+#     train_labels,
+#     palette,
+#     to_plot
+# )
 
 # f, axes = plot_qualitative(
 #     test_bins_short,
@@ -196,16 +196,16 @@ f, axes = plot_qualitative(
 #     to_plot
 # )
 
-# f, axes = plot_qualitative(
-#     test_bins_long,
-#     test_kin_long,
-#     test_timestamps_long,
-#     test_epochs_long,
-#     test_trials_long,
-#     test_labels_long,
-#     palette,
-#     to_plot
-# )
+f, axes = plot_qualitative(
+    test_bins_long,
+    test_kin_long,
+    test_timestamps_long,
+    test_epochs_long,
+    test_trials_long,
+    test_labels_long,
+    palette,
+    to_plot
+)
 
 #%%
 # Just show kinematics with phases
@@ -469,8 +469,8 @@ def prepare_train_test(
 
     return train_x, train_y, test_x, test_y, x_mean, x_std, y_mean, y_std
 
-# HISTORY = 0
-HISTORY = 5
+HISTORY = 0
+# HISTORY = 5
 
 (
     train_x,
@@ -562,7 +562,7 @@ x_short, y_short = prepare_test(
     y_mean,
     y_std,
     history=HISTORY,
-    use_local_x_stats=False,
+    # use_local_x_stats=False,
     blacklist=test_blacklist_short
     )
 x_long, y_long = prepare_test(
@@ -573,11 +573,10 @@ x_long, y_long = prepare_test(
     y_mean,
     y_std,
     history=HISTORY,
-    use_local_x_stats=False,
+    # use_local_x_stats=False,
     blacklist=test_blacklist_long
     )
 
-#%%
 print(x_short.shape)
 r2_uniform_short = r2_score(y_short, decoder.predict(x_short), multioutput='uniform_average')
 score_short = decoder.score(x_short, y_short)
@@ -585,7 +584,6 @@ score_long = decoder.score(x_long, y_long)
 print(f"Short Zero-shot: {score_short:.2f}")
 print(f"Short Zero-shot: {r2_uniform_short:.2f}")
 print(f"Long Zero-shot: {score_long:.2f}")
-#%%
 # Save decoder for use in sklearn_decoder example agent
 import pickle
 with open(f'data/sklearn_h1.pkl', 'wb') as f:

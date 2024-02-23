@@ -102,13 +102,12 @@ motor_units = np.concatenate([
     np.arange(64) + 1,
     np.arange(32) + 96 + 1,
     np.arange(64) + 128 + 1,
-    np.arange(32) + 128 + 64 + 1,
+    np.arange(32) + 128 + 96 + 1,
 ])
 # Subtract 114, 116, 118, 120, 122, 124, 126, 128, which are not wired for P2
 # Do this for both pedestals
 motor_units = np.setdiff1d(motor_units, np.arange(114, 128+1, 2))
-motor_units = np.setdiff1d(motor_units, np.arange(114+64, 128+64+1, 2))
-
+motor_units = np.setdiff1d(motor_units, np.arange(114+128, 128+128+1, 2))
 # NaN filtering for kinematics.
 LEFT_CROP_BEGIN_MAX_NAN = 60
 RIGHT_CROP_BEGIN_MAX_NAN = 20
