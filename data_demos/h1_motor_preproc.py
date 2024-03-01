@@ -25,7 +25,7 @@ files = list(root.glob('*.mat'))
 #%%
 CHANNELS_PER_SOURCE = 128
 BIN_SIZE_MS = 20
-TARGET_BIN_SIZE_MS = 10
+TARGET_BIN_SIZE_MS = 20
 TARGET_BIN_SIZE_S = TARGET_BIN_SIZE_MS / 1000
 FEW_SHOT_CALIBRATION_RATIO = 0.2
 EVAL_RATIO = 0.4
@@ -35,8 +35,10 @@ DEFAULT_TARGET_SMOOTH_MS = 490
 KERNEL_SIZE = int(DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS)
 KERNEL_SIGMA = DEFAULT_TARGET_SMOOTH_MS / (3 * TARGET_BIN_SIZE_MS)
 
-def create_targets(kin: np.ndarray):
-    kin = smooth(kin, KERNEL_SIZE, KERNEL_SIGMA)
+def create_targets(kin: np.ndarray, target_smooth_ms=DEFAULT_TARGET_SMOOTH_MS, bin_size_ms=TARGET_BIN_SIZE_MS, sigma=3):
+    kernel_size = int(target_smooth_ms / bin_size_ms)
+    kernel_sigma = target_smooth_ms / (sigma * bin_size_ms)
+    kin = smooth(kin, kernel_size, kernel_sigma)
     out = np.gradient(kin, axis=0)
     return out
 
@@ -68,6 +70,11 @@ CURATED_SETS = {
     'S644_set_1': 'test_long',
     'S644_set_2': 'test_long',
 }
+
+START_TIMES = {
+    'S608': datetime(2017, 1, 1, 1, 0, 0, tzinfo=tzlocal()),
+}
+# TODO provide start times anonymized by offset (this file will not be released)
 
 # Misfires according to test log. Trials are one-indexed.
 DROP_SET_TRIALS = {
