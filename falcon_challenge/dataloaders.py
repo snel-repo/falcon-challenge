@@ -31,13 +31,14 @@ def bin_units(
     return spike_arr
 
 
-def load_nwb(fn: str | Path, dataset: str = 'h1') -> Tuple[np.ndarray, np.ndarray]:
+def load_nwb(fn: str | Path, dataset: str = 'h1') -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     r"""
         Load data for evaluation.
 
         Returns:
         - neural_data: binned spike counts. Shape is (time x units)
         - covariates (e.g. kinematics). Shape is (time x n_kinematic_dims)
+        - trial_change: boolean of shape (time,) true if the trial has changed
         - eval_mask: boolean array indicating whether to evaluate each time step
     """
     if dataset == 'h1':
@@ -48,6 +49,6 @@ def load_nwb(fn: str | Path, dataset: str = 'h1') -> Tuple[np.ndarray, np.ndarra
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
             blacklist = nwbfile.acquisition['Blacklist'].data[:].astype(bool)
-            return bin_units(units, bin_end_timestamps=timestamps), kin, ~blacklist
+            return bin_units(units, bin_end_timestamps=timestamps), kin, np.zeros(kin.shape[0]), ~blacklist
     else:
         raise ValueError(f"Unknown dataset {dataset}")

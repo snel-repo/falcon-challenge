@@ -44,11 +44,13 @@ class FalconEvaluator:
         for datafile in eval_files:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
-            neural_data, decoding_targets, eval_mask = load_nwb(datafile, dataset=self.dataset)
+            neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
             decoder.reset()
             trial_preds = []
-            for neural_observations in neural_data:
+            for neural_observations, trial_delta_obs in zip(neural_data, trial_change):
                 trial_preds.append(decoder.predict(neural_observations))
+                if trial_delta_obs:
+                    decoder.on_trial_end()
             all_preds.append(np.stack(trial_preds))
             all_targets.append(decoding_targets)
             all_eval_mask.append(eval_mask)

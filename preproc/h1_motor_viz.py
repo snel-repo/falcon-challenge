@@ -81,7 +81,7 @@ def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.Data
     # Offset timestamps and epochs
     all_timestamps = [timestamps[0]]
     for current_epochs, current_times in zip(epochs[1:], timestamps[1:]):
-        clock_offset = all_timestamps[-1][-1] + 0.01
+        clock_offset = all_timestamps[-1][-1] + 0.02
         current_epochs['start_time'] += clock_offset
         current_epochs['stop_time'] += clock_offset
         all_timestamps.append(current_times + clock_offset)
