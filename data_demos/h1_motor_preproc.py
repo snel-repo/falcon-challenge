@@ -64,39 +64,49 @@ CURATED_SETS = {
     # 'S99_set_1': 'test_long',
     # 'S99_set_2': 'test_long',
 
+    # 'S591_set_1': 'train',
+    # 'S591_set_2': 'train',
+    # 'S594_set_1': 'train',
+    # 'S594_set_2': 'train',
+    # 'S600_set_1': 'test_short',
+    # 'S600_set_2': 'test_short',
+    # 'S602_set_1': 'test_long',
+    # 'S602_set_2': 'test_long',
+
     'S608_set_1': 'train',
     'S608_set_2': 'train',
     'S610_set_1': 'train',
     'S610_set_2': 'train',
     'S610_set_3': 'train',
-    'S613_set_1': 'test_short',
-    'S613_set_2': 'test_short',
-    'S615_set_1': 'test_short',
-    'S615_set_2': 'test_short',
+    'S613_set_1': 'train',
+    'S613_set_2': 'train',
+    'S615_set_1': 'train',
+    'S615_set_2': 'train',
+    'S619_set_1': 'train',
+    'S619_set_2': 'train',
+    'S625_set_1': 'train',
+    'S625_set_2': 'train',
+    'S627_set_1': 'test_short',
+    'S627_set_2': 'test_short',
+    'S631_set_1': 'test_short',
+    'S631_set_2': 'test_short',
+    'S633_set_1': 'test_short',
+    'S633_set_2': 'test_short',
+    'S636_set_1': 'test_long',
+    'S636_set_2': 'test_long',
+    'S639_set_1': 'test_long',
+    'S639_set_2': 'test_long',
     'S641_set_1': 'test_long',
     'S641_set_2': 'test_long',
     'S644_set_1': 'test_long',
     'S644_set_2': 'test_long',
 }
 
-START_TIMES = {
-    'S608': datetime(2017, 1, 1, 1, 0, 0, tzinfo=tzlocal()),
-}
-# TODO provide start times anonymized by offset (this file will not be released)
-
 # Misfires according to test log. Trials are one-indexed.
 DROP_SET_TRIALS = {
+    'S594_set_1': [1, 2],
     'S608_set_1': [1, 2],
     'S615_set_1': [1, 2], # Severely corrupted
-}
-
-MERGE = {
-    'S53': ['S53_set_1', 'S53_set_2'],
-    'S63': ['S63_set_1', 'S63_set_2'],
-    'S77': ['S77_set_1', 'S77_set_2'],
-    'S91': ['S91_set_1', 'S91_set_2'],
-    'S95': ['S95_set_1', 'S95_set_2'],
-    'S99': ['S99_set_1', 'S99_set_2'],
 }
 
 def create_nwb_name(mat_name: Path) -> Path:
@@ -128,8 +138,8 @@ def crop_spikes(spike_times, spike_channels, bin_times, bin_size_s=TARGET_BIN_SI
         bin_times: Separate dense clock of target bin times. Assumed continuous.
     """
     return (
-        spike_times[(spike_times >= bin_times[0]) & (spike_times < bin_times[-1] + bin_size_s)] - bin_times[0],
-        spike_channels[(spike_times >= bin_times[0]) & (spike_times < bin_times[-1] + bin_size_s)]
+        spike_times[(spike_times >= bin_times[0] - bin_size_s) & (spike_times < bin_times[-1])] - bin_times[0],
+        spike_channels[(spike_times >= bin_times[0] - bin_size_s) & (spike_times < bin_times[-1])]
     )
 
 # H1 consts
@@ -174,10 +184,26 @@ def to_nwb(fn):
         if name in state_names:
             blacklist_index.append(list(state_names).index(name))
 
+    # Align raw spike times - each on their own clocks - to the 20ms bin clock, where all covariates are recorded
+    # The unifying field is `spm_source_timestamp`, which is the end of the 20ms bin.
+    # However, we essentially assume SPM_SPIKECOUNT module was always online + functional.
+    # This is not always true, even in our curated data.
+    # When it's not, we assume that the last timestamp is consistent.
     raw_spike_channel = payload['source_index'] * CHANNELS_PER_SOURCE + payload['channel']
     raw_spike_time = payload['source_timestamp']
     bin_time = payload['spm_source_timestamp'] # Indicates end of 20ms bin, in seconds. Shape is (recording devices x Timebin), each has own clock
+    # This code breaks when we have gaps in source timestamp - fill it in
     bin_kin = payload['open_loop_kin'] # Shape is (Timebin x K)
+    if bin_time.shape[-1] != bin_kin.shape[0]:
+        print(f"Warning: {tag} has mismatch in kinematics and timestamps. Filling in missing timestamps by assuming SPM timestamp is reliable at endpoint.")
+        padded_bin_time = []
+        for nsp_bin_time in bin_time:
+            assert abs((nsp_bin_time[-1] - nsp_bin_time[0]) * 1000 / BIN_SIZE_MS - bin_kin.shape[0]) < 4, 'Substantial mismatch in start/end of NSP clocks and binned kinematics'
+            end_time = nsp_bin_time[-1]
+            padded_nsp_bin_time = np.arange(end_time - ((bin_kin.shape[0] - 1) * BIN_SIZE_MS / 1000), end_time + BIN_SIZE_MS / 1000, BIN_SIZE_MS/1000)
+            padded_bin_time.append(padded_nsp_bin_time)
+        bin_time = np.stack(padded_bin_time)
+    assert bin_time.shape[-1] == bin_kin.shape[0], 'Mismatch in SPM timestamps and SPM kinematics - make sure to extract SPM timestamps from data, not iData.'
     bin_kin = bin_kin[:, np.array(list(KIN_SUBSET.keys()))] # Subset kinematics
     bin_state = payload['state_num'] -1 # Shape is (Timebin), 1-index -> 0-index
     blacklist_timesteps = np.isin(bin_state, blacklist_index)
@@ -226,12 +252,12 @@ def to_nwb(fn):
         # These are serious (neural) corruptions. Drop from data entirely.
         print(np.isnan(bin_kin).any(-1).nonzero())
         print(np.unique(bin_trial[np.isnan(bin_kin).any(-1)]))
-        blacklist_timesteps[np.isin(bin_trial, np.array(DROP_SET_TRIALS[tag]))] = True
-        bin_kin[np.isin(bin_trial, np.array(DROP_SET_TRIALS[tag]))] = np.nan
-
-        cut_trial_left = np.nonzero(np.isin(bin_trial, np.array(DROP_SET_TRIALS[tag])))[0][-1] + 1
+        bad_trial_bins = np.isin(bin_trial, np.array(DROP_SET_TRIALS[tag]))
+        blacklist_timesteps[bad_trial_bins] = True
+        bin_kin[bad_trial_bins] = np.nan
+        print(np.nonzero(bad_trial_bins)[0])
+        cut_trial_left = np.nonzero(bad_trial_bins)[0][-1] + 1
         print(f"Cutting {cut_trial_left} bins from {bin_trial.shape[0]} total.")
-        print(cut_trial_left)
         bin_kin = bin_kin[cut_trial_left:]
         bin_trial = bin_trial[cut_trial_left:]
         bin_state = bin_state[cut_trial_left:]
@@ -239,6 +265,7 @@ def to_nwb(fn):
         blacklist_timesteps = blacklist_timesteps[cut_trial_left:]
 
         raw_spike_time, raw_spike_channel = crop_spikes(raw_spike_time, raw_spike_channel, bin_time_native, bin_size_s=BIN_SIZE_MS)
+        print(raw_spike_time)
         bin_time_native = bin_time_native - bin_time_native[0]
 
 
@@ -365,7 +392,7 @@ def to_nwb(fn):
         # print(bin_vel.shape, bin_time.shape)
         velocity_spatial_series = TimeSeries(
             name="OpenLoopKinematicsVelocity",
-            description="tx,ty,tz,rx,ry,rz,grasp",
+            description=','.join(KIN_SUBSET.values()),
             timestamps=bin_time,
             data=bin_vel,
             unit="arbitrary",
@@ -480,6 +507,7 @@ def to_nwb(fn):
         create_and_write(bin_trial >= minival_trials[0],
                          bin_trial_native >= minival_trials[0],
                          'minival', folder='minival')
-
+print(f"Processing {len(files)} files")
 for sample in files:
     to_nwb(sample)
+print("Done")

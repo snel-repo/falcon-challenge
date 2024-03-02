@@ -38,10 +38,14 @@ def get_files(query):
         return sorted(list((root / query).glob('*full.nwb')))
     return sorted(list((root / query).glob('*.nwb')))
 train_files = get_files(train_query)
+# train_files = [t for t in train_files if 'S591' in str(t)]
+# train_files = [t for t in train_files if 'S594' in str(t)]
+train_files = [t for t in train_files if 'S608' in str(t)]
 test_files_short = get_files(test_query_short)
 test_files_long = get_files(test_query_long)
 print(train_files)
 
+# uniform_dof = 5
 uniform_dof = 7
 print(f"Uniform DoF: {uniform_dof}")
 
@@ -93,7 +97,7 @@ train_bins, train_kin, train_timestamps, train_blacklist, train_epochs, train_tr
 test_bins_short, test_kin_short, test_timestamps_short, test_blacklist_short, test_epochs_short, test_trials_short, test_labels_short = load_files(test_files_short)
 test_bins_long, test_kin_long, test_timestamps_long, test_blacklist_long, test_epochs_long, test_trials_long, test_labels_long = load_files(test_files_long)
 
-BIN_SIZE_MS = 10 # TODO derive from nwb
+BIN_SIZE_MS = 20 # TODO derive from nwb
 
 # Basic qualitative
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
@@ -113,14 +117,14 @@ for idx, tag in enumerate(unique_tags):
         # white
         epoch_palette[idx] = (1, 1, 1, 0.5)
 
-def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
+def rasterplot(spike_arr, bin_size_s=BIN_SIZE_MS / 1000, ax=None):
     if ax is None:
         ax = plt.gca()
     for idx, unit in enumerate(spike_arr.T):
         ax.scatter(np.where(unit)[0] * bin_size_s, np.ones(np.sum(unit != 0)) * idx, s=1, c='k', marker='|')
     # ax = sns.heatmap(spike_arr.T, cmap='gray_r', ax=ax) # Not sufficient - further autobinning occurs
-    ax.set_xticks(np.arange(0, spike_arr.shape[0], 5000))
-    ax.set_xticklabels(np.arange(0, spike_arr.shape[0], 5000) * bin_size_s)
+    # ax.set_xticks(np.arange(0, spike_arr.shape[0], 5000))
+    # ax.set_xticklabels(np.arange(0, spike_arr.shape[0], 5000) * bin_size_s)
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 40))
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Neuron #')
@@ -221,7 +225,7 @@ plt.tight_layout()
 
 xticks = np.arange(0, 50, 10)
 plt.xlim(xticks[0], xticks[-1])
-plt.xticks(xticks, labels=xticks.round(2))
+# plt.xticks(xticks, labels=xticks.round(2))
 
 #%%
 # Basic quantitative
@@ -251,8 +255,8 @@ ax.text(0.95, 0.55, f' {len(mute_channels)} Mute channel(s) > 100Hz:\n{mute_chan
 # Units inferred as virtual meters and radians. Grasp is arbitrary.
 # TODO Feedback: Violinplot is not ideal
 ax = plt.gca()
-ax.scatter(np.arange(7), np.min(train_kin, axis=0), c='k', marker='_', s=100)
-ax.scatter(np.arange(7), np.max(train_kin, axis=0), c='k', marker='_', s=100)
+ax.scatter(np.arange(uniform_dof), np.min(train_kin, axis=0), c='k', marker='_', s=100)
+ax.scatter(np.arange(uniform_dof), np.max(train_kin, axis=0), c='k', marker='_', s=100)
 non_nan = ~np.isnan(train_kin)
 ax = sns.violinplot(train_kin, ax=ax)
 
@@ -351,8 +355,8 @@ def prepare_train_test(
     y_std[y_std == 0] = 1
     train_x = (train_x - x_mean) / x_std
     test_x = (test_x - x_mean) / x_std
-    train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
-    test_y = (test_y - y_mean) / y_std
+    # train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
+    # test_y = (test_y - y_mean) / y_std
 
     train_blacklist = train_blacklist | np.isnan(train_y).any(axis=1)
     test_blacklist = test_blacklist | np.isnan(test_y).any(axis=1)
@@ -391,7 +395,7 @@ HISTORY = 0
     y_mean,
     y_std
 ) = prepare_train_test(train_bins, train_kin, train_blacklist, history=HISTORY)
-
+print("Residual shapes: ", train_x.shape, train_y.shape, test_x.shape, test_y.shape)
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 print(f"CV Score: {score:.2f}")
 
@@ -418,7 +422,7 @@ for idx, (true, pred) in enumerate(zip(test_y.T, pred_y.T)):
     axes[idx].set_xticks(xticks)
     axes[idx].set_xticklabels([f'{x/1000 * BIN_SIZE_MS:.0f}' for x in xticks])
 axes[-1].set_xlabel('Time (s)')
-f.suptitle(f'Val $R^2$: {score:.2f}')
+f.suptitle(f'Val $R^2$: {r2_weighted:.2f}')
 f.tight_layout()
 
 #%%
@@ -445,7 +449,7 @@ def prepare_test(
         x_std = np.nanstd(signal[~blacklist], axis=0)
         x_std[x_std == 0] = 1
     signal = (signal - x_mean) / x_std
-    targets = (targets - y_mean) / y_std
+    # targets = (targets - y_mean) / y_std
 
     is_nan_y = np.isnan(targets).any(axis=1)
     if np.any(is_nan_y):

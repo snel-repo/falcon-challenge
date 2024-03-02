@@ -24,7 +24,7 @@ def bin_units(
         end_time = units.spike_times.apply(lambda s: max(s) if len(s) else 0).max() + bin_size_s
         bin_end_timestamps = np.arange(0, end_time, bin_size_s)
     spike_arr = np.zeros((len(bin_end_timestamps), len(units)), dtype=np.uint8)
-    bin_edges = np.concatenate([np.array([-np.inf]), bin_end_timestamps])
+    bin_edges = np.concatenate([np.array([bin_end_timestamps[0] - bin_size_s]), bin_end_timestamps])
     for idx, (_, unit) in enumerate(units.iterrows()):
         spike_cnt, _ = np.histogram(unit.spike_times, bins=bin_edges)
         spike_arr[:, idx] = spike_cnt
