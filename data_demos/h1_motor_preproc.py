@@ -2,7 +2,6 @@
 # Preprocessing to go from relatively raw server transfer to NWB format.
 
 # 1. Extract raw datapoints
-import os
 import math
 from pathlib import Path
 import numpy as np
@@ -19,8 +18,17 @@ from pynwb import NWBFile, NWBHDF5IO, TimeSeries
 from data_demos.filtering import smooth
 
 root = Path('./data/h1')
-# List files
 files = list(root.glob('*.mat'))
+
+KIN_SUBSET = {
+    0: 'tx',
+    1: 'ty',
+    2: 'tz',
+    3: 'rx',
+    6: 'g1',
+    7: 'g2',
+    9: 'g3',
+}
 
 #%%
 CHANNELS_PER_SOURCE = 128
@@ -97,12 +105,12 @@ def create_nwb_name(mat_name: Path) -> Path:
     name = name.split('session_')[-1]
     return (root / name).with_suffix('.nwb')
 
-def create_nwb_shell():
+def create_nwb_shell(start_date: datetime = datetime(2017, 1, 1, 1, tzinfo=tzlocal())):
     # Note identifying info is redacted
     return NWBFile(
         session_description="Open loop 7DoF calibration.",
         identifier=str(uuid4()),
-        session_start_time=datetime(2017, 1, 1, 1, tzinfo=tzlocal()),
+        session_start_time=start_date,
         lab="Rehab Neural Engineering Labs",
         institution="University of Pittsburgh",
         experiment_description="Open loop calibration for Action Research Arm Test (ARAT) for human motor BCI",
@@ -170,6 +178,7 @@ def to_nwb(fn):
     raw_spike_time = payload['source_timestamp']
     bin_time = payload['spm_source_timestamp'] # Indicates end of 20ms bin, in seconds. Shape is (recording devices x Timebin), each has own clock
     bin_kin = payload['open_loop_kin'] # Shape is (Timebin x K)
+    bin_kin = bin_kin[:, np.array(list(KIN_SUBSET.keys()))] # Subset kinematics
     bin_state = payload['state_num'] -1 # Shape is (Timebin), 1-index -> 0-index
     blacklist_timesteps = np.isin(bin_state, blacklist_index)
     print(f'% blacklist phases: {np.sum(blacklist_timesteps) / len(blacklist_timesteps) * 100:.2f}')
@@ -337,13 +346,15 @@ def to_nwb(fn):
         bin_blacklist: np.ndarray,
     ):
         # Recenter timestamps in case data is subsetted
-        nwbfile = create_nwb_shell()
+        date_str = payload['start_date']
+        date_obj = datetime.strptime(date_str, "%d-%b-%Y_%H_%M_%S")
+        nwbfile = create_nwb_shell(date_obj)
         for unit_id in motor_units:
             spike_times = spike_time[spike_channel == unit_id]
             nwbfile.add_unit(spike_times=spike_times)
         position_spatial_series = TimeSeries(
             name="OpenLoopKinematics",
-            description="tx,ty,tz,rx,ry,rz,grasp",
+            description=','.join(KIN_SUBSET.values()),
             timestamps=bin_time,
             data=bin_kin,
             unit="arbitrary",
