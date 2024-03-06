@@ -109,6 +109,18 @@ def apply_savgol_diff(x, window_length, polyorder, deriv, delta):
                              mode='constant')
     return y
 
+def apply_clipping(x, clip_quantile): 
+    """apply clipping to input signal"""
+    clip_val = np.quantile(np.abs(x), clip_quantile)
+    x = np.clip(x, -clip_val, clip_val)
+    return x
+
+def apply_scaling(x, scale_quantile): 
+    """apply scaling to input signal"""
+    scale_val = np.quantile(np.abs(x), scale_quantile)
+    x = x/scale_val
+    return x
+
 def apply_bayes_filter(x, fs, nbins, sigmax, alpha, beta, obs_model_type, pointmax):
     """runs bayesian filtering on emg data arrays
 
