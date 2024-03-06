@@ -68,7 +68,7 @@ class FalconEvaluator:
         targets = targets[eval_mask]
         preds = preds[eval_mask]
         return {
-            "r2": r2_score(targets, preds, multioutput='uniform_average')
+            "r2": r2_score(targets, preds, multioutput='variance_weighted')
         }
 
     @staticmethod
