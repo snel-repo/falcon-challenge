@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from pynwb import NWBHDF5IO
 
+from falcon_challenge.config import FalconTask
+
 # Load nwb file
 def bin_units(
         units: pd.DataFrame,
@@ -31,7 +33,7 @@ def bin_units(
     return spike_arr
 
 
-def load_nwb(fn: str | Path, dataset: str = 'h1') -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def load_nwb(fn: str | Path, dataset: FalconTask = FalconTask.h1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     r"""
         Load data for evaluation.
 
@@ -41,7 +43,7 @@ def load_nwb(fn: str | Path, dataset: str = 'h1') -> Tuple[np.ndarray, np.ndarra
         - trial_change: boolean of shape (time,) true if the trial has changed
         - eval_mask: boolean array indicating whether to evaluate each time step
     """
-    if dataset == 'h1':
+    if dataset == FalconTask.h1:
         with NWBHDF5IO(str(fn), 'r') as io:
             nwbfile = io.read()
             # print(nwbfile)

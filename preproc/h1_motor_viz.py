@@ -328,59 +328,7 @@ from data_demos.decoding_utils import (
     generate_lagged_matrix,
     fit_and_eval_decoder,
 )
-
-def prepare_train_test(
-        binned_spikes: np.ndarray,
-        behavior: np.ndarray,
-        blacklist: np.ndarray | None=None,
-        history: int=0,
-        ):
-    signal = apply_exponential_filter(binned_spikes)
-    targets = create_targets(behavior)
-
-    # Remove timepoints where nothing is happening in the kinematics
-    still_times = np.all(np.abs(targets) < 0.001, axis=1)
-    if blacklist is not None:
-        blacklist = still_times | blacklist
-    else:
-        blacklist = still_times
-
-    train_x, test_x = np.split(signal, [int(TRAIN_TEST[0] * signal.shape[0])])
-    train_y, test_y = np.split(targets, [int(TRAIN_TEST[0] * targets.shape[0])])
-    train_blacklist, test_blacklist = np.split(blacklist, [int(TRAIN_TEST[0] * blacklist.shape[0])])
-
-    x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
-    x_std[x_std == 0] = 1
-    y_mean, y_std = np.nanmean(train_y[~train_blacklist], axis=0), np.nanstd(train_y[~train_blacklist], axis=0)
-    y_std[y_std == 0] = 1
-    train_x = (train_x - x_mean) / x_std
-    test_x = (test_x - x_mean) / x_std
-    # train_y = (train_y - y_mean) / y_std # don't standardize y if using var weighted r2
-    # test_y = (test_y - y_mean) / y_std
-
-    train_blacklist = train_blacklist | np.isnan(train_y).any(axis=1)
-    test_blacklist = test_blacklist | np.isnan(test_y).any(axis=1)
-    if np.any(train_blacklist):
-        print(f"Invalidating {np.sum(train_blacklist)} timepoints in train")
-    if np.any(test_blacklist):
-        print(f"Invalidating {np.sum(test_blacklist)} timepoints in test")
-
-    if history > 0:
-        train_x = generate_lagged_matrix(train_x, history)
-        test_x = generate_lagged_matrix(test_x, history)
-        train_y = train_y[history:]
-        test_y = test_y[history:]
-        if blacklist is not None:
-            train_blacklist = train_blacklist[history:]
-            test_blacklist = test_blacklist[history:]
-
-    # Now, finally, remove by blacklist
-    train_x = train_x[~train_blacklist]
-    train_y = train_y[~train_blacklist]
-    test_x = test_x[~test_blacklist]
-    test_y = test_y[~test_blacklist]
-
-    return train_x, train_y, test_x, test_y, x_mean, x_std, y_mean, y_std
+from decoder_demos.sklearn_decoder import prepare_train_test
 
 HISTORY = 0
 # HISTORY = 5
@@ -394,7 +342,7 @@ HISTORY = 0
     x_std,
     y_mean,
     y_std
-) = prepare_train_test(train_bins, train_kin, train_blacklist, history=HISTORY)
+) = prepare_train_test(train_bins, create_targets(train_kin), train_blacklist, history=HISTORY)
 print("Residual shapes: ", train_x.shape, train_y.shape, test_x.shape, test_y.shape)
 score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
 print(f"CV Score: {score:.2f}")
