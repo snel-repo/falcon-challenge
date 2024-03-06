@@ -72,9 +72,9 @@ def load_nwb(fn: str):
         trial_info.end_time = trial_info.end_time.round(2)
 
         return (
-            bin_units(units),
+            bin_units(units, bin_size_s=0.02),
             emg_data_resample,
-            emg_timestamps[::10],
+            emg_timestamps,
             muscles,
             trial_info,
         )

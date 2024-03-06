@@ -6,7 +6,7 @@ import numpy as np
 import scipy.signal as signal
 
 from scipy.io import loadmat
-import h5py, glob, logging, sys
+import h5py, glob, logging, sys, os
 from datetime import datetime
 from dateutil.tz import tzlocal, gettz
 import matplotlib.pyplot as plt
@@ -46,9 +46,17 @@ rouse_base_dir = "/snel/share/share/data/rouse/RTG/"
 MONKEY = "L"
 EXP_DATE = "20120924"
 
-# if len(sys.argv) > 1:
-#     exp_date = sys.argv[1]
-#     monkey = sys.argv[2]
+if len(sys.argv) > 1:
+    EXP_DATE = sys.argv[1]
+    MONKEY = sys.argv[2]
+
+train_dates = ['20120924', '20120926', '20120927', '20120928']
+test_dates = ['20121004', '20121017', '20121022', '20121024']
+
+if EXP_DATE in train_dates: 
+    IS_TEST_DS = False
+if EXP_DATE in test_dates: 
+    IS_TEST_DS = True
 
 # emg file
 emg_mat_path = path.join(rouse_base_dir, f"{MONKEY}{EXP_DATE}_AD_Unrect_EMG.mat")
@@ -66,8 +74,6 @@ def convert_datestr_to_datetime(collect_date):
     )
 
     return date_time
-
-# date_time = 
 
 #%% extracting trial info
 
@@ -129,18 +135,17 @@ def convert_to_NWB(
     emg_data, 
     emg_names, 
     t_offset, 
-    fs_emg,
     n_units,
     elec_id_by_chan,
     array_group_by_chan,
     spike_time_thresh=[None, None],
     split_label='in_day_oracle' #calibration, eval
 ): 
-
+    file_id = f'{MONKEY}_{EXP_DATE}_{split_label}'
     logger.info("Creating new NWBFile")
     nwbfile = NWBFile(
         session_description="monkey performing reach-to-grasp task",
-        identifier=f'{MONKEY}_{EXP_DATE}_{split_label}',
+        identifier=file_id,
         session_start_time=convert_datestr_to_datetime(EXP_DATE),
         experiment_description="reach-to-grasp center out",
         file_create_date=datetime.now(tzlocal()),
@@ -200,7 +205,8 @@ def convert_to_NWB(
         )
 
     logger.info("Adding acquisition data")
-    t_cont = (np.arange(emg_data.shape[0])/fs_emg).round(4)
+
+    t_cont = (np.arange(0, emg_data.shape[0])/fs_cont).round(4)
 
     emg_mts = create_multichannel_timeseries(
         "emg_raw", emg_names, emg_data, timestamps=t_cont, unit="mV"
@@ -226,14 +232,14 @@ def convert_to_NWB(
         raw_emg,
         apply_notch_filt,
         "emg_notch",
-        fs_emg,
+        fs_cont,
         notch_cent_freq,
         notch_bw_freq,
     )
 
     # 2) high pass filter
     hp_emg = apply_filt_to_multi_timeseries(
-        notch_emg, apply_butter_filt, "emg_hp", fs_emg, "high", hp_cutoff_freq
+        notch_emg, apply_butter_filt, "emg_hp", fs_cont, "high", hp_cutoff_freq
     )
 
     # 3) rectify
@@ -251,7 +257,7 @@ def convert_to_NWB(
 
     # resample all the processed EMG data to 20ms bins (50Hz) 
     resamp_emg = apply_filt_to_multi_timeseries(
-        scale_emg, resample_column, 'emg_resample', 50, fs_emg
+        scale_emg, resample_column, 'emg_resample', 50, fs_cont
     )
 
     # rectify again 
@@ -390,21 +396,17 @@ def convert_to_NWB(
             electrodes=[elec_id_map[elec_id]],
             obs_intervals=[[start_cutoff, stop_cutoff + 1/fs_cont]],
         )
-
-    save_fname = path.join(SAVE_PATH, split_label, file_id + ".nwb")
+    
+    nwb_path = path.join(SAVE_PATH, split_label)
+    if not path.exists(nwb_path):
+        os.makedirs(nwb_path, mode=0o755)
+    save_fname = path.join(nwb_path, file_id + ".nwb")
     logger.info(f"Saving NWB file to {save_fname}")
     # write processed file
     with NWBHDF5IO(save_fname, "w") as io:
         io.write(nwbfile)
 
-#%% TODO: create dataset splits 
-
-FEW_SHOT_CALIBRATION_RATIO = 0.2
-EVAL_RATIO = 0.4
-
-n_trials = exp_event_times.shape[0]
-calibration_num = int(np.ceil(n_trials * FEW_SHOT_CALIBRATION_RATIO))
-eval_num = int(n_trials * EVAL_RATIO)
+#%% 
 
 trial_start_times = trial_start_times[trial_order]
 trial_end_times = trial_end_times[trial_order]
@@ -418,32 +420,143 @@ object_names = np.array(obj_names)[trial_order]
 locations = np.array(locations)[trial_order]
 exp_trial_ids = np.array(exp_trial_ids)[trial_order]
 
-# first calibration num = few shot training 
-calib_end_ind_emg = int(trial_end_times[:calibration_num][-1] * fs_emg)
-convert_to_NWB(
-    fs_cont, 
-    trial_start_times[:calibration_num], 
-    trial_end_times[:calibration_num],
-    gocue_times[:calibration_num],
-    move_onset_times[:calibration_num],
-    contact_times[:calibration_num],
-    reward_times[:calibration_num], 
-    generic_cond_ids[:calibration_num],
-    object_ids[:calibration_num], 
-    object_names[:calibration_num],
-    locations[:calibration_num], 
-    exp_trial_ids[:calibration_num], 
-    emg_data[:calib_end_ind_emg, :], 
-    emg_names, 
-    fs_emg,
-    t_offset, 
-    n_units,
-    elec_id_by_chan,
-    array_group_by_chan,
-    spike_time_thresh=[None, trial_end_times[:calibration_num][-1] + 1/fs_emg], 
-    split_label='calibration' #'in_day_oracle' #calibration, eval
-)
+#%% 
+FEW_SHOT_CALIBRATION_RATIO = 0.2
+EVAL_RATIO = 0.4
+n_trials = exp_event_times.shape[0]
+calibration_num = int(np.ceil(n_trials * FEW_SHOT_CALIBRATION_RATIO))
+eval_num = int(n_trials * EVAL_RATIO)
 
-# last eval num = evaluation set
-# everything that is not eval set = oracle 
+#%%
+if IS_TEST_DS:
+    logger.info("Creating few-shot calibration split")
+    # first calibration num = few shot training 
+    calib_end_ind_emg = int(trial_end_times[:calibration_num][-1] * fs_cont)
+    convert_to_NWB(
+        fs_cont, 
+        trial_start_times[:calibration_num], 
+        trial_end_times[:calibration_num],
+        gocue_times[:calibration_num],
+        move_onset_times[:calibration_num],
+        contact_times[:calibration_num],
+        reward_times[:calibration_num], 
+        generic_cond_ids[:calibration_num],
+        object_ids[:calibration_num], 
+        object_names[:calibration_num],
+        locations[:calibration_num], 
+        exp_trial_ids[:calibration_num], 
+        emg_data[:calib_end_ind_emg, :], 
+        emg_names, 
+        t_offset, 
+        n_units,
+        elec_id_by_chan,
+        array_group_by_chan,
+        spike_time_thresh=[0, trial_end_times[:calibration_num][-1]], 
+        split_label='calibration' #'in_day_oracle' #calibration, eval
+    )
+
+    logger.info("Creating evaluation split")
+    # last eval num = evaluation set
+    eval_start_ind_emg = int(trial_start_times[-eval_num:][0] * fs_cont)
+    convert_to_NWB(
+        fs_cont,
+        trial_start_times[-eval_num:],
+        trial_end_times[-eval_num:],
+        gocue_times[-eval_num:],
+        move_onset_times[-eval_num:],
+        contact_times[-eval_num:],
+        reward_times[-eval_num:],
+        generic_cond_ids[-eval_num:],
+        object_ids[-eval_num:],
+        object_names[-eval_num:],
+        locations[-eval_num:],
+        exp_trial_ids[-eval_num:],
+        emg_data[eval_start_ind_emg:, :],
+        emg_names,
+        t_offset,
+        n_units,
+        elec_id_by_chan,
+        array_group_by_chan,
+        spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
+        split_label='eval'
+    )
+
+    logger.info("Creating in-day oracle split")
+    # everything that is not eval set = oracle 
+    convert_to_NWB(
+        fs_cont, 
+        trial_start_times[:-eval_num],
+        trial_end_times[:-eval_num],
+        gocue_times[:-eval_num],
+        move_onset_times[:-eval_num],
+        contact_times[:-eval_num],
+        reward_times[:-eval_num],
+        generic_cond_ids[:-eval_num],
+        object_ids[:-eval_num],
+        object_names[:-eval_num],
+        locations[:-eval_num],
+        exp_trial_ids[:-eval_num],
+        emg_data[:eval_start_ind_emg, :],
+        emg_names,
+        t_offset,
+        n_units,
+        elec_id_by_chan,
+        array_group_by_chan,
+        spike_time_thresh=[0, trial_start_times[-eval_num:][0]],
+        split_label='in_day_oracle'
+    )
+
+else: 
+    logger.info("Creating full training dataset")
+    # need full dataset 
+    convert_to_NWB(
+        fs_cont,
+        trial_start_times,
+        trial_end_times,
+        gocue_times,
+        move_onset_times,
+        contact_times,
+        reward_times,
+        generic_cond_ids,
+        object_ids,
+        object_names,
+        locations,
+        exp_trial_ids,
+        emg_data,
+        emg_names,
+        t_offset,
+        n_units,
+        elec_id_by_chan,
+        array_group_by_chan,
+        spike_time_thresh=[None, None],
+        split_label='full'
+    )
+
+    logger.info("Creating minival split")
+    # and minival dataset which is last EVAL_RATIO of train data 
+    eval_start_ind_emg = int(trial_start_times[-eval_num:][0] * fs_cont)
+    convert_to_NWB(
+        fs_cont,
+        trial_start_times[-eval_num:],
+        trial_end_times[-eval_num:],
+        gocue_times[-eval_num:],
+        move_onset_times[-eval_num:],
+        contact_times[-eval_num:],
+        reward_times[-eval_num:],
+        generic_cond_ids[-eval_num:],
+        object_ids[-eval_num:],
+        object_names[-eval_num:],
+        locations[-eval_num:],
+        exp_trial_ids[-eval_num:],
+        emg_data[eval_start_ind_emg:, :],
+        emg_names,
+        t_offset,
+        n_units,
+        elec_id_by_chan,
+        array_group_by_chan,
+        spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
+        split_label='minival'
+    )
+
+
 # %%
