@@ -23,6 +23,7 @@ class FalconConfig:
     # falcon_h1, falcon_h2_writing, falcon_m1_finger, falcon_m2_reach
     task: FalconTask = FalconTask.h1
     n_channels: int = 176
+    bin_size_ms: int = 20
 
 
 

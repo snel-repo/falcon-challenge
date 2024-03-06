@@ -51,13 +51,14 @@ def main():
     #     ],
     # )
     dataset = args.phase.split('_')[0]
+    task = getattr(FalconTask, dataset)
     config = FalconConfig(
-        task=getattr(FalconTask, dataset),
+        task=task,
         n_channels=176,
     )
 
     # decoder = RandomDecoder(task_config=config)
-    decoder = SKLearnDecoder(task_config=config, model_path=f'data/sklearn_{dataset}.pkl')
+    decoder = SKLearnDecoder(task_config=config, model_path=f'data/sklearn_{task}.pkl')
     # decoder_cfg = MyConfig('added_to_docker_cfg.cfg')
     # decoder_cfg.model_path = args.model_path
     # decoder = SimpleRNNDecoder(task_config=config, decoder_cfg=decoder_cfg)

@@ -18,7 +18,7 @@ class SimpleRNNDecoder(BCIDecoder):
         self._task_config = task_config
         self.dnn = torch.load(decoder_cfg.model_path)
 
-    def reset(self):
+    def reset(self, dataset_tag: str = ""):
         self.neural_history = np.zeros((0, self._task_config.n_channels))
 
     def predict(self, neural_observations: np.ndarray):

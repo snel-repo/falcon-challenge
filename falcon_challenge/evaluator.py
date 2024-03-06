@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 from sklearn.metrics import r2_score
 
+from falcon_challenge.config import FalconTask
 from falcon_challenge.interface import BCIDecoder
 from falcon_challenge.dataloaders import load_nwb
 
@@ -14,17 +15,16 @@ class FalconEvaluator:
     def __init__(self, eval_remote=False, phase='h1_short'):
         self.eval_remote = eval_remote
         self.phase = phase
-        self.dataset = phase.split('_')[0]
+        self.dataset: FalconTask = getattr(FalconTask, phase.split('_')[0])
         self.eval_term = phase.split('_')[1]
 
     def get_eval_files(self):
-
         if self.eval_remote:
-            eval_dir = f"data/{self.dataset}/test_{self.eval_term}" # TODO is this secure? Not sure if this is the right pattern
+            eval_dir = f"data/{self.dataset.name}/test_{self.eval_term}" # TODO is this secure? Not sure if this is the right pattern
             suffix = "*eval.nwb"
         else:
             logger.info(f"Local evaluation, running minival.")
-            eval_dir = f"data/{self.dataset}/minival/"
+            eval_dir = f"data/{self.dataset.name}/minival/"
             suffix = "*minival.nwb"
         return sorted(list(Path(eval_dir).glob(suffix)))
 
@@ -41,11 +41,12 @@ class FalconEvaluator:
         all_preds = []
         all_targets = []
         all_eval_mask = []
+
         for datafile in eval_files:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
-            decoder.reset()
+            decoder.reset(dataset=datafile)
             trial_preds = []
             for neural_observations, trial_delta_obs in zip(neural_data, trial_change):
                 trial_preds.append(decoder.predict(neural_observations))
@@ -82,9 +83,9 @@ class FalconEvaluator:
             all_targets: array of shape (n_timesteps, k_dim)
             all_eval_mask: array of shape (n_timesteps, k_dim). True if we should evaluate this timestep.
         """
-        if self.dataset in ['h1', 'm1', 'm2']:
+        if self.dataset in [FalconTask.h1, FalconTask.m1, FalconTask.m2]:
             metrics = self.compute_metrics_regression(all_preds, all_targets, all_eval_mask)
-        elif self.dataset in ['h2']:
+        elif self.dataset in [FalconTask.h2]:
             metrics = self.compute_metrics_classification(all_preds, all_targets, all_eval_mask)
         else:
             raise ValueError(f"Unknown dataset {self.dataset}")
