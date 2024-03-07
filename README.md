@@ -1,12 +1,12 @@
 # FALCON Benchmark and Challenge
 
-This repo contains examples that overview FALCON datasets and the `falcon_challenge` package that is needed to submit to the FALCON benchmark.
+This package contains core code for submitting decoders to the FALCON challenge. Full github contains additional examples and documentation.
 
 ## Installation
 Install `falcon_challenge` with:
 
 ```bash
-pip install .
+pip install falcon_challenge
 ```
 
 To create Docker containers for submission, you must have Docker installed.
