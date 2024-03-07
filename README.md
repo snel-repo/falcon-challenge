@@ -14,10 +14,10 @@ See, e.g. https://docs.docker.com/desktop/install/linux-install/. Try building a
 
 ```bash
 # Build
-sudo docker build -t sk_smoke -f ./sklearn_sample.Dockerfile .
+sudo docker build -t sk_smoke -f ./decoder_demos/sklearn_sample.Dockerfile .
 sudo docker run -v ~/projects/stability-benchmark/data:/evaluation_data -it sk_smoke
 ```
-
+Note that additional steps will be needed to allow the docker container to see GPU resources. See [NVIDIA's documentation](https://github.com/NVIDIA/nvidia-container-toolkit) for more information. (The final docker run needs a `--gpus all` flag.)
 
 
 ## Submission

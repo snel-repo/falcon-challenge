@@ -30,7 +30,7 @@ ADD ./decoder_demos/ decoder_demos/
 ADD ./data_demos/ data_demos/
 
 # Add runfile
-ADD ./decode_sample.py decode.py
+ADD ./decoder_demos/sklearn_sample.py decode.py
 
 ENV TRACK "h1"
 
