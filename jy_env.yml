@@ -1,4 +1,4 @@
-name: torch2
+name: stbm
 channels:
   - conda-forge
 dependencies:
@@ -146,7 +146,6 @@ dependencies:
       - fastapi==0.98.0
       - fasteners==0.19
       - filelock==3.9.0
-      - flash-attn==2.3.2
       - fonttools==4.40.0
       - fqdn==1.5.1
       - frozenlist==1.3.3
@@ -211,15 +210,7 @@ dependencies:
       - platformdirs==3.11.0
       - protobuf==4.23.3
       - psutil==5.9.6
-      - py-cpuinfo==9.0.0
-      - pyaldata==0.1.0
-      - pycryptodomex==3.19.0
-      - pydantic==1.10.9
-      - pygments==2.16.1
-      - pyjwt==2.7.0
-      - pymongo==4.4.0
       - pynwb==2.3.3
-      - pyout==0.7.3
       - pyqt5==5.15.9
       - pyqt5-qt5==5.15.2
       - pyqt5-sip==12.12.1
@@ -263,32 +254,12 @@ dependencies:
       - starlette==0.27.0
       - starsessions==1.3.0
       - sympy==1.11.1
-      - tenacity==8.2.3
-      - threadpoolctl==3.1.0
-      - timm==0.9.7
-      - tokenizers==0.14.1
       - torch==2.1.0+cu118
       - torchaudio==2.1.0+cu118
       - torchmetrics==0.11.4
       - torchvision==0.16.0+cu118
       - tornado==6.3.3
       - tqdm==4.65.0
-      - traitlets==5.11.2
-      - transformers==4.34.0
-      - triton==2.1.0
-      - typing-extensions==4.4.0
-      - tzdata==2023.3
-      - uri-template==1.3.0
-      - urllib3==1.26.13
-      - uvicorn==0.22.0
       - wandb==0.15.12
-      - wcwidth==0.2.8
-      - webcolors==1.13
-      - websocket-client==1.6.1
-      - websocket-server==0.6.4
-      - websockets==11.0.3
       - yacs==0.1.8
       - yarl==1.9.2
-      - zarr==2.16.1
-      - zarr-checksum==0.2.9
-prefix: /ihome/rgaunt/joy47/mambaforge/envs/torch2

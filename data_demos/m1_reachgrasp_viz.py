@@ -3,14 +3,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from filtering import apply_butter_filt
 from pynwb import NWBHDF5IO
 import torch
 import torch.nn.functional as F
 from scipy.signal import resample_poly
 
-from data_demos.filtering import apply_butter_filt
-
-root = Path('/snel/share/share/derived/rouse/RTG/NWB')
+root = Path('/snel/share/share/derived/rouse/RTG/NWB_FALCON')
 files = list(root.glob('*.nwb'))
 
 # %%
@@ -53,36 +52,36 @@ def load_nwb(fn: str):
         muscles = [ts for ts in raw_emg.time_series]
         emg_data = []
         emg_timestamps = []
-        for m in muscles:
+        for m in muscles: 
             mdata = raw_emg.get_timeseries(m)
             data = mdata.data[:]
             timestamps = mdata.timestamps[:]
             emg_data.append(data)
             emg_timestamps.append(timestamps)
 
-        emg_data = np.vstack(emg_data).T
+        emg_data = np.vstack(emg_data).T 
         emg_timestamps = emg_timestamps[0]
 
         fs = 1/(emg_timestamps[1] - emg_timestamps[0])
-        # apply a lowpass filter to the emg_data
+        # apply a lowpass filter to the emg_data 
         emg_data = apply_butter_filt(emg_data, fs, 'low', 10)
-        # resample the emg data to 100 Hz from 1000Hz
+        # resample the emg data to 100 Hz from 1000Hz 
         emg_data_resample = resample_poly(emg_data, 1, 10, axis=0)
 
         trial_info.start_time = trial_info.start_time.round(2)
         trial_info.end_time = trial_info.end_time.round(2)
 
         return (
-            bin_units(units),
+            bin_units(units, bin_size_s=0.02),
             emg_data_resample,
-            emg_timestamps[::10],
+            emg_timestamps,
             muscles,
             trial_info,
         )
 
 # %%
 units, emg, time, muscle_names, trials = load_nwb(files[0])
-# %% # plot EMG for some conditions
+# %% # plot EMG for some conditions 
 
 for cond in [1, 2, 3]:
 
@@ -91,8 +90,8 @@ for cond in [1, 2, 3]:
     axs = ax.flatten()
 
     for trial in range(condition_trials.shape[0]):
-        tr = condition_trials.iloc[trial]
-        # get the timestamps between start and stop time
+        tr = condition_trials.iloc[trial] 
+        # get the timestamps between start and stop time 
         start = tr['start_time']
         stop = tr['end_time']
         start_idx = np.where(time == start)[0][0]
@@ -109,7 +108,7 @@ for cond in [1, 2, 3]:
     plt.show()
 
 
-# %% plot some continuous raster/EMG data
+# %% plot some continuous raster/EMG data 
 
 fig, ax = plt.subplots(2, 1, figsize=(5, 5), sharex=True, sharey=False)
 def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
@@ -122,7 +121,7 @@ def rasterplot(spike_arr, bin_size_s=0.01, ax=None):
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 20))
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Neuron #')
-    # remove splines
+    # remove splines 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -133,7 +132,7 @@ ax[1].set_xlabel('Time (s)')
 ax[1].set_ylabel('EMG')
 ax[1].spines['top'].set_visible(False)
 ax[1].spines['right'].set_visible(False)
-# %% histogram of mean firing rates
+# %% histogram of mean firing rates 
 
 mean_firing_rates = np.sum(units, axis=0) / (units.shape[0] * 0.01)
 plt.figure()
@@ -143,7 +142,7 @@ plt.ylabel('Channel Count')
 plt.gca().spines['top'].set_visible(False)
 plt.gca().spines['right'].set_visible(False)
 
-# %% violin plot of ranges of EMG data
+# %% violin plot of ranges of EMG data 
 
 plt.figure()
 plt.violinplot(emg[:100000], showmeans=True, showextrema=False)
@@ -180,7 +179,7 @@ def smooth(position, kernel_size=DEFAULT_TARGET_SMOOTH_MS / BIN_SIZE_MS, sigma=D
     smoothed = F.conv1d(position.unsqueeze(1), torch.tensor(kernel).float().unsqueeze(0).unsqueeze(0))
     return smoothed.squeeze().T.numpy()
 
-#%%
+#%% 
 smoothed_spikes = smooth(units)
 
 # %%
@@ -205,7 +204,7 @@ for _, trial in trials.iterrows():
     smoothed_spikes_trials.append(smoothed_spikes_region)
     emg_trials.append(emg_region)
 
-# %% split into train and valid
+# %% split into train and valid 
 from sklearn.model_selection import train_test_split
 
 # Split the smoothed_spikes_regions into training and validation sets
@@ -214,9 +213,9 @@ smoothed_spikes_train, smoothed_spikes_valid = train_test_split(smoothed_spikes_
 # Split the emg_regions into training and validation sets
 emg_train, emg_valid = train_test_split(emg_trials, test_size=0.2, random_state=42)
 
-#%% train a decoder
+#%% train a decoder 
 
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge 
 
 # Create a decoder
 decoder = Ridge(alpha=1.0)

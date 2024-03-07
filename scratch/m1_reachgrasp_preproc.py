@@ -4,7 +4,7 @@ import numpy as np
 import scipy.signal as signal
 
 from scipy.io import loadmat
-import h5py
+import h5py, glob, logging, sys
 from datetime import datetime
 from dateutil.tz import tzlocal, gettz
 import matplotlib.pyplot as plt
@@ -15,21 +15,19 @@ from pynwb.misc import Units
 from pynwb.behavior import Position
 from pynwb.behavior import BehavioralTimeSeries
 from pynwb import ProcessingModule
-from nwb_convert.nwb_create_utils import (
+from nwb_create_utils import (
     create_multichannel_timeseries,
     apply_filt_to_multi_timeseries,
 )
-from nwb_convert.filtering import (
+from filtering import (
     apply_notch_filt,
     apply_butter_filt,
     apply_savgol_diff,
+    apply_clipping,
+    apply_scaling,
     resample_column,
     rectify,
 )
-
-import logging
-import sys
-import yaml
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -40,26 +38,24 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-save_path = "/snel/share/share/data/rouse/RTG/NWB/"
-rouse_base_dir = "/snel/share/share/data/rouse/RTG/raw_files/"
+SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON/"
+rouse_base_dir = "/snel/share/share/data/rouse/RTG/"
 monkey = "L"
-exp_date = "20120928"
+exp_date = "20120924"
+
+if len(sys.argv) > 1:
+    exp_date = sys.argv[1]
+    monkey = sys.argv[2]
 
 # emg file
 emg_mat_path = path.join(rouse_base_dir, f"{monkey}{exp_date}_AD_Unrect_EMG.mat")
-# kinematics file
-kin_mat_path = path.join(rouse_base_dir, f"{monkey}_{exp_date}_processed.mat")
 # spikes file
-spk_mat_path = path.join(rouse_base_dir, f"{monkey}_GHIJKLEF_{exp_date}-data.mat")
-
+spk_mat_path = glob.glob(path.join(rouse_base_dir, f"{monkey}_*_{exp_date}-data.mat"))[0]
 # get file string
 file_id = f"{monkey}_{exp_date}"
-
 # load mat data
 f_emg = loadmat(emg_mat_path)
-f_kin = loadmat(kin_mat_path)
 f_spk = h5py.File(spk_mat_path, "r")
-
 
 def convert_datestr_to_datetime(collect_date):
     date_time = datetime.strptime(collect_date, "%Y%m%d").replace(
@@ -67,7 +63,6 @@ def convert_datestr_to_datetime(collect_date):
     )
 
     return date_time
-
 
 date_time = convert_datestr_to_datetime(exp_date)
 
@@ -84,7 +79,6 @@ nwbfile = NWBFile(
     institution="University of Kansas",
     experimenter="Dr. Adam Rouse",
 )
-
 
 # === NWBFile Step: add trial info
 logger.info("Adding trial info")
@@ -125,10 +119,9 @@ obj_id_num_map = { 128: 1, 64: 2, 8: 3, 1: 4}
 obj_names = [*map(obj_id_name_map.get, object_ids)]
 object_ids = [*map(obj_id_num_map.get, object_ids)]
 locations = np.concatenate([ [f_emg['EMGSettings']['locations'][0][0][i][0]]*f_emg['EMGInfo']['trial_id'][0][i].shape[0] for i in range(n_conds)]).tolist()
-# start / gocue / move onset / contact / reward / end
-#exp_event_times = np.concatenate((trial_start_times[:,np.newaxis],exp_sample_times,trial_end_times[:,np.newaxis]),axis=1)
+
 exp_trial_ids = np.concatenate(f_emg['EMGInfo']['trial_id'][0]).squeeze()
-n_trials = exp_trial_ids.size
+n_trials = exp_trial_ids.size 
 trial_order = np.argsort(trial_start_times)
 
 # all trials in dataset are successful (failures have already been excluded)
@@ -161,7 +154,7 @@ for i in range(n_trials):
         condition_id=condition_id,
     )
 
-# === NWBFile Step: add acquisition data
+=== NWBFile Step: add acquisition data
 logger.info("Adding acquisition data")
 
 # --- load and process EMG
@@ -178,11 +171,7 @@ emg_names = convert_names_to_list(f_emg['EMGSettings'], 'ChanNames')
 
 fs_cont = float(f_emg['EMGSettings']['samp_rate'][0][0][0][0])
 dt_cont = 1/ fs_cont
-#t_cont = np.linspace(0,n_samples*(1/fs_cont), num=n_samples).round(3) # not reliable, floating point precision issues
 t_cont = (np.arange(n_samples)/fs_cont).round(4)
-
-#dt_cont = np.unique(np.diff(t_cont)).round(4)[0]
-#fs_cont = 1 / dt_cont
 
 emg_mts = create_multichannel_timeseries(
     "emg_raw", emg_names, emg_data, timestamps=t_cont, unit="mV"
@@ -220,80 +209,44 @@ hp_emg = apply_filt_to_multi_timeseries(
 
 # 3) rectify
 rect_emg = apply_filt_to_multi_timeseries(hp_emg, rectify, "emg")
+
+# clipping and quantile normalization of EMG
+CLIP_Q = 0.99
+SCALE_Q = 0.95
+clip_emg = apply_filt_to_multi_timeseries(
+    rect_emg, apply_clipping, 'emg_clip', CLIP_Q
+)
+scale_emg = apply_filt_to_multi_timeseries(
+    clip_emg, apply_scaling, 'emg_scale', SCALE_Q
+)
+
+# resample all the processed EMG data to 20ms bins (50Hz) 
+resamp_emg = apply_filt_to_multi_timeseries(
+    scale_emg, resample_column, 'emg_resample', 50, fs_cont
+)
+
+# rectify again 
+rerect_emg = apply_filt_to_multi_timeseries(resamp_emg, rectify, 'emg_rerect')
+
+# apply low pass filter 
+preprocessed_emg = apply_filt_to_multi_timeseries(
+    rerect_emg, apply_butter_filt, 'preprocessed_emg', fs_cont, 'low', 10
+)
+
 # add each step to processing module
 emg_filt.add_container(notch_emg)
 emg_filt.add_container(hp_emg)
 emg_filt.add_container(rect_emg)
+emg_filt.add_container(clip_emg)
+emg_filt.add_container(scale_emg)
+emg_filt.add_container(resamp_emg)
+emg_filt.add_container(rerect_emg)
+emg_filt.add_container(preprocessed_emg)
 
-
-# --- load and process joint angular kinematics
-
-angle_names = convert_names_to_list(f_kin['AngleInfo'], 'angle_names')
-
-# first we need to construct a continuous array from trialized data
-fs_kin = float(f_kin['ViconSettings']['samp_rate'][0][0][0][0])
-
-ds_factor = fs_cont / fs_kin
-
-kin_n_samples = round(n_samples/ds_factor)
-t_kin = np.linspace(0,kin_n_samples*(1/fs_kin), num=kin_n_samples).round(4)
-n_angles = len(angle_names)
-kin_seg_length = f_kin['ViconSettings']['max_samples'][0][0][0][0]
-
-kin_data = np.full((kin_n_samples,n_angles), np.nan)
-kin_align_idx = f_kin['ViconInfo']['event_sample'][0][0][0][0]
 for i in range(n_conds):
     emg_file_event_sample = f_emg['EMGInfo']['file_event_sample'][0][i]
-    kin_file_event_sample = (emg_file_event_sample/ds_factor).round().astype(int) - kin_align_idx
-    kin_file_start_sample = kin_file_event_sample[:,0]
-    kin_file_end_sample = kin_file_start_sample + kin_seg_length
 
-    n_trials_cond = kin_file_end_sample.size
-    for j in range(n_trials_cond):
-        kin_file_ix = np.arange(kin_file_start_sample[j],
-                                kin_file_end_sample[j])
-        n_angles = f_kin['ViconAngles'].shape[0]
-        for k in range(n_angles):
-            kin_data[kin_file_ix,k] = f_kin['ViconAngles'][k][i][j,:]
-
-kin_mts = create_multichannel_timeseries(
-    "joint_kin_raw", angle_names, kin_data, timestamps=t_kin, unit="degrees"
-)
-nwbfile.add_acquisition(kin_mts)
-
-kin_resample = nwbfile.create_processing_module(
-    "kin_resampling_module",
-    "module to perform resampling of kinematics data to continuous data sample rate (1KHz)",
-)
-raw_joint_ang_p = nwbfile.acquisition["joint_kin_raw"]
-resample_joint_ang = apply_filt_to_multi_timeseries(
-    raw_joint_ang_p, resample_column, "joint_ang_p", fs_cont, fs_kin, timestamps=t_cont
-)
-
-resample_data_len = resample_joint_ang[angle_names[0]].data.shape[0]
-cont_data_len = resample_joint_ang[angle_names[0]].timestamps.shape[0]
-len_diff = cont_data_len - resample_data_len
-
-joint_ang_p = np.full((cont_data_len,len(angle_names)), np.nan)
-# trim data
-for i, angle_name in enumerate(angle_names):
-    if len_diff < 0: # resample length is longer than continuous
-        logger.info(f"Trimming kinematics by {len_diff} sample(s) after resampling to match continuous data length")
-        joint_ang_p[:,i] = resample_joint_ang[angle_name].data[:cont_data_len]
-    elif len_diff > 0: # resample length is shorter than continuous
-        logger.info(f"Padding kinematics with {len_diff} sample(s) after resampling to match continuous data length")
-        joint_ang_p[:resample_data_len,i] = resample_joint_ang[angle_name].data
-
-resample_joint_ang_p = create_multichannel_timeseries(
-    "joint_ang_p", angle_names, joint_ang_p, timestamps=t_cont, unit="degrees"
-)
-
-kin_resample.add_container(resample_joint_ang_p)
-# pop original data at different sample rate out of NWB
-nwbfile.acquisition.pop("joint_kin_raw")
-
-
-# import spiking data
+import spiking data
 logger.info("Adding spiking data")
 
 device = nwbfile.create_device(
@@ -366,20 +319,22 @@ nwbfile.units = Units(
     name="units", description="Sampled at 30 kHz with anti-alias", resolution=bin_width
 )
 
-n_units = f_spk['AllSpikeTimes'].shape[0]
+# n_units = f_spk['AllSpikeTimes'].shape[0]
+n_units = np.unique(f_spk['SpikeSettings']['channels'][()]).shape[0]
 array_group_by_chan = f_spk['SpikeSettings']['array_by_channel'][0]
 array_group_by_chan = [ chr(array_id) for array_id in array_group_by_chan.tolist()]
 elec_id_by_chan = f_spk['SpikeSettings']['unique_channel_num'][0]
 orig_elec_ids = np.unique(elec_id_by_chan)
 new_elec_ids = np.arange(orig_elec_ids.size)
 elec_id_map = { o_ix: n_ix for (o_ix, n_ix) in zip(orig_elec_ids, new_elec_ids)}
-elec_id_by_chan = [*map(elec_id_map.get, elec_id_by_chan)]
+# elec_id_by_chan = [*map(elec_id_map.get, elec_id_by_chan)]
 array_elec_groups = [*map(elec_group_map.get, array_group_by_chan)]
+
 for i in range(n_units):
-    elec_id = elec_id_by_chan[i]
+    elec_id = orig_elec_ids[i]
     try:
         nwbfile.add_electrode(
-            id=int(elec_id),
+            id=int(elec_id_map[elec_id]),
             x=np.nan,
             y=np.nan,
             z=np.nan,
@@ -390,23 +345,29 @@ for i in range(n_units):
         )
     except ValueError:
         logger.info('Electrode already added to table')
-    spike_times = f_spk[f_spk['AllSpikeTimes'][i][0]]
-    if spike_times.shape[0] == 1:
-        spike_times = spike_times[0]
-    else:
-        spike_times = np.squeeze(spike_times)
 
-    spike_times = (spike_times - t_offset).round(4)
+    where_elec = np.where(elec_id_by_chan == elec_id)[0]
+    all_spike_times = []
+    for j in where_elec:
+        spike_times = f_spk[f_spk['AllSpikeTimes'][j][0]]
+        if spike_times.shape[0] == 1:
+            spike_times = spike_times[0]
+        else:
+            spike_times = np.squeeze(spike_times)
+        spike_times = (spike_times - t_offset).round(4)
+        all_spike_times.append(spike_times)
+
+    all_spike_times = np.concatenate(all_spike_times)
     # ensure spike times are within bound of continuous data
-    keep_mask = (spike_times > t_cont[0]) & (spike_times < t_cont[-1])
+    keep_mask = (all_spike_times > t_cont[0]) & (all_spike_times < t_cont[-1])
     nwbfile.add_unit(
         id=i,
-        spike_times=spike_times[keep_mask],
-        electrodes=[elec_id],
+        spike_times=all_spike_times[keep_mask],
+        electrodes=[elec_id_map[elec_id]],
         obs_intervals=[[t_cont[0], t_cont[-1] + bin_width]],
     )
 
-save_fname = path.join(save_path, file_id + ".nwb")
+save_fname = path.join(SAVE_PATH, file_id + ".nwb")
 logger.info(f"Saving NWB file to {save_fname}")
 # write processed file
 with NWBHDF5IO(save_fname, "w") as io:
