@@ -17,6 +17,7 @@ setup(
         'scipy',
         'pandas',
         'seaborn',
-        'scikit-learn'
+        'scikit-learn',
+        'pynwb',
     ],
 )

@@ -9,11 +9,11 @@
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 # For GPU support, consider using NVIDIA's base image.
 # FROM nvidia/cuda:11.0-cudnn8-devel-ubuntu20.04
+RUN pwd
 RUN /bin/bash -c "python3 -m pip install falcon_challenge"
 # TODO ensure falcon_challenge available on dockerhub...
 
 # Users should install additional decoder-specific dependencies here.
-RUN pwd
 
 ENV EVALUATION_LOC remote
 
@@ -31,6 +31,9 @@ ADD ./decoder_demos/ decoder_demos/
 ADD ./decode_sample.py decode.py
 
 ENV TRACK "h1"
+
+# Don't touch
+ENV EVAL_DATA_PATH "/evaluation_data"
 
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash

@@ -1,3 +1,4 @@
+import os
 import logging
 import numpy as np
 from pathlib import Path
@@ -19,14 +20,15 @@ class FalconEvaluator:
         self.eval_term = phase.split('_')[1]
 
     def get_eval_files(self):
+        data_dir = Path(os.environ.get("EVAL_DATA_PATH", "data")) / self.dataset.name
         if self.eval_remote:
-            eval_dir = f"data/{self.dataset.name}/test_{self.eval_term}" # TODO is this secure? Not sure if this is the right pattern
+            eval_dir = data_dir / f"test_{self.eval_term}"
             suffix = "*eval.nwb"
         else:
             logger.info(f"Local evaluation, running minival.")
-            eval_dir = f"data/{self.dataset.name}/minival/"
+            eval_dir = data_dir / "minival"
             suffix = "*minival.nwb"
-        return sorted(list(Path(eval_dir).glob(suffix)))
+        return sorted(list(eval_dir.glob(suffix)))
 
     def evaluate(self, decoder: BCIDecoder):
         r"""
