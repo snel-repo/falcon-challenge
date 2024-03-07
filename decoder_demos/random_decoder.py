@@ -14,7 +14,7 @@ class RandomDecoder(BCIDecoder):
 
     def predict(self, neural_observations: np.ndarray):
         r"""
-            neural_observations: array of shape (n_channels), 10ms binned spike counts
+            neural_observations: array of shape (n_channels), binned spike counts
         """
         if self._task_config.task == FalconTask.h1:
             return np.random.rand(7)

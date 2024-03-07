@@ -1,4 +1,5 @@
 data
+local_data/
 data_demos/outputs
 *.mat
 __pycache__

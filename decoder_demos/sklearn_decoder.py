@@ -110,7 +110,7 @@ class SKLearnDecoder(BCIDecoder):
 
     def predict(self, neural_observations: np.ndarray):
         r"""
-            neural_observations: array of shape (n_channels), 10ms binned spike counts
+            neural_observations: array of shape (n_channels), binned spike counts
         """
         # breakpoint()
         self.raw_history_buffer = np.roll(self.raw_history_buffer, -1, axis=0)
@@ -221,7 +221,7 @@ def main(training_dir, calibration_dir, mode):
         task=FalconTask.h1,
         n_channels=176,
     )
-    save_path = Path(f'data/sklearn_{task_config.task}.pkl')
+    save_path = Path(f'local_data/sklearn_{task_config.task}.pkl')
     datafiles = list(training_dir.glob('*.nwb'))
     calibration_datafiles = list(calibration_dir.glob('*calibration.nwb'))
     fit_fn(datafiles, calibration_datafiles, task_config, save_path)

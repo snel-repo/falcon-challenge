@@ -36,21 +36,12 @@ def main():
         "--model-path", type=str, required=False
     )
     parser.add_argument(
-        '--phase', type=str, required=False, default='h1_short'
+        '--phase', type=str, required=False, default='h1'
     )
     args = parser.parse_args()
 
-    # benchmark_config_path = os.environ["CHALLENGE_CONFIG_FILE"]
-
-    # TODO resolve how we specifically get the task config - it shouldn't be complex for us, so we likely don't need this plugin logic, could even just maintain in Dockefiles
-    # register_hydra_plugin(HabitatChallengeConfigPlugin) # TODO what to do with this.
-    # config = get_config( # TODO what to do with this?
-    #     benchmark_config_path,
-    #     overrides=[
-    #         "habitat/task/actions=" + args.action_space,
-    #     ],
-    # )
     dataset = args.phase.split('_')[0]
+    phase = f'{phase}_short' # TODO remove once terms are removed
     task = getattr(FalconTask, dataset)
     config = FalconConfig(
         task=task,

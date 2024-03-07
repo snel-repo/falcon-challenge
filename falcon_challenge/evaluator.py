@@ -74,7 +74,7 @@ class FalconEvaluator:
     @staticmethod
     def compute_metrics_classification(preds, targets, eval_mask):
         return {
-            "accuracy": np.mean(preds == targets)
+            "accuracy": (preds == targets)[eval_mask].mean()
         }
 
     def compute_metrics(self, all_preds, all_targets, all_eval_mask=None):

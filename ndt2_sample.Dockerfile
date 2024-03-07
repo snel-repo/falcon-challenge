@@ -6,10 +6,11 @@
 # see e.g. https://eval.ai/web/challenges/challenge-page/1615/submission (You may have to register for the challenge)
 
 # TODO - Challenge team needs to upload a base image to dockerhub. I think this just has base eval dependencies e.g. numpy, but double-check
-FROM fairembodied/habitat-challenge:testing_2020_habitat_base_docker
+FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
+RUN /bin/bash -c "conda install falcon_challenge"
+# TODO ensure falcon_challenge available on dockerhub...
 
 # Users should install additional decoder-specific dependencies here.
-RUN /bin/bash -c ". activate habitat; conda install pytorch torchvision torchaudio cudatoolkit=10.1 -c pytorch; conda install tensorboard; pip install ifcfg"
 
 # Copy specific eval libs
 RUN /bin/bash -c "git clone anything_else_you_need_thats_not_in_the_base_image"
