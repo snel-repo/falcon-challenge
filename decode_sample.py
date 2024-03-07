@@ -41,7 +41,7 @@ def main():
     args = parser.parse_args()
 
     dataset = args.phase.split('_')[0]
-    phase = f'{phase}_short' # TODO remove once terms are removed
+    phase = f'{args.phase}_short' # TODO remove once terms are removed
     task = getattr(FalconTask, dataset)
     config = FalconConfig(
         task=task,
@@ -49,14 +49,14 @@ def main():
     )
 
     # decoder = RandomDecoder(task_config=config)
-    decoder = SKLearnDecoder(task_config=config, model_path=f'data/sklearn_{task}.pkl')
+    decoder = SKLearnDecoder(task_config=config, model_path=args.model_path)
     # decoder_cfg = MyConfig('added_to_docker_cfg.cfg')
     # decoder_cfg.model_path = args.model_path
     # decoder = SimpleRNNDecoder(task_config=config, decoder_cfg=decoder_cfg)
 
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",
-        phase=args.phase)
+        phase=phase)
     evaluator.evaluate(decoder)
 
 

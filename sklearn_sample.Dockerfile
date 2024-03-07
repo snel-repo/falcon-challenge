@@ -9,8 +9,7 @@
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 # For GPU support, consider using NVIDIA's base image.
 # FROM nvidia/cuda:11.0-cudnn8-devel-ubuntu20.04
-
-# RUN /bin/bash -c "conda install falcon_challenge"
+RUN /bin/bash -c "python3 -m pip install falcon_challenge"
 # TODO ensure falcon_challenge available on dockerhub...
 
 # Users should install additional decoder-specific dependencies here.
