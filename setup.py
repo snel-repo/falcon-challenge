@@ -8,7 +8,7 @@ setup(
     author='Joel Ye',
     author_email='joelye9@gmail.com',
 
-    packages=find_packages(where='falcon_challenge'),
+    packages=find_packages(include='falcon_challenge'),
     install_requires=[
         'numpy',
         'hydra-core',
