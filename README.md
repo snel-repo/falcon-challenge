@@ -6,7 +6,7 @@ This package contains core code for submitting decoders to the FALCON challenge.
 Install `falcon_challenge` with:
 
 ```bash
-pip install falcon_challenge
+pip install falcon-challenge
 ```
 
 To create Docker containers for submission, you must have Docker installed.
