@@ -10,7 +10,8 @@ FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 # For GPU support, consider using NVIDIA's base image.
 # FROM nvidia/cuda:11.0-cudnn8-devel-ubuntu20.04
 RUN pwd
-RUN /bin/bash -c "python3 -m pip install falcon_challenge"
+RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
+RUN pwd
 # TODO ensure falcon_challenge available on dockerhub...
 
 # Users should install additional decoder-specific dependencies here.
@@ -26,6 +27,7 @@ ADD ./local_data/sklearn_FalconTask.h1.pkl data/decoder.pkl
 
 # Add source code/configs (e.g. can also be cloned)
 ADD ./decoder_demos/ decoder_demos/
+ADD ./data_demos/ data_demos/
 
 # Add runfile
 ADD ./decode_sample.py decode.py
