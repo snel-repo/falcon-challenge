@@ -7,7 +7,7 @@ import argparse
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 
-from decoder_demos.sklearn_decoder import SKLearnDecoder
+from decoder_demos.ndt2_decoder import NDT2Decoder
 
 def main():
     parser = argparse.ArgumentParser()
@@ -15,7 +15,10 @@ def main():
         "--evaluation", type=str, required=True, choices=["local", "remote"]
     )
     parser.add_argument(
-        "--model-path", type=str, required=False
+        "--model-path", type=str, default='ndt2_sample.ckpt'
+    )
+    parser.add_argument(
+        "--config-path", type=str, default='ndt2_sample.yaml'
     )
     parser.add_argument(
         '--phase', type=str, required=False, default='h1'
@@ -30,7 +33,11 @@ def main():
         n_channels=176,
     )
 
-    decoder = SKLearnDecoder(task_config=config, model_path=args.model_path)
+    decoder = NDT2Decoder(
+        task_config=config,
+        model_ckpt_path=args.model_path,
+        model_cfg_path=args.config_path
+    )
 
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",

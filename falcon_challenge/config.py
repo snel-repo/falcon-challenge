@@ -24,6 +24,7 @@ class FalconConfig:
     task: FalconTask = FalconTask.h1
     n_channels: int = 176
     bin_size_ms: int = 20
+    dataset_hashes: list[str] = field(default_factory=lambda: [])
 
 
 
