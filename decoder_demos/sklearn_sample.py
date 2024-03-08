@@ -23,7 +23,8 @@ def main():
     args = parser.parse_args()
 
     dataset = args.phase.split('_')[0]
-    phase = f'{args.phase}_short' # TODO remove once terms are removed
+    phase = f'{args.phase}_long' # TODO remove once terms are removed
+    # phase = f'{args.phase}_short' # TODO remove once terms are removed
     task = getattr(FalconTask, dataset)
     config = FalconConfig(
         task=task,

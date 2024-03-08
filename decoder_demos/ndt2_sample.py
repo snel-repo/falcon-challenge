@@ -1,5 +1,7 @@
 r"""
-    Sample ridge regression decoder for the Falcon Challenge.
+    Sample NDT2 decoder for the Falcon Challenge.
+
+    H1: https://wandb.ai/joelye9/context_general_bci/runs/rasu7u1w
 """
 
 import argparse
@@ -31,7 +33,8 @@ def main():
     args = parser.parse_args()
 
     dataset = args.phase.split('_')[0]
-    phase = f'{args.phase}_short' # TODO remove once terms are removed
+    phase = f'{args.phase}_long' # TODO remove once terms are removed
+    # phase = f'{args.phase}_short' # TODO remove once terms are removed
 
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",

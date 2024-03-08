@@ -21,11 +21,13 @@ Note that additional steps will be needed to allow the docker container to see G
 
 
 ## Submission
-To submit to the FALCON benchmark, prepare a decoder and Dockerfile.
-- DOCKER instructions todo.
+To submit to the FALCON benchmark, prepare a decoder and Dockerfile. The decoder will likely reference source code that must be made importable to the Dockerfile.
 
 To run local evaluation, first setup a data directory at `./data`.
+
 You can then run:
 ```bash
-python <my_decoder>.py --evaluation local
+python <my_decoder>.py --evaluation local --phase <dataset>
 ```
+
+TODO EvalAI submission instructions
