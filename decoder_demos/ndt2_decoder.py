@@ -35,7 +35,7 @@ class NDT2Decoder(BCIDecoder):
         Load an NDT2 decoder, prepared in:
         https://github.com/joel99/context_general_bci
 
-        # TODO KV cache
+        # TODO KV cache - difficult without rotary embeddings
     """
 
     def __init__(
@@ -73,7 +73,7 @@ class NDT2Decoder(BCIDecoder):
             MetaKey.array.name: [format_array_name(self.subject)],
             MetaKey.subject.name: [self.subject],
             MetaKey.session.name: sorted([
-                self.format_dataset_tag(dataset_hash) for handle in task_config.dataset_handles
+                self.format_dataset_tag(handle) for handle in task_config.dataset_handles
             ]),
             MetaKey.task.name: [ExperimentalTask.falcon],
         }

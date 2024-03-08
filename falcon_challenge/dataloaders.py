@@ -1,7 +1,7 @@
 r"""
     Dataloading utilities for evaluator
 """
-from typing import Tuple
+from typing import Tuple, Optional, Union
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ from falcon_challenge.config import FalconTask
 def bin_units(
         units: pd.DataFrame,
         bin_size_s: float = 0.01,
-        bin_end_timestamps: np.ndarray | None = None
+        bin_end_timestamps: Optional[np.ndarray] = None
     ) -> np.ndarray:
     r"""
         units: df with only index (spike index) and spike times (list of times in seconds). From nwb.units.
@@ -33,7 +33,7 @@ def bin_units(
     return spike_arr
 
 
-def load_nwb(fn: str | Path, dataset: FalconTask = FalconTask.h1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     r"""
         Load data for evaluation.
 
