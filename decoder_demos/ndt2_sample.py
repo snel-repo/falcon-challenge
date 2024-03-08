@@ -15,10 +15,15 @@ def main():
         "--evaluation", type=str, required=True, choices=["local", "remote"]
     )
     parser.add_argument(
-        "--model-path", type=str, default='ndt2_sample.ckpt'
+        "--model-path", type=str, default='./local_data/ndt2_h1_sample.pth'
     )
     parser.add_argument(
-        "--config-path", type=str, default='ndt2_sample.yaml'
+        "--config-stem", type=str, default='falcon/h1/h1_nopool_cross',
+        help="Name in context-general-bci codebase for config. \
+            Currently, directly referencing e.g. a local yaml is not implemented unclear how to get Hydra to find it in search path."
+    )
+    parser.add_argument(
+        "--zscore-path", type=str, default='./local_data/ndt2_zscore_h1.pt'
     )
     parser.add_argument(
         '--phase', type=str, required=False, default='h1'
@@ -36,13 +41,14 @@ def main():
     config = FalconConfig(
         task=task,
         n_channels=176,
-        dataset_handles=evaluator.get_eval_files()
+        dataset_handles=[x.stem for x in evaluator.get_eval_files()]
     )
 
     decoder = NDT2Decoder(
         task_config=config,
         model_ckpt_path=args.model_path,
-        model_cfg_path=args.config_path
+        model_cfg_stem=args.config_stem,
+        zscore_path=args.zscore_path
     )
 
 

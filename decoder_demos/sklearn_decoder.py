@@ -119,7 +119,7 @@ class SKLearnDecoder(BCIDecoder):
         smth_history = apply_exponential_filter(self.raw_history_buffer, NEURAL_TAU_MS)
         self.observation_buffer = np.roll(self.observation_buffer, -1, axis=0)
         self.observation_buffer[-1] = (smth_history[-1] - self.local_x_mean) / self.local_x_std
-        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1)
+        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1) # Reverse since this happens to be how the lagged matrix is formatted
         out = self.clf.predict(decoder_in)[0]
         return out
 

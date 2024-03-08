@@ -15,7 +15,7 @@ def main():
         "--evaluation", type=str, required=True, choices=["local", "remote"]
     )
     parser.add_argument(
-        "--model-path", type=str, required=False
+        "--model-path", type=str, required=False, default='./local_data/sklearn_FalconTask.h1.pkl'
     )
     parser.add_argument(
         '--phase', type=str, required=False, default='h1'
