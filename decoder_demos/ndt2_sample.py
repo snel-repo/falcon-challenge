@@ -27,10 +27,16 @@ def main():
 
     dataset = args.phase.split('_')[0]
     phase = f'{args.phase}_short' # TODO remove once terms are removed
+
+    evaluator = FalconEvaluator(
+        eval_remote=args.evaluation == "remote",
+        phase=phase)
+
     task = getattr(FalconTask, dataset)
     config = FalconConfig(
         task=task,
         n_channels=176,
+        dataset_handles=evaluator.get_eval_files()
     )
 
     decoder = NDT2Decoder(
@@ -39,9 +45,7 @@ def main():
         model_cfg_path=args.config_path
     )
 
-    evaluator = FalconEvaluator(
-        eval_remote=args.evaluation == "remote",
-        phase=phase)
+
     evaluator.evaluate(decoder)
 
 

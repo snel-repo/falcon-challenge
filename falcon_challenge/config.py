@@ -18,15 +18,14 @@ class FalconTask(enum.Enum):
 @dataclass
 class FalconConfig:
     r"""
-        Figuring this out...
+        User is responsible for copying this appropriately,
+        since ultimately these values are to help user to inform decoder what outputs are expected.
     """
     # falcon_h1, falcon_h2_writing, falcon_m1_finger, falcon_m2_reach
     task: FalconTask = FalconTask.h1
     n_channels: int = 176
     bin_size_ms: int = 20
-    dataset_hashes: list[str] = field(default_factory=lambda: [])
-
-
+    dataset_handles: list[str] = field(default_factory=lambda: []) # Compute with evaluator.get_eval_handles
 
 
 cs = ConfigStore.instance()

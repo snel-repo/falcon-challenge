@@ -73,7 +73,7 @@ class NDT2Decoder(BCIDecoder):
             MetaKey.array.name: [format_array_name(self.subject)],
             MetaKey.subject.name: [self.subject],
             MetaKey.session.name: sorted([
-                self.format_dataset_tag(dataset_hash) for dataset_hash in task_config.dataset_hashes
+                self.format_dataset_tag(dataset_hash) for handle in task_config.dataset_handles
             ]),
             MetaKey.task.name: [ExperimentalTask.falcon],
         }
