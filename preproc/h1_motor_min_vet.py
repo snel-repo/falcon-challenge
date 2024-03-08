@@ -47,11 +47,11 @@ day_unique = set([f.name.split('_')[0] for f in sample_files])
 #%%
 from typing import List, Tuple
 from falcon_challenge.dataloaders import bin_units
-from data_demos.filtering import smooth
-from data_demos.filtering import apply_exponential_filter
+from decoder_demos.filtering import smooth
+from decoder_demos.filtering import apply_exponential_filter
 
 from sklearn.metrics import r2_score
-from data_demos.decoding_utils import (
+from decoder_demos.decoding_utils import (
     TRAIN_TEST,
     generate_lagged_matrix,
     fit_and_eval_decoder,

@@ -5,7 +5,7 @@ r"""
     To evaluate, for example:
     `python decode_submit.py --evaluation remote/local`
 """
-from typing import List
+from typing import List, Union, Optional
 import argparse
 import pickle
 import numpy as np
@@ -14,11 +14,12 @@ from pathlib import Path
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.dataloaders import load_nwb
 from falcon_challenge.interface import BCIDecoder
-from data_demos.filtering import (
+
+from filtering import (
     apply_exponential_filter,
     NEURAL_TAU_MS,
 )
-from data_demos.decoding_utils import (
+from decoding_utils import (
     TRAIN_TEST,
     generate_lagged_matrix,
     fit_and_eval_decoder,
@@ -29,7 +30,7 @@ HISTORY = 0
 def prepare_train_test(
         binned_spikes: np.ndarray,
         targets: np.ndarray,
-        blacklist: np.ndarray | None=None,
+        blacklist: Optional[np.ndarray]=None,
         history: int=0,
         ):
     signal = apply_exponential_filter(binned_spikes)

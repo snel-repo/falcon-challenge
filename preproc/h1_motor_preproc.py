@@ -15,7 +15,7 @@ from dateutil.tz import tzlocal
 
 from pynwb import NWBFile, NWBHDF5IO, TimeSeries
 
-from data_demos.filtering import smooth
+from decoder_demos.filtering import smooth
 
 root = Path('./data/h1')
 files = list(root.glob('*.mat'))

@@ -7,7 +7,7 @@ import argparse
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 
-from decoder_demos.ndt2_decoder import NDT2Decoder
+from ndt2_decoder import NDT2Decoder
 
 def main():
     parser = argparse.ArgumentParser()
