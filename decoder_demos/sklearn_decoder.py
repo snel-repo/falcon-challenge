@@ -5,7 +5,7 @@ r"""
     To evaluate, for example:
     `python decode_submit.py --evaluation remote/local`
 """
-from typing import List
+from typing import List, Union, Optional
 import argparse
 import pickle
 import numpy as np
@@ -14,11 +14,12 @@ from pathlib import Path
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.dataloaders import load_nwb
 from falcon_challenge.interface import BCIDecoder
-from data_demos.filtering import (
+
+from filtering import (
     apply_exponential_filter,
     NEURAL_TAU_MS,
 )
-from data_demos.decoding_utils import (
+from decoding_utils import (
     TRAIN_TEST,
     generate_lagged_matrix,
     fit_and_eval_decoder,
@@ -29,7 +30,7 @@ HISTORY = 0
 def prepare_train_test(
         binned_spikes: np.ndarray,
         targets: np.ndarray,
-        blacklist: np.ndarray | None=None,
+        blacklist: Optional[np.ndarray]=None,
         history: int=0,
         ):
     signal = apply_exponential_filter(binned_spikes)
@@ -110,7 +111,7 @@ class SKLearnDecoder(BCIDecoder):
 
     def predict(self, neural_observations: np.ndarray):
         r"""
-            neural_observations: array of shape (n_channels), 10ms binned spike counts
+            neural_observations: array of shape (n_channels), binned spike counts
         """
         # breakpoint()
         self.raw_history_buffer = np.roll(self.raw_history_buffer, -1, axis=0)
@@ -118,7 +119,7 @@ class SKLearnDecoder(BCIDecoder):
         smth_history = apply_exponential_filter(self.raw_history_buffer, NEURAL_TAU_MS)
         self.observation_buffer = np.roll(self.observation_buffer, -1, axis=0)
         self.observation_buffer[-1] = (smth_history[-1] - self.local_x_mean) / self.local_x_std
-        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1)
+        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1) # Reverse since this happens to be how the lagged matrix is formatted
         out = self.clf.predict(decoder_in)[0]
         return out
 
@@ -221,7 +222,7 @@ def main(training_dir, calibration_dir, mode):
         task=FalconTask.h1,
         n_channels=176,
     )
-    save_path = Path(f'data/sklearn_{task_config.task}.pkl')
+    save_path = Path(f'local_data/sklearn_{task_config.task}.pkl')
     datafiles = list(training_dir.glob('*.nwb'))
     calibration_datafiles = list(calibration_dir.glob('*calibration.nwb'))
     fit_fn(datafiles, calibration_datafiles, task_config, save_path)

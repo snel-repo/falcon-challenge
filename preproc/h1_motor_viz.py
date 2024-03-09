@@ -283,7 +283,7 @@ time_active = np.sum(active_phases) * (train_timestamps[1] - train_timestamps[0]
 print(f"Percent active (Variance inferred): {time_active / train_timestamps[-1] * 100:.2f}%")
 #%%
 # Smooth data for decoding make base linear decoder
-from data_demos.filtering import smooth
+from decoder_demos.filtering import smooth
 
 palette = [*sns.color_palette('rocket', n_colors=3), *sns.color_palette('viridis', n_colors=3), 'k']
 ax = plt.gca()
@@ -307,7 +307,7 @@ plt.xlim(xticks[0], xticks[-1])
 plt.xticks(xticks, labels=xticks.round(2))
 
 #%%
-from data_demos.filtering import apply_exponential_filter
+from decoder_demos.filtering import apply_exponential_filter
 filtered_signal = apply_exponential_filter(train_bins)
 f = plt.figure(figsize=(20, 10))
 ax = f.gca()
@@ -323,7 +323,7 @@ ax.set_xlim([0, 10])
 #%%
 # Make single day linear decoder
 from sklearn.metrics import r2_score
-from data_demos.decoding_utils import (
+from decoder_demos.decoding_utils import (
     TRAIN_TEST,
     generate_lagged_matrix,
     fit_and_eval_decoder,
