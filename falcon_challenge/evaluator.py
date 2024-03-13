@@ -13,17 +13,16 @@ logger = logging.getLogger(__name__)
 
 class FalconEvaluator:
 
-    def __init__(self, eval_remote=False, phase='h1_short'):
+    def __init__(self, eval_remote=False, phase='h1'):
         self.eval_remote = eval_remote
         self.phase = phase
         self.dataset: FalconTask = getattr(FalconTask, phase.split('_')[0])
-        self.eval_term = phase.split('_')[1]
 
     @staticmethod
-    def get_eval_handles(is_remote: bool, dataset: FalconTask, eval_term: str):
+    def get_eval_handles(is_remote: bool, dataset: FalconTask):
         data_dir = Path(os.environ.get("EVAL_DATA_PATH", "data")) / dataset.name
         if is_remote:
-            eval_dir = data_dir / f"test_{eval_term}"
+            eval_dir = data_dir / f"test"
             suffix = "*eval.nwb"
         else:
             logger.info(f"Local evaluation, running minival.")
@@ -32,7 +31,7 @@ class FalconEvaluator:
         return sorted(list(eval_dir.glob(suffix)))
 
     def get_eval_files(self):
-        return self.get_eval_handles(self.eval_remote, self.dataset, self.eval_term)
+        return self.get_eval_handles(self.eval_remote, self.dataset)
 
     def evaluate(self, decoder: BCIDecoder):
         r"""
