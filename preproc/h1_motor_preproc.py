@@ -50,6 +50,8 @@ def create_targets(kin: np.ndarray, target_smooth_ms=DEFAULT_TARGET_SMOOTH_MS, b
     out = np.gradient(kin, axis=0)
     return out
 
+USE_SHORT_LONG_DISTINCTION = True
+USE_SHORT_LONG_DISTINCTION = False
 CURATED_SETS = {
     # 'S53_set_1': 'train',
     # 'S53_set_2': 'train',
@@ -459,54 +461,60 @@ def to_nwb(fn):
         )
     def create_and_write(trial_mask, trial_mask_native, suffix, folder=CURATED_SETS[tag]):
         nwbfile = create_cropped_container(trial_mask, trial_mask_native)
+        if not USE_SHORT_LONG_DISTINCTION and "test" in folder:
+            folder = "test"
         out = fn.parent / folder / f"{out_fn.stem}_{suffix}.nwb"
         write_to_nwb(nwbfile, out)
 
     trials = sorted(np.unique(bin_trial))
+    out_fn = create_nwb_name(fn)
+    eval_num = int(len(trials) * EVAL_RATIO)
+    eval_trials = trials[-eval_num:]
+    create_and_write(bin_trial >= eval_trials[0],
+                     bin_trial_native >= eval_trials[0],
+                     'eval')
     if CURATED_SETS[tag] != "train":
-        out_fn = create_nwb_name(fn)
         calibration_num = math.ceil(len(trials) * FEW_SHOT_CALIBRATION_RATIO)
         calibration_trials = trials[:calibration_num]
         create_and_write(bin_trial < calibration_trials[-1],
                          bin_trial_native < calibration_trials[-1],
                          'calibration')
-        eval_num = int(len(trials) * EVAL_RATIO)
-        eval_trials = trials[-eval_num:]
-        create_and_write(bin_trial >= eval_trials[0],
-                         bin_trial_native >= eval_trials[0],
-                         'eval')
 
         in_day_oracle = trials[:-eval_num]
         create_and_write(bin_trial <= in_day_oracle[-1], # Note <= because array end already exclusive
                          bin_trial_native <= in_day_oracle[-1],
                          'in_day_oracle')
 
-        create_and_write(np.ones_like(bin_trial, dtype=bool), # Note <= because array end already exclusive
+        create_and_write(np.ones_like(bin_trial, dtype=bool),
                          np.ones_like(bin_trial_native, dtype=bool),
                          'full')
     else:
-        nwbfile = create_nwb_container(
-            raw_spike_time,
-            raw_spike_channel,
-            bin_time,
-            bin_time_native,
-            bin_kin,
-            bin_vel,
-            bin_trial,
-            bin_state,
-            bin_blacklist,
-        )
+        calibration_trials = trials[:-eval_num]
+        create_and_write(bin_trial <= calibration_trials[-1],
+                         bin_trial_native <= calibration_trials[-1],
+                         'calibration')
 
-        out_fn = create_nwb_name(fn)
-        out = fn.parent / CURATED_SETS[tag] / out_fn.name
-        write_to_nwb(nwbfile, out)
+        # Use first two trials for minival
+        minival_num = 2
+        minival_trials = trials[:minival_num]
+        create_and_write(bin_trial <= minival_trials[-1],
+                         bin_trial_native <= minival_trials[-1],
+                         'minival')
+        # nwbfile = create_nwb_container(
+        #     raw_spike_time,
+        #     raw_spike_channel,
+        #     bin_time,
+        #     bin_time_native,
+        #     bin_kin,
+        #     bin_vel,
+        #     bin_trial,
+        #     bin_state,
+        #     bin_blacklist,
+        # )
 
-        # Take last eval ratio as arbitrary minival for sanity checking
-        minival_num = int(len(trials) * EVAL_RATIO)
-        minival_trials = trials[-minival_num:]
-        create_and_write(bin_trial >= minival_trials[0],
-                         bin_trial_native >= minival_trials[0],
-                         'minival', folder='minival')
+        # out = fn.parent / CURATED_SETS[tag] / out_fn.name
+        # write_to_nwb(nwbfile, out)
+
 print(f"Processing {len(files)} files")
 for sample in files:
     to_nwb(sample)
