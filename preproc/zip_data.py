@@ -12,9 +12,12 @@ base_path = Path('./data/h1')  # replace with your base directory path
 out_path = Path('./data/h1')  # replace with your output directory path
 
 # Define file patterns for each category
-h1_categories = ['train/*.nwb', 'minival/*.nwb', 'test_short/*calibration.nwb', 'test_long/*calibration.nwb']
-oracle_categories = ['test_short/*oracle.nwb', 'test_long/*oracle.nwb']
-eval_categories = ['test_short/*eval.nwb', 'test_long/*eval.nwb']
+# h1_categories = ['train/*.nwb', 'minival/*.nwb', 'test_short/*calibration.nwb', 'test_long/*calibration.nwb']
+# oracle_categories = ['test_short/*oracle.nwb', 'test_long/*oracle.nwb']
+# eval_categories = ['test_short/*eval.nwb', 'test_long/*eval.nwb']
+h1_categories = ['train/*calibration.nwb', 'train/*minival.nwb', 'test/*calibration.nwb']
+oracle_categories = ['train/*calibration.nwb', 'test/*oracle.nwb']
+eval_categories = ['train/*eval.nwb', 'test/*eval.nwb']
 
 # Zip up h1 categories
 h1_zip_path = out_path / 'h1.zip'

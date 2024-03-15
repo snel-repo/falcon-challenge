@@ -1,7 +1,7 @@
 r"""
     Load an sklearn decoder.
     To train, for example:
-    `python decoder_demos/sklearn_decoder.py --training_dir data/h1/train --calibration_dir data/h1/test_short --mode all`
+    `python decoder_demos/sklearn_decoder.py --training_dir data/h1/train --calibration_dir data/h1/test --mode all`
     To evaluate, for example:
     `python decode_submit.py --evaluation remote/local`
 """
