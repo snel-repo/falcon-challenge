@@ -380,6 +380,12 @@ def convert_to_NWB(
         location="Motor Cortex",
         device=device,
     )
+    Z_elec_group = nwbfile.create_electrode_group(
+        name='Z_electrode_group',
+        description="Electrodes not labelled as belonging to any other group",
+        location='Motor Cortex',
+        device=device,
+    )
 
     elec_group_map = {
         'E': E_elec_group,
@@ -390,6 +396,7 @@ def convert_to_NWB(
         'J': J_elec_group,
         'K': K_elec_group,
         'L': L_elec_group,
+        'Z': Z_elec_group,
     }
 
     nwbfile.units = Units(
@@ -404,13 +411,13 @@ def convert_to_NWB(
         if arr_id is not None:
             array_elec_groups.append(elec_group_map[arr_id])
         else:
-            array_elec_groups.append(None)
+            array_elec_groups.append(elec_group_map['Z'])
 
     for elec_id in range(1, 97):
         # elec_id = orig_elec_ids[i]
         try:
             nwbfile.add_electrode(
-                id=elec_id, #int(elec_id_map[elec_id]),
+                id=elec_id-1, #int(elec_id_map[elec_id]),
                 x=np.nan,
                 y=np.nan,
                 z=np.nan,
@@ -448,9 +455,9 @@ def convert_to_NWB(
         valid_spike_times = all_spike_times[keep_mask] if len(all_spike_times) >= 1 else all_spike_times
         # if valid_spike_times is not None:
         nwbfile.add_unit(
-            id=elec_id,
+            id=elec_id-1,
             spike_times=np.squeeze(valid_spike_times),
-            electrodes=[elec_id],
+            electrodes=[elec_id-1],
             obs_intervals=[[start_cutoff, stop_cutoff]],
         )
         # else: 
@@ -537,7 +544,7 @@ if IS_TEST_DS:
         t_offset,
         all_spike_times,
         array_group_by_elec,
-        spike_time_thresh=[trial_start_times[-eval_num:][0], None],
+        spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
         split_label='eval'
     )
 
@@ -587,7 +594,7 @@ else:
         t_offset,
         all_spike_times,
         array_group_by_elec,
-        spike_time_thresh=[None, trial_start_times[-eval_num:][0]],
+        spike_time_thresh=[0, trial_start_times[-eval_num:][0]],
         split_label='train'
     )
 
@@ -612,7 +619,7 @@ else:
         t_offset,
         all_spike_times,
         array_group_by_elec,
-        spike_time_thresh=[trial_start_times[-eval_num:][0], None],
+        spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
         split_label='minival'
     )
 
