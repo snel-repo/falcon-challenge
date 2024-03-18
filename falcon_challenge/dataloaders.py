@@ -52,5 +52,37 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
             blacklist = nwbfile.acquisition['Blacklist'].data[:].astype(bool)
             return bin_units(units, bin_end_timestamps=timestamps), kin, np.zeros(kin.shape[0]), ~blacklist
+    elif dataset == FalconTask.m1: 
+        with NWBHDF5IO(fn, 'r') as io:
+            nwbfile = io.read()
+
+            raw_emg = nwbfile.acquisition['preprocessed_emg']
+            muscles = [ts for ts in raw_emg.time_series]
+            emg_data = []
+            emg_timestamps = []
+            for m in muscles: 
+                mdata = raw_emg.get_timeseries(m)
+                data = mdata.data[:]
+                timestamps = mdata.timestamps[:]
+                emg_data.append(data)
+                emg_timestamps.append(timestamps)
+            emg_data = np.vstack(emg_data).T 
+            emg_timestamps = emg_timestamps[0]
+
+            units = nwbfile.units.to_dataframe()
+            binned_units = bin_units(units, bin_size_s=0.02, bin_end_timestamps=emg_timestamps)
+            
+            eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
+
+            trial_info = (
+                nwbfile.trials.to_dataframe()
+                .reset_index()
+                .rename({"id": "trial_id", "stop_time": "end_time"}, axis=1)
+            )
+            switch_inds = np.searchsorted(emg_timestamps, trial_info.start_time)
+            trial_change = np.zeros(emg_timestamps.shape[0], dtype=bool)
+            trial_change[switch_inds] = True
+
+            return binned_units, emg_data, trial_change, eval_mask
     else:
         raise ValueError(f"Unknown dataset {dataset}")
