@@ -42,7 +42,7 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON/"
+SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v2/"
 rouse_base_dir = "/snel/share/share/data/rouse/RTG/"
 MONKEY = "L"
 EXP_DATE = "20120924"
@@ -325,6 +325,25 @@ def convert_to_NWB(
     nwbfile.add_acquisition(emg_proc_mts)
     # emg_filt.add_container(preprocessed_emg)
 
+    convert_trial_start_time = pd.to_datetime(trial_start_times, unit='s').round('20ms').values.astype('float64') * 1e-9 
+    convert_trial_end_time = pd.to_datetime(trial_end_times, unit='s').round('20ms').values.astype('float64') * 1e-9
+    eval_mask = np.full(t_new.size, False)
+    # now add a mask for getting within-trial periods 
+    for start, stop in zip(convert_trial_start_time, convert_trial_end_time):
+        start_ind = np.searchsorted(t_new, start)
+        stop_ind = np.searchsorted(t_new, stop)
+        eval_mask[start_ind:stop_ind] = True
+
+    nwbfile.add_acquisition(
+        TimeSeries(
+            name="eval_mask",
+            description="Timesteps to ignore covariates (for training, eval).",
+            timestamps=t_new,
+            data=eval_mask,
+            unit="bool",
+        )
+    )
+
     logger.info("Adding spiking data")
 
     device = nwbfile.create_device(
@@ -520,7 +539,7 @@ if IS_TEST_DS:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[0, trial_end_times[:calibration_num][-1]], 
-        split_label='calibration' #'in_day_oracle' #calibration, eval
+        split_label='test_calibration' #'in_day_oracle' #calibration, eval
     )
 
     logger.info("Creating evaluation split")
@@ -545,7 +564,7 @@ if IS_TEST_DS:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
-        split_label='eval'
+        split_label='test_eval'
     )
 
     logger.info("Creating in-day oracle split")
@@ -569,7 +588,7 @@ if IS_TEST_DS:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[0, trial_start_times[-eval_num:][0]],
-        split_label='in_day_oracle'
+        split_label='test_oracle'
     )
 
 else: 
@@ -595,7 +614,7 @@ else:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[0, trial_start_times[-eval_num:][0]],
-        split_label='train'
+        split_label='train_calibration'
     )
 
     logger.info("Creating minival split")
@@ -620,6 +639,31 @@ else:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
+        split_label='train_eval'
+    )
+
+    logger.info("Creating smoketest data")
+    NUM_ST_TRIALS = 2
+    st_ind_emg = int(trial_end_times[-NUM_ST_TRIALS:][0] * fs_cont)
+    convert_to_NWB(
+        fs_cont,
+        trial_start_times[-NUM_ST_TRIALS:],
+        trial_end_times[-NUM_ST_TRIALS:],
+        gocue_times[-NUM_ST_TRIALS:],
+        move_onset_times[-NUM_ST_TRIALS:],
+        contact_times[-NUM_ST_TRIALS:],
+        reward_times[-NUM_ST_TRIALS:],
+        generic_cond_ids[-NUM_ST_TRIALS:],
+        object_ids[-NUM_ST_TRIALS:],
+        object_names[-NUM_ST_TRIALS:],
+        locations[-NUM_ST_TRIALS:],
+        exp_trial_ids[-NUM_ST_TRIALS:],
+        emg_data[st_ind_emg:, :],
+        emg_names,
+        t_offset,
+        all_spike_times,
+        array_group_by_elec,
+        spike_time_thresh=[0, trial_end_times[-NUM_ST_TRIALS:][0]],
         split_label='minival'
     )
 
