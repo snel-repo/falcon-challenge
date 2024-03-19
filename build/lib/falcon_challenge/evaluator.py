@@ -46,7 +46,7 @@ class FalconEvaluator:
         all_preds = []
         all_targets = []
         all_eval_mask = []
-
+        print('number of data files:', len(eval_files))
         for datafile in eval_files:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
@@ -60,6 +60,7 @@ class FalconEvaluator:
             all_preds.append(np.stack(trial_preds))
             all_targets.append(decoding_targets)
             all_eval_mask.append(eval_mask)
+        print('number of predictions:', len(all_preds))
         all_preds = np.concatenate(all_preds)
         all_targets = np.concatenate(all_targets)
         all_eval_mask = np.concatenate(all_eval_mask)
