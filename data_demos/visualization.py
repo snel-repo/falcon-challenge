@@ -83,17 +83,24 @@ def rasterplot(spike_arr, bin_size_s=0.02, ax=None):
     if ax is None:
         ax = plt.gca()
     for idx, unit in enumerate(spike_arr.T):
-        ax.scatter(np.where(unit)[0] * bin_size_s, np.ones(np.sum(unit != 0)) * idx, s=1, c='k', marker='|')
+        ax.scatter(
+            np.where(unit)[0] * bin_size_s, 
+            np.ones(np.sum(unit != 0)) * idx, 
+            s=1, 
+            c='k', 
+            marker='|',
+            linewidths=0.2, 
+            alpha=0.3
+        )
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 20))
     ax.set_ylabel('Channel #')
 
-def plot_firing_rate_distributions(day_intervals, lengths, binned_neural, start_dates, axes):
+def plot_firing_rate_distributions(lengths, binned_neural, start_dates, axes):
     """
     Plot the firing rate distributions for each day
 
     Args:
-    - day_intervals (list): List of the day intervals
-    - lengths (list): List of the lengths of each day
+    - lengths (list): Dictionary with values of the lengths of each day
     - binned_neural (np.ndarray): Array of shape (T, N) containing the binned neural data
     - start_dates (list): List of the start dates
     - axes (plt.Axes): Axes to plot on
