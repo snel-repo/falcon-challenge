@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from os import path
 
 from pynwb import TimeSeries
+from pynwb.file import Subject
 from pynwb.misc import Units
 from pynwb.behavior import Position
 from pynwb.behavior import BehavioralTimeSeries
@@ -184,6 +185,8 @@ def convert_to_NWB(
         experimenter="Dr. Adam Rouse",
     )
 
+    subject = Subject(subject_id=f'Monkey{MONKEY}_{split_label}', species='Rhesus macaque', sex='M', age='P7Y')
+    nwbfile.subject = subject
     # === NWBFile Step: add trial info
     logger.info("Adding trial info")
     # add trial information
