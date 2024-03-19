@@ -27,6 +27,8 @@ class FalconEvaluator:
         else:
             logger.info(f"Local evaluation, running minival.")
             eval_dir = data_dir / "minival"
+            print("eval dir:", eval_dir)
+            print(os.listdir(eval_dir))
             suffix = "*minival.nwb"
         return sorted(list(eval_dir.glob(suffix)))
 
