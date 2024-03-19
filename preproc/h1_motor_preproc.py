@@ -13,12 +13,18 @@ from uuid import uuid4
 
 from dateutil.tz import tzlocal
 
-from pynwb import NWBFile, NWBHDF5IO, TimeSeries
+import pynwb
+from pynwb import NWBFile, TimeSeries
 
 from decoder_demos.filtering import smooth
+from preproc.nwb_create_utils import (
+    FEW_SHOT_CALIBRATION_RATIO, EVAL_RATIO, SMOKETEST_NUM,
+    write_to_nwb
+)
 
 root = Path('./data/h1')
 files = list(root.glob('*.mat'))
+
 
 KIN_SUBSET = {
     0: 'tx',
@@ -35,8 +41,6 @@ CHANNELS_PER_SOURCE = 128
 BIN_SIZE_MS = 20
 TARGET_BIN_SIZE_MS = 20
 TARGET_BIN_SIZE_S = TARGET_BIN_SIZE_MS / 1000
-FEW_SHOT_CALIBRATION_RATIO = 0.2
-EVAL_RATIO = 0.4
 INTERTRIAL_NAME = 'Intertrial'
 
 DEFAULT_TARGET_SMOOTH_MS = 490
@@ -117,21 +121,33 @@ def create_nwb_name(mat_name: Path) -> Path:
     name = name.split('session_')[-1]
     return (root / name).with_suffix('.nwb')
 
-def create_nwb_shell(start_date: datetime = datetime(2017, 1, 1, 1, tzinfo=tzlocal())):
+def create_nwb_shell(
+        start_date: datetime = datetime(2017, 1, 1, 1, tzinfo=tzlocal()),
+        relative_offset: datetime = datetime(2017, 5, 25, 1, tzinfo=tzlocal()), # Obfuscated first date of all date
+        suffix: str = ''
+    ):
     # Note identifying info is redacted
+    from dateutil.relativedelta import relativedelta
+    start_date_shift = relativedelta(start_date, relative_offset)
+    # print(start_date_shift)
+    start_date_obsfucate = datetime(2010, 1, 1) + start_date_shift
+    subject = pynwb.file.Subject(
+        subject_id=f'Pitt001-{suffix}',
+        description='First subject from Pitt human BCI for DANDI. Details randomly chosen to satisfy DANDI req.',
+        sex='M',
+        age='P40Y',
+        species='Homo sapiens',
+    )
     return NWBFile(
-        session_description="Open loop 7DoF calibration.",
+        session_description="FALCON H1. Open loop 7DoF calibration.",
         identifier=str(uuid4()),
-        session_start_time=start_date,
+        subject=subject,
+        session_start_time=start_date_obsfucate,
         lab="Rehab Neural Engineering Labs",
         institution="University of Pittsburgh",
+        experimenter="Flesher, Sharlene",
         experiment_description="Open loop calibration for Action Research Arm Test (ARAT) for human motor BCI",
     )
-
-def write_to_nwb(nwbfile: NWBFile, fn: Path):
-    fn.parent.mkdir(exist_ok=True, parents=True)
-    with NWBHDF5IO(str(fn), 'w') as io:
-        io.write(nwbfile)
 
 def crop_spikes(spike_times, spike_channels, bin_times, bin_size_s=TARGET_BIN_SIZE_S):
     r"""
@@ -373,18 +389,21 @@ def to_nwb(fn):
         bin_trial: np.ndarray, # Resampled
         bin_state: np.ndarray, # Native resolution
         bin_blacklist: np.ndarray,
+        suffix: str = '',
     ):
         # Recenter timestamps in case data is subsetted
         date_str = payload['start_date']
-        date_obj = datetime.strptime(date_str, "%d-%b-%Y_%H_%M_%S")
-        nwbfile = create_nwb_shell(date_obj)
+        date_obj = datetime.strptime(date_str, "%d-%b-%Y_%H_%M_%S").astimezone(tzlocal())
+        nwbfile = create_nwb_shell(date_obj, suffix=suffix)
         for unit_id in motor_units:
             spike_times = spike_time[spike_channel == unit_id]
             nwbfile.add_unit(spike_times=spike_times)
         position_spatial_series = TimeSeries(
             name="OpenLoopKinematics",
             description=','.join(KIN_SUBSET.values()),
-            timestamps=bin_time,
+            starting_time=0.0,
+            rate=0.02,
+            # timestamps=bin_time,
             data=bin_kin,
             unit="arbitrary",
         )
@@ -395,7 +414,9 @@ def to_nwb(fn):
         velocity_spatial_series = TimeSeries(
             name="OpenLoopKinematicsVelocity",
             description=','.join(KIN_SUBSET.values()),
-            timestamps=bin_time,
+            starting_time=0.0,
+            rate=0.02,
+            # timestamps=bin_time,
             data=bin_vel,
             unit="arbitrary",
         )
@@ -407,15 +428,19 @@ def to_nwb(fn):
         trial_series = TimeSeries(
             name="TrialNum",
             description="Trial number",
-            timestamps=bin_time,
+            starting_time=0.0,
+            rate=0.02,
+            # timestamps=bin_time,
             data=bin_trial,
             unit="arbitrary",
         )
         nwbfile.add_acquisition(trial_series)
         blacklist_series = TimeSeries(
-            name="Blacklist",
+            name="kin_blacklist",
             description="Timesteps to ignore covariates (for training, eval). Neural data is not affected.",
-            timestamps=bin_time,
+            starting_time=0.0,
+            rate=0.02,
+            # timestamps=bin_time,
             data=bin_blacklist,
             unit="bool",
         )
@@ -443,7 +468,7 @@ def to_nwb(fn):
                 timeseries=[position_spatial_series])
         return nwbfile
 
-    def create_cropped_container(trial_mask, trial_mask_native):
+    def create_cropped_container(trial_mask, trial_mask_native, suffix):
         # print(trial_mask)
         sub_bin_time = bin_time[trial_mask]
         sub_spike_times, sub_channels = crop_spikes(raw_spike_time, raw_spike_channel, sub_bin_time)
@@ -458,9 +483,10 @@ def to_nwb(fn):
             bin_trial[trial_mask],
             bin_state[trial_mask_native],
             bin_blacklist[trial_mask],
+            suffix=suffix,
         )
     def create_and_write(trial_mask, trial_mask_native, suffix, folder=CURATED_SETS[tag]):
-        nwbfile = create_cropped_container(trial_mask, trial_mask_native)
+        nwbfile = create_cropped_container(trial_mask, trial_mask_native, suffix)
         if not USE_SHORT_LONG_DISTINCTION and "test" in folder:
             folder = "test"
         out = fn.parent / folder / f"{out_fn.stem}_{suffix}.nwb"
@@ -495,7 +521,7 @@ def to_nwb(fn):
                          'calibration')
 
         # Use first two trials for minival
-        minival_num = 2
+        minival_num = SMOKETEST_NUM
         minival_trials = trials[:minival_num]
         create_and_write(bin_trial <= minival_trials[-1],
                          bin_trial_native <= minival_trials[-1],
@@ -519,3 +545,4 @@ print(f"Processing {len(files)} files")
 for sample in files:
     to_nwb(sample)
 print("Done")
+# %%

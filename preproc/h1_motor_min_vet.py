@@ -30,7 +30,7 @@ def get_start_date_and_volume(fn: Path):
         print(fn)
         nwbfile = io.read()
         start_date = nwbfile.session_start_time.strftime('%Y-%m-%d') # full datetime to just date
-        return pd.to_datetime(start_date), nwbfile.acquisition['OpenLoopKinematics'].timestamps.shape[0]
+        return pd.to_datetime(start_date), nwbfile.acquisition['OpenLoopKinematics'].data.shape[0]
 start_dates, volume = zip(*[get_start_date_and_volume(fn) for fn in sample_files])
 
 # Convert to pandas dataframe for easier manipulation
@@ -67,8 +67,8 @@ def load_nwb(fn: str):
         units = nwbfile.units.to_dataframe()
         kin = nwbfile.acquisition['OpenLoopKinematics'].data[:]
         velocity = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
-        timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
-        blacklist = nwbfile.acquisition['Blacklist'].data[:].astype(bool)
+        timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
+        blacklist = nwbfile.acquisition['kin_blacklist'].data[:].astype(bool)
         epochs = nwbfile.epochs.to_dataframe()
         trials = nwbfile.acquisition['TrialNum'].data[:]
         labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
