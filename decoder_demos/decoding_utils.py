@@ -4,6 +4,21 @@ from sklearn.model_selection import GridSearchCV
 
 TRAIN_TEST = (0.8, 0.2)
 
+def zscore_data(data): 
+    """
+    Z-scores the input data.
+
+    Parameters:
+    data (np.ndarray): The input data.
+
+    Returns:
+    np.ndarray: The z-scored data.
+    """
+    m = np.mean(data, axis=0)
+    s = np.std(data, axis=0)
+    s[s==0] = 1
+    return (data - m) / s
+
 def generate_lagged_matrix(input_matrix: np.ndarray, lag: int):
     """
     Generate a lagged version of an input matrix.
@@ -30,19 +45,21 @@ def apply_neural_behavioral_lag(neural_matrix: np.ndarray, behavioral_matrix: np
     Apply a lag to the neural matrix and the behavioral matrix.
 
     Parameters:
-    neural_matrix (np.ndarray): The neural matrix.
-    behavioral_matrix (np.ndarray): The behavioral matrix.
-    lag (int): The number of lags to consider.
+    neural_matrix (np.ndarray): The neural matrix. (Time x Channels)
+    behavioral_matrix (np.ndarray): The behavioral matrix. (Time x Dimensions)
+    lag (int): The number of bins to consider.
 
     Returns:
     np.ndarray: The lagged neural matrix.
     np.ndarray: The lagged behavioral matrix.
     """
-    # Apply the lag to the neural matrix
-    neural_matrix = neural_matrix[:-lag]
 
-    # Apply the lag to the behavioral matrix
-    behavioral_matrix = behavioral_matrix[lag:]
+    if lag != 0:
+        # Apply the lag to the neural matrix
+        neural_matrix = neural_matrix[:-lag, :]
+
+        # Apply the lag to the behavioral matrix
+        behavioral_matrix = behavioral_matrix[lag:, :]
 
     return neural_matrix, behavioral_matrix
 
@@ -53,6 +70,7 @@ def fit_and_eval_decoder(
     eval_rates: np.ndarray,
     eval_behavior: np.ndarray,
     grid_search: bool=True,
+    return_preds: bool=False
 ):
     """Fits ridge regression on train data passed
     in and evaluates on eval data
@@ -90,4 +108,7 @@ def fit_and_eval_decoder(
     else:
         decoder = Ridge(alpha=1e-2)
     decoder.fit(train_rates, train_behavior)
-    return decoder.score(eval_rates, eval_behavior), decoder
+    if return_preds:
+        return decoder.score(eval_rates, eval_behavior), decoder, decoder.predict(eval_rates)
+    else:
+        return decoder.score(eval_rates, eval_behavior), decoder
