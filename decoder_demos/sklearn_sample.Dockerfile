@@ -7,12 +7,18 @@
 
 # Base image specifies basic dependencies; if you're using TF/Jax, you may want to use a different base image.
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
-RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
-# TODO ensure falcon_challenge available on dockerhub...
+# RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
 
+# TODO ensure falcon_challenge available on dockerhub...
+RUN apt-get update && apt-get install -y git
+ARG TOKEN
+RUN git clone -b clay_testing https://$TOKEN@github.com/snel-repo/falcon-challenge.git
+RUN pip install ./falcon-challenge
 # Users should install additional decoder-specific dependencies here.
 
-ENV EVALUATION_LOC remote
+ENV EVALUATION_LOC local
+
+WORKDIR /workspace
 
 # Add files from local context into Docker image
 # Note local context reference is the working dir by default, see https://docs.docker.com/engine/reference/commandline/build/
@@ -22,8 +28,10 @@ ENV EVALUATION_LOC remote
 ADD ./local_data/sklearn_FalconTask.h1.pkl data/decoder.pkl
 
 # Add source code/configs (e.g. can also be cloned)
-ADD ./decoder_demos/ decoder_demos/
+ADD ./decoder_demos/ decoder_demos
 ADD ./data_demos/ data_demos/
+
+ENV PYTHONPATH "${PYTHONPATH}:/workspace/decoder_demos"
 
 # Add runfile
 ADD ./decoder_demos/sklearn_sample.py decode.py

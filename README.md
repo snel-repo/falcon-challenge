@@ -5,6 +5,8 @@ This package contains core code for submitting decoders to the FALCON challenge.
 ## Installation
 Install `falcon_challenge` with:
 
+TODO suggest python 3.10
+
 ```bash
 pip install falcon-challenge
 ```
@@ -12,6 +14,7 @@ pip install falcon-challenge
 To create Docker containers for submission, you must have Docker installed.
 See, e.g. https://docs.docker.com/desktop/install/linux-install/. Try building and locally testing the provided `sklearn_sample.Dockerfile`, to confirm your setup works. Do this with the following commands (once Docker is installed)
 
+TODO explanation of training model from sample before running docker smoke test
 ```bash
 # Build
 sudo docker build -t sk_smoke -f ./decoder_demos/sklearn_sample.Dockerfile .

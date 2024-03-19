@@ -174,6 +174,7 @@ def fit_sklearn_decoder(
         'x_mean': x_means,
         'x_std': x_stds,
     }
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     with open(save_path, 'wb') as f:
         pickle.dump(decoder_obj, f)
     return save_path

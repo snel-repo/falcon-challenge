@@ -7,6 +7,10 @@ import argparse
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 
+import os
+print(os.getcwd())
+print(os.listdir())
+
 from sklearn_decoder import SKLearnDecoder
 
 def main():

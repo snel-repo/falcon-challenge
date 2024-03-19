@@ -19,6 +19,7 @@ setup(
         'seaborn',
         'scikit-learn',
         'pynwb',
+        'torch'
     ],
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',

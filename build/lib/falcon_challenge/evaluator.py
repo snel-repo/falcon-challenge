@@ -19,7 +19,7 @@ class FalconEvaluator:
         self.dataset: FalconTask = getattr(FalconTask, phase.split('_')[0])
 
     @staticmethod
-    def get_eval_handles(is_remote: bool, dataset: FalconTask, eval_term: str):
+    def get_eval_handles(is_remote: bool, dataset: FalconTask):
         data_dir = Path(os.environ.get("EVAL_DATA_PATH", "data")) / dataset.name
         if is_remote:
             eval_dir = data_dir / f"test"
@@ -31,7 +31,7 @@ class FalconEvaluator:
         return sorted(list(eval_dir.glob(suffix)))
 
     def get_eval_files(self):
-        return self.get_eval_handles(self.eval_remote, self.dataset, self.eval_term)
+        return self.get_eval_handles(self.eval_remote, self.dataset)
 
     def evaluate(self, decoder: BCIDecoder):
         r"""
