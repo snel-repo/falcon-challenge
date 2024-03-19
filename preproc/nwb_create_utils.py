@@ -1,8 +1,23 @@
+from pathlib import Path
+from pynwb import NWBFile, NWBHDF5IO
 from pynwb import TimeSeries
 from pynwb.behavior import Position
 from pynwb.behavior import BehavioralTimeSeries
 from pynwb import ProcessingModule
 
+r"""
+    FALCON Consts
+"""
+BIN_SIZE_MS = 20
+BIN_SIZE_S = BIN_SIZE_MS / 1000
+FEW_SHOT_CALIBRATION_RATIO = 0.2
+EVAL_RATIO = 0.4
+SMOKETEST_NUM = 2
+
+def write_to_nwb(nwbfile: NWBFile, fn: Path):
+    fn.parent.mkdir(exist_ok=True, parents=True)
+    with NWBHDF5IO(str(fn), 'w') as io:
+        io.write(nwbfile)
 
 def create_multichannel_timeseries(data_name, chan_names, data, timestamps=None, unit=''):
     """Creates a BehavioralTimeSeries for multi-channel continuous data"""

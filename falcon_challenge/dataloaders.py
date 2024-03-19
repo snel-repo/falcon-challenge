@@ -49,10 +49,10 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             # print(nwbfile)
             units = nwbfile.units.to_dataframe()
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
-            timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
-            blacklist = nwbfile.acquisition['Blacklist'].data[:].astype(bool)
+            timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
+            blacklist = nwbfile.acquisition['kin_blacklist'].data[:].astype(bool)
             return bin_units(units, bin_end_timestamps=timestamps), kin, np.zeros(kin.shape[0]), ~blacklist
-    elif dataset == FalconTask.m1: 
+    elif dataset == FalconTask.m1:
         with NWBHDF5IO(fn, 'r') as io:
             nwbfile = io.read()
 
@@ -60,18 +60,18 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             muscles = [ts for ts in raw_emg.time_series]
             emg_data = []
             emg_timestamps = []
-            for m in muscles: 
+            for m in muscles:
                 mdata = raw_emg.get_timeseries(m)
                 data = mdata.data[:]
                 timestamps = mdata.timestamps[:]
                 emg_data.append(data)
                 emg_timestamps.append(timestamps)
-            emg_data = np.vstack(emg_data).T 
+            emg_data = np.vstack(emg_data).T
             emg_timestamps = emg_timestamps[0]
 
             units = nwbfile.units.to_dataframe()
             binned_units = bin_units(units, bin_size_s=0.02, bin_end_timestamps=emg_timestamps)
-            
+
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
 
             trial_info = (

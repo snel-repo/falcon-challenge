@@ -49,8 +49,8 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             # print(nwbfile)
             units = nwbfile.units.to_dataframe()
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
-            timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
-            blacklist = nwbfile.acquisition['Blacklist'].data[:].astype(bool)
+            timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
+            blacklist = nwbfile.acquisition['kin_blacklist'].data[:].astype(bool)
             return bin_units(units, bin_end_timestamps=timestamps), kin, np.zeros(kin.shape[0]), ~blacklist
     else:
         raise ValueError(f"Unknown dataset {dataset}")
