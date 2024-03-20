@@ -1,9 +1,9 @@
-#%% 
+#%%
 
 from pynwb import NWBFile
 from pynwb import NWBHDF5IO
 import numpy as np
-import pandas as pd 
+import pandas as pd
 import scipy.signal as signal
 
 from scipy.io import loadmat
@@ -33,7 +33,7 @@ from filtering import (
     rectify,
 )
 
-#%% 
+#%%
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -55,9 +55,9 @@ if len(sys.argv) > 2:
 train_dates = ['20120924', '20120926', '20120927', '20120928']
 test_dates = ['20121004', '20121017', '20121022', '20121024']
 
-if EXP_DATE in train_dates: 
+if EXP_DATE in train_dates:
     IS_TEST_DS = False
-if EXP_DATE in test_dates: 
+if EXP_DATE in test_dates:
     IS_TEST_DS = True
 
 # emg file
@@ -100,7 +100,7 @@ locations = np.concatenate([ [f_emg['EMGSettings']['locations'][0][0][i][0]]*f_e
 exp_trial_ids = np.concatenate(f_emg['EMGInfo']['trial_id'][0]).squeeze()
 trial_order = np.argsort(trial_start_times)
 
-#%% extracting emg data 
+#%% extracting emg data
 
 emg_data = f_emg["EMGRawData"]
 
@@ -113,7 +113,7 @@ emg_names = convert_names_to_list(f_emg['EMGSettings'], 'ChanNames')
 fs_cont = float(f_emg['EMGSettings']['samp_rate'][0][0][0][0])
 t_offset = f_emg['EMGSettings']['analog_start_time'][0][0][0][0]
 
-#%% 
+#%%
 channels = np.squeeze(f_spk['SpikeSettings']['channels'][()])
 all_spike_times = []
 for i in range(1, 97):
@@ -132,13 +132,13 @@ for i in range(1, 97):
         ch_spk_times = ch_spk_times[0]
     all_spike_times.append(ch_spk_times)
 
-#%% 
+#%%
 # n_units = np.unique(f_spk['SpikeSettings']['channels'][()]).shape[0]
 array_group_by_chan = f_spk['SpikeSettings']['array_by_channel'][0]
-array_group_by_chan = [chr(array_id) for array_id in array_group_by_chan.tolist()] # this is for each channels that has spikes 
+array_group_by_chan = [chr(array_id) for array_id in array_group_by_chan.tolist()] # this is for each channels that has spikes
 array_group_by_elec = []
-for i in range(1, 97): 
-    if i in channels: 
+for i in range(1, 97):
+    if i in channels:
         array_group_by_elec.append(
             array_group_by_chan[np.where(channels == i)[0][0]]
         )
@@ -147,31 +147,31 @@ for i in range(1, 97):
 
 # elec_id_by_chan = f_spk['SpikeSettings']['unique_channel_num'][0]
 
-#%% 
+#%%
 
 def convert_to_NWB(
-    fs_cont, 
-    trial_start_times, 
+    fs_cont,
+    trial_start_times,
     trial_end_times,
     gocue_times,
     move_onset_times,
     contact_times,
-    reward_times, 
+    reward_times,
     generic_cond_ids,
-    object_ids, 
+    object_ids,
     object_names,
-    locations, 
-    exp_trial_ids, 
-    emg_data, 
-    emg_names, 
-    t_offset, 
+    locations,
+    exp_trial_ids,
+    emg_data,
+    emg_names,
+    t_offset,
     # n_units,
     # elec_id_by_chan,
     spike_times,
     array_group_by_chan,
     spike_time_thresh=[None, None],
     split_label='in_day_oracle' #calibration, eval
-): 
+):
     file_id = f'{MONKEY}_{EXP_DATE}_{split_label}'
     logger.info("Creating new NWBFile")
     nwbfile = NWBFile(
@@ -212,7 +212,7 @@ def convert_to_NWB(
     for ix in range(exp_trial_ids.size):
         # ix = trial_order[i]
         number = exp_trial_ids[ix]
-        start_time = pd.to_datetime(trial_start_times[ix], unit='s').round('20ms').value * 1e-9 
+        start_time = pd.to_datetime(trial_start_times[ix], unit='s').round('20ms').value * 1e-9
         end_time = pd.to_datetime(trial_end_times[ix], unit='s').round('20ms').value * 1e-9
         gocue_time = pd.to_datetime(gocue_times[ix], unit='s').round('20ms').value * 1e-9
         move_onset_time = pd.to_datetime(move_onset_times[ix], unit='s').round('20ms').value * 1e-9
@@ -254,7 +254,7 @@ def convert_to_NWB(
 
     # extract acquisition data
     # raw_emg = nwbfile.acquisition["emg_raw"]
-    raw_emg = emg_data 
+    raw_emg = emg_data
 
     notch_cent_freq = [60, 180, 200, 300, 400]
     notch_bw_freq = [2, 2, 2, 2, 2]
@@ -296,17 +296,17 @@ def convert_to_NWB(
     # )
     scale_emg = apply_scaling(clip_emg, SCALE_Q)
 
-    # resample all the processed EMG data to 20ms bins (50Hz) 
+    # resample all the processed EMG data to 20ms bins (50Hz)
     # resamp_emg = apply_filt_to_multi_timeseries(
     #     scale_emg, resample_column, 'emg_resample', target_fs, fs_cont
     # )
     resamp_emg = resample_column(scale_emg, target_fs, fs_cont)
 
-    # rectify again 
+    # rectify again
     # rerect_emg = apply_filt_to_multi_timeseries(resamp_emg, rectify, 'emg_rerect')
     rerect_emg = rectify(resamp_emg)
 
-    # apply low pass filter 
+    # apply low pass filter
     # preprocessed_emg = apply_filt_to_multi_timeseries(
     #     rerect_emg, apply_butter_filt, 'preprocessed_emg', 50, 'low', 10
     # )
@@ -328,10 +328,10 @@ def convert_to_NWB(
     nwbfile.add_acquisition(emg_proc_mts)
     # emg_filt.add_container(preprocessed_emg)
 
-    convert_trial_start_time = pd.to_datetime(trial_start_times, unit='s').round('20ms').values.astype('float64') * 1e-9 
+    convert_trial_start_time = pd.to_datetime(trial_start_times, unit='s').round('20ms').values.astype('float64') * 1e-9
     convert_trial_end_time = pd.to_datetime(trial_end_times, unit='s').round('20ms').values.astype('float64') * 1e-9
     eval_mask = np.full(t_new.size, False)
-    # now add a mask for getting within-trial periods 
+    # now add a mask for getting within-trial periods
     for start, stop in zip(convert_trial_start_time, convert_trial_end_time):
         start_ind = np.searchsorted(t_new, start)
         stop_ind = np.searchsorted(t_new, stop)
@@ -340,7 +340,7 @@ def convert_to_NWB(
     nwbfile.add_acquisition(
         TimeSeries(
             name="eval_mask",
-            description="Timesteps to ignore covariates (for training, eval).",
+            description="Timesteps to KEEP covariates (for training, eval).",
             timestamps=t_new,
             data=eval_mask,
             unit="bool",
@@ -428,7 +428,7 @@ def convert_to_NWB(
     # new_elec_ids = np.arange(orig_elec_ids.size)
     # elec_id_map = { o_ix: n_ix for (o_ix, n_ix) in zip(orig_elec_ids, new_elec_ids)}
     # array_elec_groups = [*map(elec_group_map.get, array_group_by_chan)]
-    array_elec_groups = [] 
+    array_elec_groups = []
     for arr_id in array_group_by_chan:
         if arr_id is not None:
             array_elec_groups.append(elec_group_map[arr_id])
@@ -464,13 +464,13 @@ def convert_to_NWB(
 
         # all_spike_times = np.concatenate(all_spike_times)
         all_spike_times = np.array(spike_times[elec_id - 1])
-        if len(all_spike_times) >= 1: 
+        if len(all_spike_times) >= 1:
             all_spike_times = (all_spike_times - t_offset).round(4)
 
         start_cutoff, stop_cutoff = spike_time_thresh
-        if start_cutoff is None: 
+        if start_cutoff is None:
             start_cutoff = t_new[0]
-        if stop_cutoff is None: 
+        if stop_cutoff is None:
             stop_cutoff = t_new[-1]
         # ensure spike times are within bound of continuous data
         keep_mask = (all_spike_times > start_cutoff) & (all_spike_times < stop_cutoff)
@@ -482,12 +482,12 @@ def convert_to_NWB(
             electrodes=[elec_id-1],
             obs_intervals=[[start_cutoff, stop_cutoff]],
         )
-        # else: 
+        # else:
         #     nwbfile.add_unit(
         #         id=i,
         #         electrodes=[elec_id],
         #     )
-    
+
     nwb_path = path.join(SAVE_PATH, split_label)
     if not path.exists(nwb_path):
         os.makedirs(nwb_path, mode=0o755)
@@ -497,7 +497,7 @@ def convert_to_NWB(
     with NWBHDF5IO(save_fname, "w") as io:
         io.write(nwbfile)
 
-#%% 
+#%%
 
 trial_start_times = trial_start_times[trial_order]
 trial_end_times = trial_end_times[trial_order]
@@ -511,7 +511,7 @@ object_names = np.array(obj_names)[trial_order]
 locations = np.array(locations)[trial_order]
 exp_trial_ids = np.array(exp_trial_ids)[trial_order]
 
-#%% 
+#%%
 FEW_SHOT_CALIBRATION_RATIO = 0.2
 EVAL_RATIO = 0.4
 n_trials = exp_event_times.shape[0]
@@ -521,27 +521,27 @@ eval_num = int(n_trials * EVAL_RATIO)
 #%%
 if IS_TEST_DS:
     logger.info("Creating few-shot calibration split")
-    # first calibration num = few shot training 
+    # first calibration num = few shot training
     calib_end_ind_emg = int(trial_end_times[:calibration_num][-1] * fs_cont)
     convert_to_NWB(
-        fs_cont, 
-        trial_start_times[:calibration_num], 
+        fs_cont,
+        trial_start_times[:calibration_num],
         trial_end_times[:calibration_num],
         gocue_times[:calibration_num],
         move_onset_times[:calibration_num],
         contact_times[:calibration_num],
-        reward_times[:calibration_num], 
+        reward_times[:calibration_num],
         generic_cond_ids[:calibration_num],
-        object_ids[:calibration_num], 
+        object_ids[:calibration_num],
         object_names[:calibration_num],
-        locations[:calibration_num], 
-        exp_trial_ids[:calibration_num], 
-        emg_data[:calib_end_ind_emg, :], 
-        emg_names, 
-        t_offset, 
+        locations[:calibration_num],
+        exp_trial_ids[:calibration_num],
+        emg_data[:calib_end_ind_emg, :],
+        emg_names,
+        t_offset,
         all_spike_times,
         array_group_by_elec,
-        spike_time_thresh=[0, trial_end_times[:calibration_num][-1]], 
+        spike_time_thresh=[0, trial_end_times[:calibration_num][-1]],
         split_label='test_calibration' #'in_day_oracle' #calibration, eval
     )
 
@@ -571,9 +571,9 @@ if IS_TEST_DS:
     )
 
     logger.info("Creating in-day oracle split")
-    # everything that is not eval set = oracle 
+    # everything that is not eval set = oracle
     convert_to_NWB(
-        fs_cont, 
+        fs_cont,
         trial_start_times[:-eval_num],
         trial_end_times[:-eval_num],
         gocue_times[:-eval_num],
@@ -594,7 +594,7 @@ if IS_TEST_DS:
         split_label='test_oracle'
     )
 
-else: 
+else:
     logger.info("Creating full training dataset")
     # first 60%
     eval_start_ind_emg = int(trial_start_times[-eval_num:][0] * fs_cont)
@@ -621,7 +621,7 @@ else:
     )
 
     logger.info("Creating minival split")
-    # and minival dataset which is last EVAL_RATIO of train data 
+    # and minival dataset which is last EVAL_RATIO of train data
     # eval_start_ind_emg = int(trial_start_times[-eval_num:][0] * fs_cont)
     convert_to_NWB(
         fs_cont,

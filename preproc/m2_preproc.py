@@ -174,7 +174,7 @@ def to_nwb(path: Path, ):
         for i, spikes in enumerate(all_spikes):
             nwbfile.add_unit(
                 id=i,
-                spike_times=spikes / 1000 - start_time,
+                spike_times=np.array(spikes) / 1000 - start_time,
                 electrodes=[i]
             )
         all_time = np.concatenate(all_time, axis=0)
@@ -199,9 +199,9 @@ def to_nwb(path: Path, ):
         nwbfile.add_acquisition(
             TimeSeries(
                 name='eval_mask',
-                description='Timesteps to ignore covariates (for training, eval).',
+                description='Timesteps to keep covariates (for training, eval).',
                 timestamps=all_time,
-                data=np.zeros_like(all_time, dtype=bool),
+                data=np.ones_like(all_time, dtype=bool),
                 unit='bool'
             )
         )
