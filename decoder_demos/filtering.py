@@ -45,7 +45,7 @@ def gaussian_kernel(size, sigma):
 def smooth(position, kernel_size: int, sigma: float):
     """
     Apply Gaussian smoothing on the position data (dim 0)
-    kernel_size: size of the kernel
+    kernel_size: size of the kernel (in input bins)
     sigma: standard deviation of the Gaussian kernel
     """
     kernel = gaussian_kernel(kernel_size, sigma)
@@ -109,13 +109,13 @@ def apply_savgol_diff(x, window_length, polyorder, deriv, delta):
                              mode='constant')
     return y
 
-def apply_clipping(x, clip_quantile): 
+def apply_clipping(x, clip_quantile):
     """apply clipping to input signal"""
     clip_val = np.quantile(np.abs(x), clip_quantile)
     x = np.clip(x, -clip_val, clip_val)
     return x
 
-def apply_scaling(x, scale_quantile): 
+def apply_scaling(x, scale_quantile):
     """apply scaling to input signal"""
     scale_val = np.quantile(np.abs(x), scale_quantile)
     x = x/scale_val

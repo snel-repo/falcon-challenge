@@ -1,10 +1,10 @@
-import pandas as pd 
-import numpy as np 
-import matplotlib.pyplot as plt 
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 
-def plot_split_bars(df, fig, ax): 
+def plot_split_bars(df, fig, ax):
     """
     Plot the dataset sizes for each split type (train, test) for each start date
 
@@ -16,20 +16,31 @@ def plot_split_bars(df, fig, ax):
     # Scatter plot for visualizing each start date on the same y-value
     palette = sns.color_palette(n_colors=2)
     sns.barplot(
-        x='Date', 
-        y='Dataset Size (s)', 
-        data=df, 
-        ax=ax, 
-        order=df['Date'].sort_values(), 
-        estimator=np.sum, 
-        errorbar=None, 
+        x='Date',
+        y='Dataset Size (s)',
+        data=df,
+        ax=ax,
+        order=df['Date'].sort_values(),
+        estimator=np.sum,
+        errorbar=None,
         hue='Split Type',
         palette=palette
     )
+    train_ratio = len(df[df['Split Type'] == 'Train']) / len(df)
+    train_center_of_mass = train_ratio / 2
+    test_center_of_mass = (1 - train_ratio) / 2 + train_ratio
     ax.get_legend().remove()
-    ax.text(0.15, 0.3, 'Train', color=palette[0], fontsize=36, transform=ax.transAxes, backgroundcolor='white')
-    ax.text(0.5, 0.3, 'Test', color=palette[1], fontsize=36, transform=ax.transAxes)
+    ax.text(train_center_of_mass, 0.3, 'Train', color=palette[0], fontsize=36, transform=ax.transAxes, backgroundcolor='white', ha='center')
+    ax.text(test_center_of_mass, 0.3, 'Test', color=palette[1], fontsize=36, transform=ax.transAxes, backgroundcolor='white', ha='center')
     fig.autofmt_xdate()  # Rotate dates for readability
+
+def find_time_ratio(datestr_start, datestr_mid, datestr_end):
+    # Assume strs are %m-%d, year doesn't matter
+    datetime_start = pd.to_datetime(f'2010-{datestr_start}')
+    datetime_mid = pd.to_datetime(f'2010-{datestr_mid}')
+    datetime_end = pd.to_datetime(f'2010-{datestr_end}')
+    total_time = datetime_end - datetime_start
+    return (datetime_mid - datetime_start) / total_time
 
 def plot_timeline(ax, sections):
     """
@@ -45,8 +56,10 @@ def plot_timeline(ax, sections):
     ax_inset = inset_axes(ax, width="50%", height="20%", loc='upper right', borderpad=1)
 
     # Plotting the colorized timeline in the inset
+    markers = ['o', 's']
     for i, (section, dates) in enumerate(sections.items()):
-        ax_inset.scatter(dates, [0] * len(dates), marker='o', color=palette[i], s=40)
+        dates = list(map(lambda md: pd.to_datetime(f'2010-{md}'), dates))
+        ax_inset.scatter(dates, [0] * len(dates), marker=markers[i], color=palette[i], s=40)
 
     # Configuring the inset
     ax_inset.set_yticks([])
@@ -58,17 +71,23 @@ def plot_timeline(ax, sections):
     ax_inset.annotate('', xy=(1, 0), xytext=(0, 0),
                 arrowprops=dict(arrowstyle="->", color='black'),
                 xycoords=('axes fraction', 'data'), textcoords=('axes fraction', 'data'))
+
+    train_ratio = find_time_ratio(sections['Train'][0], sections['Test'][0], sections['Test'][-1])
+    train_center_of_mass = train_ratio / 2
+    test_center_of_mass = (1 - train_ratio) / 2 + train_ratio
     ax_inset.text(
-        0.2, 0.7, 'Train', 
+        train_center_of_mass, 0.7, 'Train',
         color=palette[0],
-        fontsize=20, 
-        transform=ax_inset.transAxes
+        fontsize=20,
+        transform=ax_inset.transAxes,
+        ha='center'
     )
     ax_inset.text(
-        0.55, 0.7, 'Test', 
+        test_center_of_mass, 0.7, 'Test',
         color=palette[1],
         fontsize=20,
-        transform=ax_inset.transAxes
+        transform=ax_inset.transAxes,
+        ha='center'
     )
 
 def rasterplot(spike_arr, bin_size_s=0.02, ax=None):
@@ -84,12 +103,12 @@ def rasterplot(spike_arr, bin_size_s=0.02, ax=None):
         ax = plt.gca()
     for idx, unit in enumerate(spike_arr.T):
         ax.scatter(
-            np.where(unit)[0] * bin_size_s, 
-            np.ones(np.sum(unit != 0)) * idx, 
-            s=1, 
-            c='k', 
+            np.where(unit)[0] * bin_size_s,
+            np.ones(np.sum(unit != 0)) * idx,
+            s=1,
+            c='k',
             marker='|',
-            linewidths=0.2, 
+            linewidths=0.2,
             alpha=0.3
         )
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 20))
@@ -115,6 +134,6 @@ def plot_firing_rate_distributions(lengths, binned_neural, start_dates, axes):
     for day, means in zip(start_dates, daily_means):
         flattened_data['Day'].extend([day.strftime('%m-%d')] * len(means))  # Extend day labels - reformat for simplicity
         flattened_data['Mean Firing Rate (Hz)'].extend(means)  # Extend mean firing rates
-        
+
     axes = sns.histplot(data=flattened_data, x='Mean Firing Rate (Hz)', hue='Day', kde=True, ax=axes, palette='viridis', bins=20, stat='percent', multiple='dodge')
     axes.set_title('Firing Rate Distribution per day', ha='center', va='center', transform=axes.transAxes, fontsize=18)

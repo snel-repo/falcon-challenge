@@ -22,12 +22,10 @@ from pprint import pprint
 from scipy.io import loadmat
 from scipy.signal import resample_poly
 
-
 from dateutil.tz import tzlocal
 
 import pynwb
 from pynwb import NWBFile, TimeSeries
-from pynwb.behavior import BehavioralTimeSeries
 
 from decoder_demos.filtering import smooth
 from preproc.nwb_create_utils import (
@@ -139,6 +137,7 @@ def to_nwb(path: Path, ):
     ):
         nwbfile = create_nwb_shell(path, DATA_SPLITS[path.stem], suffix=suffix)
         all_bhvr = []
+        all_vel = []
         all_spikes = [[] for _ in range(CHANNEL_EXPECTATION)]
         all_time = []
         start_time = 0
@@ -149,6 +148,7 @@ def to_nwb(path: Path, ):
             time -= start_time
             nwbfile.add_trial(
                 start_time=time[0],
+                end_time=time[-1],
                 stop_time=time[-1],
                 tgt_loc=trial_data['target'],
             )
@@ -158,9 +158,12 @@ def to_nwb(path: Path, ):
             bhvr = trial_data['fingers']
             EDGE_PAD = 160 # reduce edge ringing, in ms
             y_padded = np.pad(bhvr, ((EDGE_PAD, EDGE_PAD), (0, 0)), mode='edge',)
+            y_padded = smooth(y_padded, 120, 40) # TODO ask Sam what to use instead of this Gaussian
+
             y_resampled_padded = resample_poly(y_padded, math.ceil(FS / BIN_SIZE_MS), 1000)
             bhvr = y_resampled_padded[int(EDGE_PAD / BIN_SIZE_MS):int(-EDGE_PAD / BIN_SIZE_MS)]
             all_bhvr.append(bhvr)
+            all_vel.append(np.gradient(bhvr, axis=0))
             all_time.append(time)
 
             for j, spike in enumerate(trial_data['spikes']):
@@ -175,14 +178,32 @@ def to_nwb(path: Path, ):
                 spike_times=spikes - start_time,
                 electrodes=[i]
             )
-
+        all_time = np.concatenate(all_time, axis=0)
         ts = create_multichannel_timeseries(
             data_name='finger_pos',
             chan_names=KIN_LABELS,
             data=np.concatenate(all_bhvr, axis=0),
-            timestamps=np.concatenate(all_time, axis=0),
+            timestamps=all_time,
         )
         nwbfile.add_acquisition(ts)
+
+        ts = create_multichannel_timeseries(
+            data_name='finger_vel',
+            chan_names=KIN_LABELS,
+            data=np.concatenate(all_vel, axis=0),
+            timestamps=all_time,
+        )
+        nwbfile.add_acquisition(ts)
+
+        nwbfile.add_acquisition(
+            TimeSeries(
+                name='eval_mask',
+                description='Timesteps to ignore covariates (for training, eval).',
+                timestamps=all_time,
+                data=np.zeros_like(all_time, dtype=bool),
+                unit='bool'
+            )
+        )
         write_to_nwb(nwbfile, path.parent.parent / DATA_SPLITS[path.stem] / f"{path.stem}_{suffix}.nwb")
         print(f"Written {path.stem}_{suffix}.nwb")
 
@@ -217,15 +238,29 @@ payload = payload[1:]
 payload = [i for i in payload if not i['BlankTrial']] # 1 if screen was off, no trial run
 payload = list(map(filt_single_trial, payload))
 from matplotlib import pyplot as plt
-time = payload[0]['time'].astype(float)
-fingers = payload[0]['fingers']
-# from scipy.interpolate import CubicSpline
+trial = 0
 
-downsample_time = time[::math.ceil(FS * BIN_SIZE_MS / 1000)] # This effectively rounds up
+time = payload[trial]['time'].astype(float)
+fingers = payload[trial]['fingers']
+
+SRC_BINS_PER_TGT = math.ceil(FS * BIN_SIZE_MS / 1000)
+downsample_time = time[::SRC_BINS_PER_TGT] # This effectively rounds up
+# crop, then bin
+if len(fingers) % SRC_BINS_PER_TGT:
+    bin_fingers = fingers[:-(len(fingers) % SRC_BINS_PER_TGT)]
+    bin_time = time[:-(len(time) % SRC_BINS_PER_TGT)]
+bin_time = bin_time.reshape(-1, SRC_BINS_PER_TGT).mean(axis=1)
+bin_fingers = bin_fingers.reshape(-1, SRC_BINS_PER_TGT, bin_fingers.shape[-1]).mean(axis=1)
+# plt.plot(bin_time, np.gradient(bin_fingers, axis=0))
+
 print(fingers.shape)
 # print(downsample_fingers.shape)
 EDGE_PAD = 160 # reduce edge ringing, in ms
 y_padded = np.pad(fingers, ((EDGE_PAD, EDGE_PAD), (0, 0)), mode='edge',)
+
+# Low pass
+print(y_padded.shape)
+y_padded = smooth(y_padded, 100, 25)
 
 from scipy.signal import resample_poly
 # Resample the padded signal
@@ -237,4 +272,5 @@ downsample_fingers = y_resampled
 # downsample_fingers = resample_poly(fingers, math.ceil(FS / BIN_SIZE_MS), 1000) # This should round up
 # downsample_fingers = resample(fingers, math.ceil(len(fingers) / (FS * BIN_SIZE_MS / 1000)), axis=0) # This should round up
 # plt.plot(time, fingers)
-plt.plot(downsample_time, downsample_fingers)
+# plt.plot(downsample_time, downsample_fingers)
+plt.plot(downsample_time, np.gradient(downsample_fingers, axis=0), label='grad')
