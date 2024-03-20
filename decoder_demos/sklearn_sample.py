@@ -27,7 +27,6 @@ def main():
     task = getattr(FalconTask, dataset)
     config = FalconConfig(
         task=task,
-        n_channels=176,
     )
 
     decoder = SKLearnDecoder(task_config=config, model_path=args.model_path)
