@@ -43,7 +43,7 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v2/"
+SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v3/"
 rouse_base_dir = "/snel/share/share/data/rouse/RTG/"
 MONKEY = "L"
 EXP_DATE = "20120924"
@@ -542,7 +542,7 @@ if IS_TEST_DS:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[0, trial_end_times[:calibration_num][-1]], 
-        split_label='test_calibration' #'in_day_oracle' #calibration, eval
+        split_label='held_out_calib' #'in_day_oracle' #calibration, eval
     )
 
     logger.info("Creating evaluation split")
@@ -567,7 +567,7 @@ if IS_TEST_DS:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
-        split_label='test_eval'
+        split_label='held_out_eval'
     )
 
     logger.info("Creating in-day oracle split")
@@ -591,7 +591,7 @@ if IS_TEST_DS:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[0, trial_start_times[-eval_num:][0]],
-        split_label='test_oracle'
+        split_label='held_out_oracle'
     )
 
 else: 
@@ -617,7 +617,7 @@ else:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[0, trial_start_times[-eval_num:][0]],
-        split_label='train_calibration'
+        split_label='held_in_calib'
     )
 
     logger.info("Creating minival split")
@@ -642,7 +642,7 @@ else:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[trial_start_times[-eval_num:][0], emg_data.shape[0]/fs_cont],
-        split_label='train_eval'
+        split_label='held_in_eval'
     )
 
     logger.info("Creating smoketest data")
@@ -667,7 +667,7 @@ else:
         all_spike_times,
         array_group_by_elec,
         spike_time_thresh=[0, trial_end_times[-NUM_ST_TRIALS:][0]],
-        split_label='minival'
+        split_label='held_in_minival'
     )
 
 
