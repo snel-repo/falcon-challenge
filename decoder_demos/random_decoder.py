@@ -16,13 +16,4 @@ class RandomDecoder(BCIDecoder):
         r"""
             neural_observations: array of shape (n_channels), binned spike counts
         """
-        if self._task_config.task == FalconTask.h1:
-            return np.random.rand(7)
-        elif self._task_config.task == FalconTask.h2:
-            return np.random.rand(28) # Or whatever the action space is
-        elif self._task_config.task == FalconTask.m1:
-            return np.random.rand(2)
-        elif self._task_config.task == FalconTask.m2:
-            return np.random.rand(2)
-        else:
-            raise ValueError(f"Unknown task {self._task_config.task}")
+        return np.random.rand(self._task_config.out_dim)

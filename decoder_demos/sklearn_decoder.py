@@ -218,8 +218,8 @@ def main(training_dir, calibration_dir, mode):
     training_dir = Path(training_dir)
     calibration_dir = Path(calibration_dir)
     task_config = FalconConfig(
-        task=FalconTask.h1,
-        n_channels=176,
+        task=FalconTask.m2,
+        # task=FalconTask.h1,
     )
     save_path = Path(f'local_data/sklearn_{task_config.task}.pkl')
     datafiles = list(training_dir.glob('*.nwb'))

@@ -42,7 +42,6 @@ def main():
     task = getattr(FalconTask, dataset)
     config = FalconConfig(
         task=task,
-        n_channels=176,
         dataset_handles=[x.stem for x in evaluator.get_eval_files()]
     )
 

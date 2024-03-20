@@ -23,10 +23,27 @@ class FalconConfig:
     """
     # falcon_h1, falcon_h2_writing, falcon_m1_finger, falcon_m2_reach
     task: FalconTask = FalconTask.h1
-    n_channels: int = 176
+    # n_channels: int = 176
     bin_size_ms: int = 20
     dataset_handles: list[str] = field(default_factory=lambda: []) # Compute with evaluator.get_eval_handles
 
+    @property
+    def n_channels(self):
+        if self.task == FalconTask.h1:
+            return 176
+        elif self.task == FalconTask.m2:
+            return 96
+
+    @property
+    def out_dim(self):
+        if self.task == FalconTask.h1:
+            return 7
+        elif self.task == FalconTask.h2:
+            return 28
+        elif self.task == FalconTask.m1:
+            return 2 # TODO
+        elif self.task == FalconTask.m2:
+            return 2
 
 cs = ConfigStore.instance()
 cs.store(name="falcon_config", node=FalconConfig)

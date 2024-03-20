@@ -124,18 +124,20 @@ def create_nwb_name(mat_name: Path) -> Path:
 def create_nwb_shell(
         start_date: datetime = datetime(2017, 1, 1, 1, tzinfo=tzlocal()),
         relative_offset: datetime = datetime(2017, 5, 25, 1, tzinfo=tzlocal()), # Obfuscated first date of all date
-        suffix: str = ''
+        suffix: str = '',
+        exp_set: int = 1
     ):
     # Note identifying info is redacted
     from dateutil.relativedelta import relativedelta
     start_date_shift = relativedelta(start_date, relative_offset)
     # print(start_date_shift)
-    start_date_obsfucate = datetime(2010, 1, 1) + start_date_shift
+    start_date_obsfucate = datetime(1925, 1, 1) + start_date_shift # Recommended in DANDI slack as BIDS convention
+    print(f'PittHuman-set{exp_set}-{suffix}', start_date_obsfucate)
     subject = pynwb.file.Subject(
-        subject_id=f'Pitt001-{suffix}',
-        description='First subject from Pitt human BCI for DANDI. Details randomly chosen to satisfy DANDI req.',
-        sex='M',
-        age='P40Y',
+        subject_id=f'PittHuman-set{exp_set}-{suffix}',
+        description='First subject from Pitt human BCI for DANDI. Details redacted.',
+        sex='U',
+        age='P20Y/P90Y',
         species='Homo sapiens',
     )
     return NWBFile(
@@ -390,11 +392,12 @@ def to_nwb(fn):
         bin_state: np.ndarray, # Native resolution
         bin_blacklist: np.ndarray,
         suffix: str = '',
+        exp_set: int = 1,
     ):
         # Recenter timestamps in case data is subsetted
         date_str = payload['start_date']
         date_obj = datetime.strptime(date_str, "%d-%b-%Y_%H_%M_%S").astimezone(tzlocal())
-        nwbfile = create_nwb_shell(date_obj, suffix=suffix)
+        nwbfile = create_nwb_shell(date_obj, suffix=suffix, exp_set=exp_set)
         for unit_id in motor_units:
             spike_times = spike_time[spike_channel == unit_id]
             nwbfile.add_unit(spike_times=spike_times)
@@ -473,6 +476,7 @@ def to_nwb(fn):
         sub_bin_time = bin_time[trial_mask]
         sub_spike_times, sub_channels = crop_spikes(raw_spike_time, raw_spike_channel, sub_bin_time)
         start_time = sub_bin_time[0]
+        exp_set = tag.split('_')[-1]
         return create_nwb_container(
             sub_spike_times,
             sub_channels,
@@ -484,6 +488,7 @@ def to_nwb(fn):
             bin_state[trial_mask_native],
             bin_blacklist[trial_mask],
             suffix=suffix,
+            exp_set=exp_set,
         )
     def create_and_write(trial_mask, trial_mask_native, suffix, folder=CURATED_SETS[tag]):
         nwbfile = create_cropped_container(trial_mask, trial_mask_native, suffix)

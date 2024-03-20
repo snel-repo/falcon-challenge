@@ -43,19 +43,18 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
         - trial_change: boolean of shape (time,) true if the trial has changed
         - eval_mask: boolean array indicating whether to evaluate each time step
     """
-    if dataset == FalconTask.h1:
-        with NWBHDF5IO(str(fn), 'r') as io:
-            nwbfile = io.read()
-            # print(nwbfile)
-            units = nwbfile.units.to_dataframe()
+    if not dataset in [FalconTask.h1, FalconTask.h2, FalconTask.m1, FalconTask.m2]:
+        raise ValueError(f"Unknown dataset {dataset}")
+    with NWBHDF5IO(str(fn), 'r') as io:
+        nwbfile = io.read()
+        units = nwbfile.units.to_dataframe()
+        if dataset == FalconTask.h1:
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
             blacklist = nwbfile.acquisition['kin_blacklist'].data[:].astype(bool)
-            return bin_units(units, bin_end_timestamps=timestamps), kin, np.zeros(kin.shape[0]), ~blacklist
-    elif dataset == FalconTask.m1:
-        with NWBHDF5IO(fn, 'r') as io:
-            nwbfile = io.read()
-
+            binned_units = bin_units(units, bin_end_timestamps=timestamps)
+            return binned_units, kin, np.zeros(kin.shape[0]), ~blacklist
+        elif dataset == FalconTask.m1:
             raw_emg = nwbfile.acquisition['preprocessed_emg']
             muscles = [ts for ts in raw_emg.time_series]
             emg_data = []
@@ -69,7 +68,6 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             emg_data = np.vstack(emg_data).T
             emg_timestamps = emg_timestamps[0]
 
-            units = nwbfile.units.to_dataframe()
             binned_units = bin_units(units, bin_size_s=0.02, bin_end_timestamps=emg_timestamps)
 
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
@@ -84,5 +82,25 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             trial_change[switch_inds] = True
 
             return binned_units, emg_data, trial_change, eval_mask
-    else:
-        raise ValueError(f"Unknown dataset {dataset}")
+        elif dataset == FalconTask.m2:
+            vel_container = nwbfile.acquisition['finger_vel']
+            labels = [ts for ts in vel_container.time_series]
+            vel_data = []
+            vel_timestamps = None
+            for ts in labels:
+                ts_data = vel_container.get_timeseries(ts)
+                vel_data.append(ts_data.data[:])
+                vel_timestamps = ts_data.timestamps[:]
+            vel_data = np.vstack(vel_data).T
+            binned_units = bin_units(units, bin_size_s=0.02, bin_end_timestamps=vel_timestamps)
+
+            eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
+
+            trial_change = np.zeros(vel_timestamps.shape[0], dtype=bool)
+            trial_info = nwbfile.trials.to_dataframe().reset_index()
+            switch_inds = np.searchsorted(vel_timestamps, trial_info.start_time)
+            trial_change[switch_inds] = True
+            return binned_units, vel_data, vel_timestamps, eval_mask
+        else:
+            raise NotImplementedError(f"Dataset {dataset} not implemented")
+            breakpoint()
