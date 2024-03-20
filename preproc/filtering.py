@@ -31,7 +31,6 @@ def apply_exponential_filter(
     return filtered_signal
 
 
-
 def gaussian_kernel(size, sigma):
     """
     Create a 1D Gaussian kernel.
@@ -109,13 +108,13 @@ def apply_savgol_diff(x, window_length, polyorder, deriv, delta):
                              mode='constant')
     return y
 
-def apply_clipping(x, clip_quantile): 
+def apply_clipping(x, clip_quantile):
     """apply clipping to input signal"""
     clip_val = np.quantile(np.abs(x), clip_quantile)
     x = np.clip(x, -clip_val, clip_val)
     return x
 
-def apply_scaling(x, scale_quantile): 
+def apply_scaling(x, scale_quantile):
     """apply scaling to input signal"""
     scale_val = np.quantile(np.abs(x), scale_quantile)
     x = x/scale_val
