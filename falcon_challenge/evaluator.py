@@ -26,7 +26,7 @@ class FalconEvaluator:
             suffix = "*eval.nwb"
         else:
             logger.info(f"Local evaluation, running minival.")
-            eval_dir = data_dir / "minival"
+            eval_dir = data_dir / "train"
             suffix = "*minival.nwb"
         return sorted(list(eval_dir.glob(suffix)))
 

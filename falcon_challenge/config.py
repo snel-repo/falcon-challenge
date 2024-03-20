@@ -34,6 +34,16 @@ class FalconConfig:
         elif self.task == FalconTask.m2:
             return 96
 
+    @property
+    def out_dim(self):
+        if self.task == FalconTask.h1:
+            return 7
+        elif self.task == FalconTask.h2:
+            return 28
+        elif self.task == FalconTask.m1:
+            return 2 # TODO
+        elif self.task == FalconTask.m2:
+            return 2
 
 cs = ConfigStore.instance()
 cs.store(name="falcon_config", node=FalconConfig)

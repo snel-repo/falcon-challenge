@@ -97,7 +97,9 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
 
             trial_change = np.zeros(vel_timestamps.shape[0], dtype=bool)
-            # TODO trial change
+            trial_info = nwbfile.trials.to_dataframe().reset_index()
+            switch_inds = np.searchsorted(vel_timestamps, trial_info.start_time)
+            trial_change[switch_inds] = True
             return binned_units, vel_data, vel_timestamps, eval_mask
         else:
             raise NotImplementedError(f"Dataset {dataset} not implemented")
