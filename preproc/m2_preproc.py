@@ -142,13 +142,12 @@ def to_nwb(path: Path, ):
         all_time = []
         start_time = 0
         for i, trial_data in enumerate(payload):
-            time = trial_data['time'].astype(float)
+            time = trial_data['time'].astype(float) / 1000 # To ms
             if not start_time:
                 start_time = time[0]
             time -= start_time
             nwbfile.add_trial(
                 start_time=time[0],
-                end_time=time[-1],
                 stop_time=time[-1],
                 tgt_loc=trial_data['target'],
             )
@@ -175,7 +174,7 @@ def to_nwb(path: Path, ):
         for i, spikes in enumerate(all_spikes):
             nwbfile.add_unit(
                 id=i,
-                spike_times=spikes - start_time,
+                spike_times=spikes / 1000 - start_time,
                 electrodes=[i]
             )
         all_time = np.concatenate(all_time, axis=0)
@@ -184,6 +183,7 @@ def to_nwb(path: Path, ):
             chan_names=KIN_LABELS,
             data=np.concatenate(all_bhvr, axis=0),
             timestamps=all_time,
+            unit='AU'
         )
         nwbfile.add_acquisition(ts)
 
@@ -192,6 +192,7 @@ def to_nwb(path: Path, ):
             chan_names=KIN_LABELS,
             data=np.concatenate(all_vel, axis=0),
             timestamps=all_time,
+            unit='AU'
         )
         nwbfile.add_acquisition(ts)
 

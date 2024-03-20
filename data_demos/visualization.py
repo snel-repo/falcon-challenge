@@ -90,12 +90,13 @@ def plot_timeline(ax, sections):
         ha='center'
     )
 
-def rasterplot(spike_arr, bin_size_s=0.02, ax=None):
+def rasterplot(spike_arr, bin_size_s=0.02, ax=None, spike_alpha=0.3, lw=0.2, s=1):
     """
     Plot a raster plot of the spike_arr
 
     Args:
-    - spike_arr (np.ndarray): Array of shape (T, N) containing the spike times
+    - spike_arr (np.ndarray): Array of shape (T, N) containing the spike times.
+    - T expected in ms..?
     - bin_size_s (float): Size of the bin in seconds
     - ax (plt.Axes): Axes to plot on
     """
@@ -105,11 +106,11 @@ def rasterplot(spike_arr, bin_size_s=0.02, ax=None):
         ax.scatter(
             np.where(unit)[0] * bin_size_s,
             np.ones(np.sum(unit != 0)) * idx,
-            s=1,
+            s=s,
             c='k',
             marker='|',
-            linewidths=0.2,
-            alpha=0.3
+            linewidths=lw,
+            alpha=spike_alpha
         )
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 20))
     ax.set_ylabel('Channel #')
