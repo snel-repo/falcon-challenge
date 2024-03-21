@@ -43,7 +43,7 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v3/"
+SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v4/"
 rouse_base_dir = "/snel/share/share/data/rouse/RTG/"
 MONKEY = "L"
 EXP_DATE = "20120924"
@@ -512,10 +512,11 @@ locations = np.array(locations)[trial_order]
 exp_trial_ids = np.array(exp_trial_ids)[trial_order]
 
 #%%
-FEW_SHOT_CALIBRATION_RATIO = 0.2
+# FEW_SHOT_CALIBRATION_RATIO = 0.2
 EVAL_RATIO = 0.4
 n_trials = exp_event_times.shape[0]
-calibration_num = int(np.ceil(n_trials * FEW_SHOT_CALIBRATION_RATIO))
+# calibration_num = int(np.ceil(n_trials * FEW_SHOT_CALIBRATION_RATIO))
+calibration_num = 10
 eval_num = int(n_trials * EVAL_RATIO)
 
 #%%
@@ -620,7 +621,7 @@ else:
         split_label='held_in_calib'
     )
 
-    logger.info("Creating minival split")
+    logger.info("Creating eval split")
     # and minival dataset which is last EVAL_RATIO of train data
     # eval_start_ind_emg = int(trial_start_times[-eval_num:][0] * fs_cont)
     convert_to_NWB(
@@ -647,26 +648,26 @@ else:
 
     logger.info("Creating smoketest data")
     NUM_ST_TRIALS = 2
-    st_ind_emg = int(trial_end_times[-NUM_ST_TRIALS:][0] * fs_cont)
+    st_ind_emg = int(trial_end_times[:NUM_ST_TRIALS][-1] * fs_cont)
     convert_to_NWB(
         fs_cont,
-        trial_start_times[-NUM_ST_TRIALS:],
-        trial_end_times[-NUM_ST_TRIALS:],
-        gocue_times[-NUM_ST_TRIALS:],
-        move_onset_times[-NUM_ST_TRIALS:],
-        contact_times[-NUM_ST_TRIALS:],
-        reward_times[-NUM_ST_TRIALS:],
-        generic_cond_ids[-NUM_ST_TRIALS:],
-        object_ids[-NUM_ST_TRIALS:],
-        object_names[-NUM_ST_TRIALS:],
-        locations[-NUM_ST_TRIALS:],
-        exp_trial_ids[-NUM_ST_TRIALS:],
-        emg_data[st_ind_emg:, :],
+        trial_start_times[:NUM_ST_TRIALS],
+        trial_end_times[:NUM_ST_TRIALS],
+        gocue_times[:NUM_ST_TRIALS],
+        move_onset_times[:NUM_ST_TRIALS],
+        contact_times[:NUM_ST_TRIALS],
+        reward_times[:NUM_ST_TRIALS],
+        generic_cond_ids[:NUM_ST_TRIALS],
+        object_ids[:NUM_ST_TRIALS],
+        object_names[:NUM_ST_TRIALS],
+        locations[:NUM_ST_TRIALS],
+        exp_trial_ids[:NUM_ST_TRIALS],
+        emg_data[:st_ind_emg, :],
         emg_names,
         t_offset,
         all_spike_times,
         array_group_by_elec,
-        spike_time_thresh=[0, trial_end_times[-NUM_ST_TRIALS:][0]],
+        spike_time_thresh=[0, trial_end_times[:NUM_ST_TRIALS][-1]],
         split_label='held_in_minival'
     )
 
