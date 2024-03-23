@@ -22,7 +22,7 @@ from preproc.nwb_create_utils import (
     write_to_nwb
 )
 
-root = Path('./data/h1')
+root = Path('../data/h1')
 files = list(root.glob('*.mat'))
 
 
@@ -57,56 +57,60 @@ def create_targets(kin: np.ndarray, target_smooth_ms=DEFAULT_TARGET_SMOOTH_MS, b
 USE_SHORT_LONG_DISTINCTION = True
 USE_SHORT_LONG_DISTINCTION = False
 CURATED_SETS = {
-    # 'S53_set_1': 'train',
-    # 'S53_set_2': 'train',
-    # 'S63_set_1': 'train',
-    # 'S63_set_2': 'train',
-    # 'S77_set_1': 'test_short',
-    # 'S77_set_2': 'test_short',
-    # 'S91_set_1': 'test_long',
-    # 'S91_set_2': 'test_long',
-    # 'S95_set_1': 'test_long',
-    # 'S95_set_2': 'test_long',
-    # 'S99_set_1': 'test_long',
-    # 'S99_set_2': 'test_long',
+    # 'S53_set_1': "held_in",
+    # 'S53_set_2': "held_in",
+    # 'S63_set_1': "held_in",
+    # 'S63_set_2': "held_in",
+    # 'S77_set_1': "held_out",
+    # 'S77_set_2': "held_out",
+    # 'S91_set_1': "held_out",
+    # 'S91_set_2': "held_out",
+    # 'S95_set_1': "held_out",
+    # 'S95_set_2': "held_out",
+    # 'S99_set_1': "held_out",
+    # 'S99_set_2': "held_out",
 
-    # 'S591_set_1': 'train',
-    # 'S591_set_2': 'train',
-    # 'S594_set_1': 'train',
-    # 'S594_set_2': 'train',
-    # 'S600_set_1': 'test_short',
-    # 'S600_set_2': 'test_short',
-    # 'S602_set_1': 'test_long',
-    # 'S602_set_2': 'test_long',
+    # 'S591_set_1': "held_in",
+    # 'S591_set_2': "held_in",
+    # 'S594_set_1': "held_in",
+    # 'S594_set_2': "held_in",
+    # 'S600_set_1': "held_out",
+    # 'S600_set_2': "held_out",
+    # 'S602_set_1': "held_out",
+    # 'S602_set_2': "held_out",
 
-    'S608_set_1': 'train',
-    'S608_set_2': 'train',
-    'S610_set_1': 'train',
-    'S610_set_2': 'train',
-    'S610_set_3': 'train',
-    'S613_set_1': 'train',
-    'S613_set_2': 'train',
-    'S615_set_1': 'train',
-    'S615_set_2': 'train',
-    'S619_set_1': 'train',
-    'S619_set_2': 'train',
-    'S625_set_1': 'train',
-    'S625_set_2': 'train',
-    'S627_set_1': 'test_short',
-    'S627_set_2': 'test_short',
-    'S631_set_1': 'test_short',
-    'S631_set_2': 'test_short',
-    'S633_set_1': 'test_short',
-    'S633_set_2': 'test_short',
-    'S636_set_1': 'test_long',
-    'S636_set_2': 'test_long',
-    'S639_set_1': 'test_long',
-    'S639_set_2': 'test_long',
-    'S641_set_1': 'test_long',
-    'S641_set_2': 'test_long',
-    'S644_set_1': 'test_long',
-    'S644_set_2': 'test_long',
+    'S608_set_1': "held_in",
+    'S608_set_2': "held_in",
+    'S610_set_1': "held_in",
+    'S610_set_2': "held_in",
+    'S610_set_3': "held_in",
+    'S613_set_1': "held_in",
+    'S613_set_2': "held_in",
+    'S615_set_1': "held_in",
+    'S615_set_2': "held_in",
+    'S619_set_1': "held_in",
+    'S619_set_2': "held_in",
+    'S625_set_1': "held_in",
+    'S625_set_2': "held_in",
+    'S627_set_1': "held_out",
+    'S627_set_2': "held_out",
+    'S631_set_1': "held_out",
+    'S631_set_2': "held_out",
+    'S633_set_1': "held_out",
+    'S633_set_2': "held_out",
+    'S636_set_1': "held_out",
+    'S636_set_2': "held_out",
+    'S639_set_1': "held_out",
+    'S639_set_2': "held_out",
+    'S641_set_1': "held_out",
+    'S641_set_2': "held_out",
+    'S644_set_1': "held_out",
+    'S644_set_2': "held_out",
 }
+if not USE_SHORT_LONG_DISTINCTION:
+    for key in list(CURATED_SETS.keys()):
+        if "held_out" in CURATED_SETS[key]:
+            CURATED_SETS[key] = "held_out"
 
 # Misfires according to test log. Trials are one-indexed.
 DROP_SET_TRIALS = {
@@ -132,9 +136,12 @@ def create_nwb_shell(
     start_date_shift = relativedelta(start_date, relative_offset)
     # print(start_date_shift)
     start_date_obsfucate = datetime(1925, 1, 1) + start_date_shift # Recommended in DANDI slack as BIDS convention
-    print(f'PittHuman-set{exp_set}-{suffix}', start_date_obsfucate)
+    subject_id = f'HumanPitt-{suffix}'
+    file_id = f'{subject_id}_{start_date_obsfucate.strftime("%m-%d-%H:%M")}_set{exp_set}'
+    print(subject_id, start_date_obsfucate)
+    print(file_id)
     subject = pynwb.file.Subject(
-        subject_id=f'PittHuman-set{exp_set}-{suffix}',
+        subject_id=subject_id,
         description='First subject from Pitt human BCI for DANDI. Details redacted.',
         sex='U',
         age='P20Y/P90Y',
@@ -142,12 +149,12 @@ def create_nwb_shell(
     )
     return NWBFile(
         session_description="FALCON H1. Open loop 7DoF calibration.",
-        identifier=str(uuid4()),
+        identifier=file_id,
         subject=subject,
         session_start_time=start_date_obsfucate,
         lab="Rehab Neural Engineering Labs",
         institution="University of Pittsburgh",
-        experimenter="Flesher, Sharlene",
+        experimenter="Collinger, Jen",
         experiment_description="Open loop calibration for Action Research Arm Test (ARAT) for human motor BCI",
     )
 
@@ -439,12 +446,12 @@ def to_nwb(fn):
         )
         nwbfile.add_acquisition(trial_series)
         blacklist_series = TimeSeries(
-            name="kin_blacklist",
+            name="eval_mask",
             description="Timesteps to ignore covariates (for training, eval). Neural data is not affected.",
             starting_time=0.0,
             rate=0.02,
             # timestamps=bin_time,
-            data=bin_blacklist,
+            data=~(bin_blacklist.astype(bool)),
             unit="bool",
         )
         nwbfile.add_acquisition(blacklist_series)
@@ -477,6 +484,7 @@ def to_nwb(fn):
         sub_spike_times, sub_channels = crop_spikes(raw_spike_time, raw_spike_channel, sub_bin_time)
         start_time = sub_bin_time[0]
         exp_set = tag.split('_')[-1]
+        print(CURATED_SETS[tag])
         return create_nwb_container(
             sub_spike_times,
             sub_channels,
@@ -491,9 +499,9 @@ def to_nwb(fn):
             exp_set=exp_set,
         )
     def create_and_write(trial_mask, trial_mask_native, suffix, folder=CURATED_SETS[tag]):
-        nwbfile = create_cropped_container(trial_mask, trial_mask_native, suffix)
-        if not USE_SHORT_LONG_DISTINCTION and "test" in folder:
-            folder = "test"
+        nwbfile = create_cropped_container(trial_mask, trial_mask_native, f'{folder}-{suffix}')
+        if not USE_SHORT_LONG_DISTINCTION and "held_out" in folder:
+            folder = "held_out"
         out = fn.parent / folder / f"{out_fn.stem}_{suffix}.nwb"
         write_to_nwb(nwbfile, out)
 
@@ -504,12 +512,12 @@ def to_nwb(fn):
     create_and_write(bin_trial >= eval_trials[0],
                      bin_trial_native >= eval_trials[0],
                      'eval')
-    if CURATED_SETS[tag] != "train":
+    if CURATED_SETS[tag] != "held_in":
         calibration_num = math.ceil(len(trials) * FEW_SHOT_CALIBRATION_RATIO)
         calibration_trials = trials[:calibration_num]
         create_and_write(bin_trial < calibration_trials[-1],
                          bin_trial_native < calibration_trials[-1],
-                         'calibration')
+                         'calib')
 
         in_day_oracle = trials[:-eval_num]
         create_and_write(bin_trial <= in_day_oracle[-1], # Note <= because array end already exclusive
@@ -523,7 +531,7 @@ def to_nwb(fn):
         calibration_trials = trials[:-eval_num]
         create_and_write(bin_trial <= calibration_trials[-1],
                          bin_trial_native <= calibration_trials[-1],
-                         'calibration')
+                         'calib')
 
         # Use first two trials for minival
         minival_num = SMOKETEST_NUM

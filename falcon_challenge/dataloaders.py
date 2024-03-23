@@ -41,7 +41,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
         - neural_data: binned spike counts. Shape is (time x units)
         - covariates (e.g. kinematics). Shape is (time x n_kinematic_dims)
         - trial_change: boolean of shape (time,) true if the trial has changed
-        - eval_mask: boolean array indicating whether to evaluate each time step
+        - eval_mask: boolean array indicating whether to evaluate each time step, True if should
     """
     if not dataset in [FalconTask.h1, FalconTask.h2, FalconTask.m1, FalconTask.m2]:
         raise ValueError(f"Unknown dataset {dataset}")
@@ -51,9 +51,9 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
         if dataset == FalconTask.h1:
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
-            blacklist = nwbfile.acquisition['kin_blacklist'].data[:].astype(bool)
+            eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
             binned_units = bin_units(units, bin_end_timestamps=timestamps)
-            return binned_units, kin, np.zeros(kin.shape[0]), ~blacklist
+            return binned_units, kin, np.zeros(kin.shape[0]), eval_mask
         elif dataset == FalconTask.m1:
             raw_emg = nwbfile.acquisition['preprocessed_emg']
             muscles = [ts for ts in raw_emg.time_series]
