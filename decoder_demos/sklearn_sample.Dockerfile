@@ -7,6 +7,7 @@
 
 # Base image specifies basic dependencies; if you're using TF/Jax, you may want to use a different base image.
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
+RUN pwd
 RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
 # TODO ensure falcon_challenge available on dockerhub...
 
@@ -26,6 +27,7 @@ ADD ./decoder_demos/ decoder_demos/
 ADD ./data_demos/ data_demos/
 
 # Add runfile
+ADD ./decoder_demos/sklearn_sample.py decode.py
 ADD ./preproc/filtering.py filtering.py
 
 ENV TRACK "h1"
