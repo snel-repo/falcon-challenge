@@ -80,7 +80,7 @@ class FalconEvaluator:
         if is_remote: # i.e. definitely docker
             data_dir = os.environ.get("EVAL_DATA_PATH")
         else: # possibly docker or local
-            if os.path.exists("data"):
+            if os.path.exists(f"./data/{dataset.name}"):
                 logger.info("Using local data directory.")
                 data_dir = "data"
             else:

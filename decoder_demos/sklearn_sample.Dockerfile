@@ -7,8 +7,9 @@
 
 # Base image specifies basic dependencies; if you're using TF/Jax, you may want to use a different base image.
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
-RUN pwd
 RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
+# RUN pwd
+# ADD ./falcon_challenge falcon_challenge
 ENV PREDICTION_PATH "/tmp/submission.pkl"
 ENV GT_PATH "/tmp/ground_truth.pkl"
 

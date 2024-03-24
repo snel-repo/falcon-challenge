@@ -2,6 +2,7 @@
 
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
+ADD ./falcon_challenge falcon_challenge
 ENV PREDICTION_PATH "/tmp/submission.pkl"
 ENV GT_PATH = "/tmp/ground_truth.pkl"
 
@@ -26,13 +27,15 @@ ADD ./local_data/ndt2_h1_sample.pth data/decoder.pth
 ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
 
 # Add runfile
+RUN pwd
+RUN pwd
 ADD ./decoder_demos/ndt2_sample.py decode.py
 ADD ./decoder_demos/ndt2_decoder.py ndt2_decoder.py
 
 ENV SPLIT "h1"
 ENV PHASE "test"
 
-# Don't touch
+# Make sure this matches the mounted data volume path. Generally leave as is.
 ENV EVAL_DATA_PATH "/evaluation_data"
 
 # CMD specifies a default command to run when the container is launched.

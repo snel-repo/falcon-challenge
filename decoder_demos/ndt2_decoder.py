@@ -50,15 +50,16 @@ class NDT2Decoder(BCIDecoder):
             Model config is typically stored on wandb, but this is not portable enough. Instead, directly reference the model config file.
         """
         self._task_config = task_config
+        self.exp_task = getattr(ExperimentalTask, f'falcon_{task_config.task.name}')
 
         context_registry.register([
             *FalconContextInfo.build_from_dir(
                 f'./data/{task_config.task.name}/eval',
-                task=ExperimentalTask.falcon,
+                task=self.exp_task,
                 suffix='eval'),
             *FalconContextInfo.build_from_dir(
                 f'./data/{task_config.task.name}/minival',
-                task=ExperimentalTask.falcon,
+                task=self.exp_task,
                 suffix='minival')])
 
         try:
@@ -84,7 +85,7 @@ class NDT2Decoder(BCIDecoder):
             MetaKey.session.name: sorted([
                 self.format_dataset_tag(handle) for handle in task_config.dataset_handles
             ]),
-            MetaKey.task.name: [ExperimentalTask.falcon],
+            MetaKey.task.name: [self.exp_task],
         }
         data_attrs = DataAttrs.from_config(cfg.dataset, context=ContextAttrs(**context_idx))
         cfg.model.task.decode_normalizer = zscore_path
@@ -97,7 +98,7 @@ class NDT2Decoder(BCIDecoder):
         self.observation_buffer = torch.zeros((cfg.dataset.max_length_ms // task_config.bin_size_ms, task_config.n_channels), dtype=torch.uint8, device='cuda:0')
 
     def format_dataset_tag(self, dataset_stem: str):
-        return FalconContextInfo.get_id(self.subject, ExperimentalTask.falcon, FalconContextInfo.get_alias(self.subject, dataset_stem))
+        return FalconContextInfo.get_id(self.subject, self.exp_task, FalconContextInfo.get_alias(self.subject, dataset_stem))
 
     def reset(self, dataset: Path = ""):
         dataset_tag =  self.get_file_tag(dataset) # e.g. stem including _set_N suffix
