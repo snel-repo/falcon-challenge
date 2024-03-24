@@ -98,10 +98,11 @@ class NDT2Decoder(BCIDecoder):
         self.observation_buffer = torch.zeros((cfg.dataset.max_length_ms // task_config.bin_size_ms, task_config.n_channels), dtype=torch.uint8, device='cuda:0')
 
     def format_dataset_tag(self, dataset_stem: str):
-        return FalconContextInfo.get_id(self.subject, self.exp_task, FalconContextInfo.get_alias(self.subject, dataset_stem))
+        return FalconContextInfo.get_id(self.subject, self.exp_task, FalconContextInfo.get_alias(self.exp_task, self.subject, dataset_stem))
 
     def reset(self, dataset: Path = ""):
-        dataset_tag =  self.get_file_tag(dataset) # e.g. stem including _set_N suffix
+        dataset_tag = dataset.stem
+        # dataset_tag =  self.get_file_tag(dataset) # e.g. stem including _set_N suffix
         self.set_steps = 0
         self.observation_buffer.zero_()
         self.meta_key = torch.tensor([self.model.data_attrs.context.session.index(self.format_dataset_tag(dataset_tag))], device='cuda:0')
