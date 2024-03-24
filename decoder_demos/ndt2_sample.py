@@ -28,18 +28,18 @@ def main():
         "--zscore-path", type=str, default='./local_data/ndt2_zscore_h1.pt'
     )
     parser.add_argument(
-        '--phase', type=str, required=False, default='h1'
+        '--split', type=str, choices=['h1', 'h2', 'm1', 'm2'], default='h1',
+    )
+    parser.add_argument(
+        '--phase', choices=['minival', 'test'], default='minival'
     )
     args = parser.parse_args()
 
-    dataset = args.phase.split('_')[0]
-    phase = args.phase
-
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",
-        phase=phase)
+        split=args.split)
 
-    task = getattr(FalconTask, dataset)
+    task = getattr(FalconTask, args.split)
     config = FalconConfig(
         task=task,
         dataset_handles=[x.stem for x in evaluator.get_eval_files()]
@@ -53,7 +53,7 @@ def main():
     )
 
 
-    evaluator.evaluate(decoder)
+    evaluator.evaluate(decoder, phase=args.phase)
 
 
 if __name__ == "__main__":

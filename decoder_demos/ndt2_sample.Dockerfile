@@ -2,6 +2,8 @@
 
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
+ENV PREDICTION_PATH "/tmp/submission.pkl"
+ENV GT_PATH = "/tmp/ground_truth.pkl"
 
 # Users should install additional decoder-specific dependencies here.
 RUN apt-get update && \
@@ -27,7 +29,8 @@ ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
 ADD ./decoder_demos/ndt2_sample.py decode.py
 ADD ./decoder_demos/ndt2_decoder.py ndt2_decoder.py
 
-ENV TRACK "h1"
+ENV SPLIT "h1"
+ENV PHASE "test"
 
 # Don't touch
 ENV EVAL_DATA_PATH "/evaluation_data"
@@ -35,4 +38,4 @@ ENV EVAL_DATA_PATH "/evaluation_data"
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash
 CMD ["/bin/bash", "-c", \
-    "python decode.py --evaluation $EVALUATION_LOC --model-path data/decoder.pth --zscore-path data/zscore.pt --phase $TRACK"]
+    "python decode.py --evaluation $EVALUATION_LOC --model-path data/decoder.pth --zscore-path data/zscore.pt --split $SPLIT --phase $PHASE"]

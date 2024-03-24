@@ -44,7 +44,7 @@ class FalconConfig:
         elif self.task == FalconTask.h2:
             return 28
         elif self.task == FalconTask.m1:
-            return 2 # TODO
+            return 16
         elif self.task == FalconTask.m2:
             return 2
 

@@ -3,7 +3,6 @@ r"""
 """
 
 import argparse
-
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 
@@ -18,13 +17,14 @@ def main():
         "--model-path", type=str, required=False, default='./local_data/sklearn_FalconTask.h1.pkl'
     )
     parser.add_argument(
-        '--phase', type=str, required=False, default='h1'
+        '--split', type=str, choices=['h1', 'h2', 'm1', 'm2'], default='h1',
+    )
+    parser.add_argument(
+        '--phase', choices=['minival', 'test'], default='minival'
     )
     args = parser.parse_args()
 
-    dataset = args.phase.split('_')[0]
-    phase = args.phase
-    task = getattr(FalconTask, dataset)
+    task = getattr(FalconTask, args.split)
     config = FalconConfig(
         task=task,
     )
@@ -33,8 +33,9 @@ def main():
 
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",
-        phase=phase)
-    evaluator.evaluate(decoder)
+        split=args.split,
+    )
+    evaluator.evaluate(decoder, phase=args.phase)
 
 
 if __name__ == "__main__":
