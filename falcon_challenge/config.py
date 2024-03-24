@@ -47,6 +47,27 @@ class FalconConfig:
             return 16
         elif self.task == FalconTask.m2:
             return 2
+        
+    def hash_dataset(self, handle: str):
+        r"""
+            handle - path.stem of a datafile.
+            Convenience function to help identify what "session" a datafile belongs to.
+        """
+        if self.task == FalconTask.h1:
+            # dandi-like atm but not quite determined; e.g. S608_set_1_calib
+            pieces = handle.split('_')
+            if pieces[-1] in ['minival', 'calib', 'calibration', 'eval', 'full']:
+                return '_'.join(pieces[:-1])
+            return handle
+        elif self.task == FalconTask.h2:
+            return NotImplementedError("H2 not implemented.")
+        elif self.task == FalconTask.m1: # return date
+            # sub-MonkeyL-held-in-minival_ses-20120924_behavior+ecephys.nwb
+            if 'behavior+ecephys' in handle:
+                return handle.split('_')[-2].split('-')[-1]
+            return handle.split('_')[1]
+        elif self.task == FalconTask.m2:
+            raise NotImplementedError("M2 not implemented.")
 
 cs = ConfigStore.instance()
 cs.store(name="falcon_config", node=FalconConfig)

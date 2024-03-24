@@ -4,9 +4,10 @@ import pickle
 import logging
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
 from sklearn.metrics import r2_score
 
-from falcon_challenge.config import FalconTask
+from falcon_challenge.config import FalconTask, FalconConfig
 from falcon_challenge.interface import BCIDecoder
 from falcon_challenge.dataloaders import load_nwb
 
@@ -107,14 +108,18 @@ class FalconEvaluator:
         all_targets = []
         all_eval_mask = []
 
-        for datafile in eval_files:
+        for datafile in tqdm(eval_files):
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
             decoder.reset(dataset=datafile)
             trial_preds = []
-            for neural_observations, trial_delta_obs in zip(neural_data, trial_change):
-                trial_preds.append(decoder.predict(neural_observations))
+            for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
+                if step_mask:
+                    trial_preds.append(decoder.predict(neural_observations))
+                else:
+                    decoder.observe(neural_observations)
+                    trial_preds.append(np.full(FalconConfig(self.dataset).out_dim, np.nan))
                 if trial_delta_obs:
                     decoder.on_trial_end()
             all_preds.append(np.stack(trial_preds))

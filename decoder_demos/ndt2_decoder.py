@@ -110,12 +110,19 @@ class NDT2Decoder(BCIDecoder):
         r"""
             neural_observations: array of shape (n_channels), binned spike counts
         """
-        self.set_steps += 1
-        self.observation_buffer = torch.roll(self.observation_buffer, -1, dims=0)
-        self.observation_buffer[-1] = torch.as_tensor(neural_observations, dtype=torch.uint8, device='cuda:0')
+        self.observe(neural_observations)
         decoder_in = rearrange(self.observation_buffer[-self.set_steps:], 't c -> 1 t c 1')
         out = self.model(decoder_in, self.meta_key) # Remove batch dim
         return out[0].cpu().numpy()
+    
+    def observe(self, neural_observations: np.ndarray):
+        r"""
+            neural_observations: array of shape (n_channels), binned spike counts
+            - for timestamps where we don't want predictions but neural data may be informative (start of trial)
+        """
+        self.set_steps += 1
+        self.observation_buffer = torch.roll(self.observation_buffer, -1, dims=0)
+        self.observation_buffer[-1] = torch.as_tensor(neural_observations, dtype=torch.uint8, device='cuda:0')
 
 if __name__ == "__main__":
     print(f"No train/calibration capabilities in {__file__}, use `context_general_bci` codebase.")

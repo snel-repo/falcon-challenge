@@ -24,7 +24,6 @@ from decoder_demos.decoding_utils import (
     fit_and_eval_decoder,
 )
 
-NOT_DANDI_HOTFIX_H1 = True
 HISTORY = 0
 
 def prepare_train_test(
@@ -95,11 +94,10 @@ class SKLearnDecoder(BCIDecoder):
             self.x_std = payload['x_std']
             self.raw_history_buffer = np.zeros((MAX_HISTORY, task_config.n_channels))
             self.observation_buffer = np.zeros((self.history, task_config.n_channels))
-        self.is_dandi_style = task_config.task != FalconTask.h1 or not NOT_DANDI_HOTFIX_H1
 
     def reset(self, dataset: Path = ""):
         if isinstance(self.x_mean, dict):
-            dataset_tag =  self.get_file_tag(dataset, is_dandi=self.is_dandi_style)
+            dataset_tag =  self._task_config.hash_dataset(dataset.stem)
             if dataset_tag not in self.x_mean:
                 raise ValueError(f"Dataset tag {dataset_tag} not found in calibration set {self.x_mean.keys()} - did you calibrate on this dataset?")
             self.local_x_mean = self.x_mean[dataset_tag]
@@ -114,15 +112,21 @@ class SKLearnDecoder(BCIDecoder):
         r"""
             neural_observations: array of shape (n_channels), binned spike counts
         """
-        # breakpoint()
+        self.observe(neural_observations)
+        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1) # Reverse since this happens to be how the lagged matrix is formatted
+        out = self.clf.predict(decoder_in)[0]
+        return out
+
+    def observe(self, neural_observations: np.ndarray):
+        r"""
+            neural_observations: array of shape (n_channels), binned spike counts
+            - for timestamps where we don't want predictions but neural data may be informative (start of trial)
+        """
         self.raw_history_buffer = np.roll(self.raw_history_buffer, -1, axis=0)
         self.raw_history_buffer[-1] = neural_observations
         smth_history = apply_exponential_filter(self.raw_history_buffer, NEURAL_TAU_MS)
         self.observation_buffer = np.roll(self.observation_buffer, -1, axis=0)
         self.observation_buffer[-1] = (smth_history[-1] - self.local_x_mean) / self.local_x_std
-        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1) # Reverse since this happens to be how the lagged matrix is formatted
-        out = self.clf.predict(decoder_in)[0]
-        return out
 
 def fit_sklearn_decoder(
     datafiles: List[Path],
@@ -162,8 +166,7 @@ def fit_sklearn_decoder(
         _,
         _,
     ) = zip(*[load_nwb(fn, task_config.task) for fn in [*calibration_datafiles, *datafiles]])
-    is_dandi_style = task_config.task != FalconTask.h1 or not NOT_DANDI_HOTFIX_H1
-    fns = [BCIDecoder.get_file_tag(fn, is_dandi=is_dandi_style) for fn in [*calibration_datafiles, *datafiles]]
+    fns = [task_config.hash_dataset(fn.stem) for fn in [*calibration_datafiles, *datafiles]]
     x_means = {}
     x_stds = {}
     for fn, neural_data in zip(fns, cal_neural_data):
