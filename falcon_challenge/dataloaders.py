@@ -79,6 +79,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             )
             switch_inds = np.searchsorted(emg_timestamps, trial_info.start_time)
             trial_change = np.zeros(emg_timestamps.shape[0], dtype=bool)
+            # breakpoint() # ! Bug here with M1 atm, trial change greater than length of emg timestamps
             trial_change[switch_inds] = True
 
             return binned_units, emg_data, trial_change, eval_mask

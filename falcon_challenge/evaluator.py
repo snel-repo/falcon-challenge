@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 
 HELD_IN_KEYS = {
     FalconTask.h1: ['S608', 'S610', 'S613', 'S615', 'S619', 'S625'],
+    FalconTask.m1: ['L_20120924', 'L_20120926', 'L_20120927', 'L_20120928'],
 }
 
 HELD_OUT_KEYS = {
-    FalconTask.h1: ['S627', 'S631', 'S633', 'S636', 'S639', 'S641', 'S644']
+    FalconTask.h1: ['S627', 'S631', 'S633', 'S636', 'S639', 'S641', 'S644'],
+    FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121022', 'L_20121024'],
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
