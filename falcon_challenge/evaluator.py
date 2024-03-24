@@ -76,16 +76,19 @@ class FalconEvaluator:
         # ! TODO ideally seed other libraries as well...? Is that our responsibility?
 
         eval_files = self.get_eval_files()
-        eval_files_held_in = [f for f in eval_files if any(k in f.name for k in HELD_IN_KEYS[self.dataset])]
-        eval_files_held_out = [f for f in eval_files if any(k in f.name for k in HELD_OUT_KEYS[self.dataset])]
-        assert len(eval_files) == len(eval_files_held_in) + len(eval_files_held_out), "Mismatch in extracted eval files: Eval file state is not consistent with benchmark creation settings."
-        metrics_held_in = self.evaluate_files(decoder, eval_files_held_in)
-        metrics_held_out = self.evaluate_files(decoder, eval_files_held_out)
         metrics = {}
-        for k, v in metrics_held_in.items():
-            metrics[f'held_in_{k}'] = v
-        for k, v in metrics_held_out.items():
-            metrics[f'held_out_{k}'] = v
+        if self.eval_remote:
+            eval_files_held_in = [f for f in eval_files if any(k in f.name for k in HELD_IN_KEYS[self.dataset])]
+            eval_files_held_out = [f for f in eval_files if any(k in f.name for k in HELD_OUT_KEYS[self.dataset])]
+            assert len(eval_files) == len(eval_files_held_in) + len(eval_files_held_out), "Mismatch in extracted eval files: Eval file state is not consistent with benchmark creation settings."
+            metrics_held_in = self.evaluate_files(decoder, eval_files_held_in)
+            metrics_held_out = self.evaluate_files(decoder, eval_files_held_out)
+            for k, v in metrics_held_in.items():
+                metrics[f'held_in_{k}'] = v
+            for k, v in metrics_held_out.items():
+                metrics[f'held_out_{k}'] = v
+        else:
+            metrics = self.evaluate_files(decoder, eval_files)
         for k, v in metrics.items():
             logger.info("{}: {}".format(k, v))
         return metrics

@@ -20,7 +20,7 @@ def main():
         "--model-path", type=str, default='./local_data/ndt2_h1_sample.pth'
     )
     parser.add_argument(
-        "--config-stem", type=str, default='falcon/h1/h1_nopool_cross',
+        "--config-stem", type=str, default='falcon/h1/h1_scale_data',
         help="Name in context-general-bci codebase for config. \
             Currently, directly referencing e.g. a local yaml is not implemented unclear how to get Hydra to find it in search path."
     )
