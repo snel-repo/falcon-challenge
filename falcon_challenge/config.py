@@ -31,8 +31,11 @@ class FalconConfig:
     def n_channels(self):
         if self.task == FalconTask.h1:
             return 176
+        elif self.task == FalconTask.m1:
+            return 96
         elif self.task == FalconTask.m2:
             return 96
+        raise NotImplementedError(f"Task {self.task} not implemented.")
 
     @property
     def out_dim(self):

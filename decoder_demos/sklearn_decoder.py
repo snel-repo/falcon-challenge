@@ -57,9 +57,9 @@ def prepare_train_test(
     train_blacklist = train_blacklist | np.isnan(train_y).any(axis=1)
     test_blacklist = test_blacklist | np.isnan(test_y).any(axis=1)
     if np.any(train_blacklist):
-        print(f"Invalidating {np.sum(train_blacklist)} timepoints in train")
+        print(f"Invalidating {np.sum(train_blacklist)} of {train_blacklist.shape[0]} timepoints in train")
     if np.any(test_blacklist):
-        print(f"Invalidating {np.sum(test_blacklist)} timepoints in test")
+        print(f"Invalidating {np.sum(test_blacklist)} of {test_blacklist.shape[0]} timepoints in test")
 
     if history > 0:
         train_x = generate_lagged_matrix(train_x, history)
@@ -221,8 +221,8 @@ def main(task, training_dir, calibration_dir, mode):
         task=FalconTask.__dict__[task],
     )
     save_path = Path(f'local_data/sklearn_{task_config.task}.pkl')
-    datafiles = list(training_dir.glob('*calib.nwb'))
-    calibration_datafiles = list(calibration_dir.glob('*calib.nwb'))
+    datafiles = list(training_dir.glob('*calib*.nwb'))
+    calibration_datafiles = list(calibration_dir.glob('*calib*.nwb'))
     fit_fn(datafiles, calibration_datafiles, task_config, save_path)
     print(f"Saved to {save_path}")
 
