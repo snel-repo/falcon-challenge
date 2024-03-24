@@ -43,7 +43,7 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v4/"
+SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v5/"
 rouse_base_dir = "/snel/share/share/data/rouse/RTG/"
 MONKEY = "L"
 EXP_DATE = "20120924"
@@ -320,8 +320,8 @@ def convert_to_NWB(
     # emg_filt.add_container(scale_emg)
     # emg_filt.add_container(resamp_emg)
     # emg_filt.add_container(rerect_emg)
-    start_time = (spike_time_thresh[0] if spike_time_thresh[0] else 0) * fs_cont / target_fs
-    t_new = (np.arange(int(start_time), int(start_time) + preprocessed_emg.shape[0])/target_fs).round(4)
+    # start_time = spike_time_thresh[0] #if spike_time_thresh[0] else 0) * fs_cont / target_fs
+    t_new = np.arange(spike_time_thresh[0], spike_time_thresh[-1], 1/target_fs).round(4)
     emg_proc_mts = create_multichannel_timeseries(
         "preprocessed_emg", emg_names, preprocessed_emg, timestamps=t_new, unit="mV"
     )
