@@ -77,10 +77,14 @@ class FalconEvaluator:
 
     @staticmethod
     def get_eval_handles(is_remote: bool, dataset: FalconTask, phase: str = 'minival'):
-        if is_remote:
+        if is_remote: # i.e. definitely docker
             data_dir = os.environ.get("EVAL_DATA_PATH")
-        else:
-            data_dir = "data"
+        else: # possibly docker or local
+            if os.path.exists("data"):
+                logger.info("Using local data directory.")
+                data_dir = "data"
+            else:
+                data_dir = os.environ.get("EVAL_DATA_PATH") # a local docker eval
         data_dir = Path(data_dir) / dataset.name
         if phase == 'test': # TODO wire wherever test is actually stored on remote
             eval_dir = data_dir / f"eval"
@@ -92,6 +96,8 @@ class FalconEvaluator:
         logger.info("Searching for evaluation data.")
         handles = self.get_eval_handles(self.eval_remote, self.dataset, phase=phase)
         logger.info(f"Found {len(handles)} files.")
+        if len(handles) == 0:
+            raise FileNotFoundError(f"No files found in {self.dataset.name} for phase {phase}. Note test phase data is only available on EvalAI remote.")
         return handles
     
     def predict_files(self, decoder: BCIDecoder, eval_files: List):
