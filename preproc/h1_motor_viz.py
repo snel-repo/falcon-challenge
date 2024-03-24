@@ -27,7 +27,6 @@ from falcon_challenge.config import FalconTask
 # root = Path('/ihome/rgaunt/joy47/share/stability/human_motor')
 root = Path('./data/h1')
 # root = Path('/snel/home/bkarpo2/pitt_data')
-
 # List files
 train_query = 'train'
 test_query_short = 'test_short'

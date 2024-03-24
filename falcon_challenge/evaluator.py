@@ -22,11 +22,11 @@ class FalconEvaluator:
     def get_eval_handles(is_remote: bool, dataset: FalconTask):
         data_dir = Path(os.environ.get("EVAL_DATA_PATH", "data")) / dataset.name
         if is_remote:
-            eval_dir = data_dir / f"test"
+            eval_dir = data_dir / f"eval"
             suffix = "*eval.nwb"
         else:
             logger.info(f"Local evaluation, running minival.")
-            eval_dir = data_dir / "train"
+            eval_dir = data_dir / "minival"
             suffix = "*minival.nwb"
         return sorted(list(eval_dir.glob(suffix)))
 

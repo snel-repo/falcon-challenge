@@ -1,7 +1,7 @@
 r"""
     Load an sklearn decoder.
     To train, for example:
-    `python decoder_demos/sklearn_decoder.py --training_dir data/h1/train --calibration_dir data/h1/test --mode all`
+    `python decoder_demos/sklearn_decoder.py --training_dir data/h1/held_in_calib --calibration_dir data/h1/held_out_calib --mode all`
     To evaluate, see `sklearn_sample.py`
 """
 from typing import List, Union, Optional
@@ -159,8 +159,8 @@ def fit_sklearn_decoder(
         _,
         _,
         _,
-    ) = zip(*[load_nwb(fn, task_config.task) for fn in calibration_datafiles])
-    fns = [BCIDecoder.get_file_tag(fn) for fn in calibration_datafiles]
+    ) = zip(*[load_nwb(fn, task_config.task) for fn in [*calibration_datafiles, *datafiles]])
+    fns = [BCIDecoder.get_file_tag(fn) for fn in [*calibration_datafiles, *datafiles]]
     x_means = {}
     x_stds = {}
     for fn, neural_data in zip(fns, cal_neural_data):
@@ -207,7 +207,7 @@ def fit_last_session(
         save_path
     )
 
-def main(training_dir, calibration_dir, mode):
+def main(task, training_dir, calibration_dir, mode):
     # Your main function logic here
     if mode == 'all':
         fit_fn = fit_sklearn_decoder
@@ -218,22 +218,22 @@ def main(training_dir, calibration_dir, mode):
     training_dir = Path(training_dir)
     calibration_dir = Path(calibration_dir)
     task_config = FalconConfig(
-        task=FalconTask.m2,
-        # task=FalconTask.h1,
+        task=FalconTask.__dict__[task],
     )
     save_path = Path(f'local_data/sklearn_{task_config.task}.pkl')
-    datafiles = list(training_dir.glob('*.nwb'))
-    calibration_datafiles = list(calibration_dir.glob('*calibration.nwb'))
+    datafiles = list(training_dir.glob('*calib.nwb'))
+    calibration_datafiles = list(calibration_dir.glob('*calib.nwb'))
     fit_fn(datafiles, calibration_datafiles, task_config, save_path)
     print(f"Saved to {save_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train sklearn decoder')
 
+    parser.add_argument('--task', type=str, choices=['h1', 'm1', 'm2'], help='Task for training')
     parser.add_argument('--training_dir', '-t', type=str, help='Root directory for training files')
     parser.add_argument('--calibration_dir', '-c', type=str, help='Root directory for calibration files')
     parser.add_argument('--mode', '-m', type=str, choices=['all', 'last'], help='Mode for training')
 
     args = parser.parse_args()
 
-    main(args.training_dir, args.calibration_dir, args.mode)
+    main(args.task, args.training_dir, args.calibration_dir, args.mode)

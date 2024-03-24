@@ -19,10 +19,11 @@ from pynwb import NWBFile, TimeSeries
 from decoder_demos.filtering import smooth
 from preproc.nwb_create_utils import (
     FEW_SHOT_CALIBRATION_RATIO, EVAL_RATIO, SMOKETEST_NUM,
+    EVAL_RATIO_HUMAN,
     write_to_nwb
 )
 
-root = Path('../data/h1')
+root = Path('./data/h1')
 files = list(root.glob('*.mat'))
 
 
@@ -507,7 +508,7 @@ def to_nwb(fn):
 
     trials = sorted(np.unique(bin_trial))
     out_fn = create_nwb_name(fn)
-    eval_num = int(len(trials) * EVAL_RATIO)
+    eval_num = int(len(trials) * EVAL_RATIO_HUMAN)
     eval_trials = trials[-eval_num:]
     create_and_write(bin_trial >= eval_trials[0],
                      bin_trial_native >= eval_trials[0],

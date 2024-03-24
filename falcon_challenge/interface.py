@@ -10,7 +10,7 @@ class BCIDecoder:
     @staticmethod
     def get_file_tag(filepath: Path):
         pieces = filepath.stem.split('_')
-        if pieces[-1] in ['minival', 'calibration', 'eval', 'full']:
+        if pieces[-1] in ['minival', 'calib', 'calibration', 'eval', 'full']:
             return '_'.join(pieces[:-1])
         return filepath.stem
 
