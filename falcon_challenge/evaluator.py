@@ -1,3 +1,4 @@
+from typing import List
 import os
 import logging
 import numpy as np
@@ -10,6 +11,14 @@ from falcon_challenge.dataloaders import load_nwb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+HELD_IN_KEYS = {
+    FalconTask.h1: ['S608', 'S610', 'S613', 'S615', 'S619', 'S625'],
+}
+
+HELD_OUT_KEYS = {
+    FalconTask.h1: ['S627', 'S631', 'S633', 'S636', 'S639', 'S641', 'S644']
+}
 
 class FalconEvaluator:
 
@@ -33,16 +42,7 @@ class FalconEvaluator:
     def get_eval_files(self):
         return self.get_eval_handles(self.eval_remote, self.dataset)
 
-    def evaluate(self, decoder: BCIDecoder):
-        r"""
-            prints set of metrics, which we would look at to rank submissions
-            # TODO how does eval-ai specifically get metrics beyond what we print?
-            # * That should exist in the original NLB logic, or check Habitat further
-        """
-        np.random.seed(0)
-        # ! TODO ideally seed other libraries as well...? Is that our responsibility?
-
-        eval_files = self.get_eval_files()
+    def evaluate_files(self, decoder: BCIDecoder, eval_files: List):
         all_preds = []
         all_targets = []
         all_eval_mask = []
@@ -64,6 +64,28 @@ class FalconEvaluator:
         all_targets = np.concatenate(all_targets)
         all_eval_mask = np.concatenate(all_eval_mask)
         metrics = self.compute_metrics(all_preds, all_targets, all_eval_mask)
+        return metrics
+
+    def evaluate(self, decoder: BCIDecoder):
+        r"""
+            prints set of metrics, which we would look at to rank submissions
+            # TODO how does eval-ai specifically get metrics beyond what we print?
+            # * That should exist in the original NLB logic, or check Habitat further
+        """
+        np.random.seed(0)
+        # ! TODO ideally seed other libraries as well...? Is that our responsibility?
+
+        eval_files = self.get_eval_files()
+        eval_files_held_in = [f for f in eval_files if any(k in f.name for k in HELD_IN_KEYS[self.dataset])]
+        eval_files_held_out = [f for f in eval_files if any(k in f.name for k in HELD_OUT_KEYS[self.dataset])]
+        assert len(eval_files) == len(eval_files_held_in) + len(eval_files_held_out), "Mismatch in extracted eval files: Eval file state is not consistent with benchmark creation settings."
+        metrics_held_in = self.evaluate_files(decoder, eval_files_held_in)
+        metrics_held_out = self.evaluate_files(decoder, eval_files_held_out)
+        metrics = {}
+        for k, v in metrics_held_in.items():
+            metrics[f'held_in_{k}'] = v
+        for k, v in metrics_held_out.items():
+            metrics[f'held_out_{k}'] = v
         for k, v in metrics.items():
             logger.info("{}: {}".format(k, v))
         return metrics
