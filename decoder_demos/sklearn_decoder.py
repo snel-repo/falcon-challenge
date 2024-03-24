@@ -18,7 +18,7 @@ from filtering import (
     apply_exponential_filter,
     NEURAL_TAU_MS,
 )
-from decoding_utils import (
+from decoder_demos.decoding_utils import (
     TRAIN_TEST,
     generate_lagged_matrix,
     fit_and_eval_decoder,

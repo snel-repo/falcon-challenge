@@ -26,7 +26,7 @@ ADD ./decoder_demos/ decoder_demos/
 ADD ./data_demos/ data_demos/
 
 # Add runfile
-ADD ./decoder_demos/sklearn_sample.py decode.py
+ADD ./preproc/filtering.py filtering.py
 
 ENV TRACK "h1"
 

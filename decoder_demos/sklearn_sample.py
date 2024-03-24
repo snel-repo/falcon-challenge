@@ -7,7 +7,7 @@ import argparse
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 
-from sklearn_decoder import SKLearnDecoder
+from decoder_demos.sklearn_decoder import SKLearnDecoder
 
 def main():
     parser = argparse.ArgumentParser()
