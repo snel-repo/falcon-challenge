@@ -53,9 +53,13 @@ class NDT2Decoder(BCIDecoder):
 
         context_registry.register([
             *FalconContextInfo.build_from_dir(
-                f'./data/{task_config.task.name}/test',
+                f'./data/{task_config.task.name}/eval',
                 task=ExperimentalTask.falcon,
-                suffix='eval')])
+                suffix='eval'),
+            *FalconContextInfo.build_from_dir(
+                f'./data/{task_config.task.name}/minival',
+                task=ExperimentalTask.falcon,
+                suffix='minival')])
 
         try:
             initialize_config_module(
