@@ -5,4 +5,5 @@ data_demos/outputs
 __pycache__
 *.egg-info
 *.pkl
+build/
 # dist/
