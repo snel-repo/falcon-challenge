@@ -24,6 +24,7 @@ from decoder_demos.decoding_utils import (
     fit_and_eval_decoder,
 )
 
+NOT_DANDI_HOTFIX_H1 = True
 HISTORY = 0
 
 def prepare_train_test(
@@ -94,10 +95,11 @@ class SKLearnDecoder(BCIDecoder):
             self.x_std = payload['x_std']
             self.raw_history_buffer = np.zeros((MAX_HISTORY, task_config.n_channels))
             self.observation_buffer = np.zeros((self.history, task_config.n_channels))
+        self.is_dandi_style = task_config.task != FalconTask.h1 or not NOT_DANDI_HOTFIX_H1
 
     def reset(self, dataset: Path = ""):
         if isinstance(self.x_mean, dict):
-            dataset_tag =  self.get_file_tag(dataset)
+            dataset_tag =  self.get_file_tag(dataset, is_dandi=self.is_dandi_style)
             if dataset_tag not in self.x_mean:
                 raise ValueError(f"Dataset tag {dataset_tag} not found in calibration set {self.x_mean.keys()} - did you calibrate on this dataset?")
             self.local_x_mean = self.x_mean[dataset_tag]
@@ -160,7 +162,8 @@ def fit_sklearn_decoder(
         _,
         _,
     ) = zip(*[load_nwb(fn, task_config.task) for fn in [*calibration_datafiles, *datafiles]])
-    fns = [BCIDecoder.get_file_tag(fn) for fn in [*calibration_datafiles, *datafiles]]
+    is_dandi_style = task_config.task != FalconTask.h1 or not NOT_DANDI_HOTFIX_H1
+    fns = [BCIDecoder.get_file_tag(fn, is_dandi=is_dandi_style) for fn in [*calibration_datafiles, *datafiles]]
     x_means = {}
     x_stds = {}
     for fn, neural_data in zip(fns, cal_neural_data):

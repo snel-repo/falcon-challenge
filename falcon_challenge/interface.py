@@ -8,10 +8,15 @@ class BCIDecoder:
         pass
 
     @staticmethod
-    def get_file_tag(filepath: Path):
-        pieces = filepath.stem.split('_')
-        if pieces[-1] in ['minival', 'calib', 'calibration', 'eval', 'full']:
-            return '_'.join(pieces[:-1])
+    def get_file_tag(filepath: Path, is_dandi=False):
+        if is_dandi:
+            # dandi-style sub-MonkeyL-held-in-calib_ses-20120926_behavior+ecephys.nwb  
+            return filepath.stem.split('_')[-2]
+        else:
+            # other style: L_20120924_held_in_eval.nwb
+            pieces = filepath.stem.split('_')
+            if pieces[-1] in ['minival', 'calib', 'calibration', 'eval', 'full']:
+                return '_'.join(pieces[:-1])
         return filepath.stem
 
     @abc.abstractmethod
