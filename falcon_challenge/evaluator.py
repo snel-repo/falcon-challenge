@@ -115,13 +115,13 @@ class FalconEvaluator:
             decoder.reset(dataset=datafile)
             trial_preds = []
             for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
+                if trial_delta_obs:
+                    decoder.on_trial_end()
                 if step_mask:
                     trial_preds.append(decoder.predict(neural_observations))
                 else:
                     decoder.observe(neural_observations)
                     trial_preds.append(np.full(FalconConfig(self.dataset).out_dim, np.nan))
-                if trial_delta_obs:
-                    decoder.on_trial_end()
             all_preds.append(np.stack(trial_preds))
             all_targets.append(decoding_targets)
             all_eval_mask.append(eval_mask)

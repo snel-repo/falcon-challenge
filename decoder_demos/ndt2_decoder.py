@@ -125,5 +125,10 @@ class NDT2Decoder(BCIDecoder):
         self.observation_buffer = torch.roll(self.observation_buffer, -1, dims=0)
         self.observation_buffer[-1] = torch.as_tensor(neural_observations, dtype=torch.uint8, device='cuda:0')
 
+    def on_trial_end(self):
+        # reset - for some reason m1 benefits from this
+        self.set_steps = 0
+        self.observation_buffer.zero_()
+
 if __name__ == "__main__":
     print(f"No train/calibration capabilities in {__file__}, use `context_general_bci` codebase.")

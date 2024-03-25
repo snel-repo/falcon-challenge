@@ -32,21 +32,19 @@ def bin_units(
         if (gaps <= 0).any():
             raise ValueError("bin_end_timestamps must be monotonically increasing.")
         min_gap = np.min(gaps)
-        large_gaps = gaps > min_gap
-        if np.any(large_gaps):
-            breakpoint() # TODO test this
+        if not np.allclose(gaps, min_gap):
+            # breakpoint() # TODO test this
             # Adjust bin_end_timestamps to include bins at the end of discontinuities
             new_bins = []
             bin_mask = [] # bool True if bin ending at this timepoint should be included
-            for i, gap in enumerate(large_gaps):
+            for i, gap in enumerate(gaps):
                 new_bins.append(bin_end_timestamps[i])
                 bin_mask.append(True)
-                if gap:
+                if not np.isclose(gap, min_gap):
                     # Calculate the start of the last bin_size_s before the next bin_end_timestamp
                     last_bin_start = bin_end_timestamps[i+1] - bin_size_s
                     new_bins.append(last_bin_start)
                     bin_mask.append(False)
-            new_bins.append(bin_end_timestamps[-1])
             bin_mask.append(True)
             bin_end_timestamps = np.array(new_bins)
             bin_mask = np.array(bin_mask)
