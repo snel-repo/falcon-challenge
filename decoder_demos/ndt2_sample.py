@@ -42,7 +42,7 @@ def main():
     task = getattr(FalconTask, args.split)
     config = FalconConfig(
         task=task,
-        dataset_handles=[x.stem for x in evaluator.get_eval_files()]
+        dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=args.phase)]
     )
 
     decoder = NDT2Decoder(

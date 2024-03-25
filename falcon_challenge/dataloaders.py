@@ -22,13 +22,40 @@ def bin_units(
         Returns:
         - array of spike counts per bin, per unit. Shape is (bins x units)
     """
+    bin_mask = None
     if bin_end_timestamps is None:
         end_time = units.spike_times.apply(lambda s: max(s) if len(s) else 0).max() + bin_size_s
         bin_end_timestamps = np.arange(0, end_time, bin_size_s)
+    else:
+        # Check contiguous else force cropping for even bins
+        gaps = np.diff(bin_end_timestamps)
+        if (gaps <= 0).any():
+            raise ValueError("bin_end_timestamps must be monotonically increasing.")
+        min_gap = np.min(gaps)
+        large_gaps = gaps > min_gap
+        if np.any(large_gaps):
+            breakpoint() # TODO test this
+            # Adjust bin_end_timestamps to include bins at the end of discontinuities
+            new_bins = []
+            bin_mask = [] # bool True if bin ending at this timepoint should be included
+            for i, gap in enumerate(large_gaps):
+                new_bins.append(bin_end_timestamps[i])
+                bin_mask.append(True)
+                if gap:
+                    # Calculate the start of the last bin_size_s before the next bin_end_timestamp
+                    last_bin_start = bin_end_timestamps[i+1] - bin_size_s
+                    new_bins.append(last_bin_start)
+                    bin_mask.append(False)
+            new_bins.append(bin_end_timestamps[-1])
+            bin_mask.append(True)
+            bin_end_timestamps = np.array(new_bins)
+            bin_mask = np.array(bin_mask)
     spike_arr = np.zeros((len(bin_end_timestamps), len(units)), dtype=np.uint8)
     bin_edges = np.concatenate([np.array([bin_end_timestamps[0] - bin_size_s]), bin_end_timestamps])
     for idx, (_, unit) in enumerate(units.iterrows()):
         spike_cnt, _ = np.histogram(unit.spike_times, bins=bin_edges)
+        if bin_mask is not None:
+            spike_cnt = spike_cnt[bin_mask]
         spike_arr[:, idx] = spike_cnt
     return spike_arr
 
