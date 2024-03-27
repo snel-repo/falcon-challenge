@@ -60,3 +60,5 @@ To submit to the FALCON benchmark once your decoder Docker container is ready, f
 `
 evalai push decoder_container:latest --phase <phase-name>
 `
+
+Note that `pip install evalai` may fail on python 3.11, see: https://github.com/aio-libs/aiohttp/issues/6600. We recommend creating a separate env for submission in this case. 
