@@ -36,7 +36,7 @@ H1 should unfold correctly just from unzipping the provided directory. M1 should
 
 ### Code
 This codebase contains starter code for implementing your own method for the FALCON challenge. 
-- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must confirm to the interface specified in `falcon_challenge.interface`.
+- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
 - In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented!
 
