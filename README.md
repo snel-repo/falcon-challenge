@@ -36,7 +36,7 @@ H1 should unfold correctly just from unzipping the provided directory. M1 should
 
 ### Code
 This codebase contains starter code for implementing your own method for the FALCON challenge. 
-- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must confirm to the interface specified in `falcon_challenge.interface`.
+- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
 - In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented!
 
@@ -51,7 +51,7 @@ To interface with our challenge, your code will need to be packaged in a Docker 
 ```bash
 # Build
 sudo docker build -t sk_smoke -f ./decoder_demos/sklearn_sample.Dockerfile .
-sudo docker run -v PATH_TO_YOUR_DATA_DIR:/evaluation_data -it sk_smoke
+sudo docker run -v PATH_TO_YOUR_DATA_DIR:/dataset/evaluation_data -it sk_smoke
 ## If your solution needs GPUs, append a --gpus all flag to `docker run`
 ```
 
@@ -60,3 +60,5 @@ To submit to the FALCON benchmark once your decoder Docker container is ready, f
 `
 evalai push decoder_container:latest --phase <phase-name>
 `
+
+Note that `pip install evalai` may fail on python 3.11, see: https://github.com/aio-libs/aiohttp/issues/6600. We recommend creating a separate env for submission in this case. 

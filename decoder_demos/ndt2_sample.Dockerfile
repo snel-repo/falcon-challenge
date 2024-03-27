@@ -3,7 +3,8 @@
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
 ADD ./falcon_challenge falcon_challenge
-ENV PREDICTION_PATH "/tmp/submission.pkl"
+ENV PREDICTION_PATH "/submission/submission.csv"
+ENV PREDICTION_PATH_LOCAL "/tmp/submission.pkl"
 ENV GT_PATH = "/tmp/ground_truth.pkl"
 
 # Users should install additional decoder-specific dependencies here.
@@ -36,7 +37,7 @@ ENV SPLIT "h1"
 ENV PHASE "test"
 
 # Make sure this matches the mounted data volume path. Generally leave as is.
-ENV EVAL_DATA_PATH "/evaluation_data"
+ENV EVAL_DATA_PATH "/dataset/evaluation_data"
 
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash

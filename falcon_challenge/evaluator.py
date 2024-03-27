@@ -35,25 +35,30 @@ HELDIN_OR_OUT_MAP = {
 }
 
 def evaluate(
-    test_annotation_file: str,
-    user_submission_file: str,
-    phase_codename: str,
+    test_annotation_file: str, # The annotation file for the phase - but our labels are pulled from eval data.
+    user_submission_file: str, # * JY: This appears to always be /submission/submission.csv on EvalAI. No matter - load it as a pickle.
+    phase_codename: str, # e.g. minival or test
     **kwargs
 ):
     r"""
         Evaluate payloads with potentially multiple splits worth of data
         - Low pri: can I provide all results or just one split's worth entry? Currently providing 1, examples just provide 1, but in general would be nice to provide all. User shouldn't be able to submit more than 1, though.
     """
+    # ! Want: Locally, test_annotation should be somewhere safe (tmp)
+    # ! Remotely, it shoudl be /submission/submission.csv exactly.
+    # Ignore explicit annotations provided and directly search for concatenated answers
+    test_annotation_file = os.environ.get("GT_PATH", './local_gt.pkl')
+    logger.info(f"Loading GT from {test_annotation_file}")
+
     result = []
     # Load pickles
     with open(test_annotation_file, 'rb') as test_annotation_file, open(user_submission_file, 'rb') as user_submission_file:
         test_annotations = pickle.load(test_annotation_file)
         user_submission = pickle.load(user_submission_file)
-    
-    for datasplit in test_annotations:
+    for datasplit in user_submission: # datasplit e.g. h1, m1
+        if datasplit not in test_annotations:
+            raise ValueError(f"Missing {datasplit} in GT labels.")
         split_annotations = test_annotations[datasplit]
-        if datasplit not in user_submission:
-            raise ValueError(f"Missing {datasplit} in user submission.")
         split_result = {}
         split_result["Normalized Latency"] = user_submission[datasplit]["normalized_latency"]
         for in_or_out in split_annotations.keys():
@@ -147,8 +152,8 @@ class FalconEvaluator:
 
         eval_files = self.get_eval_files(phase=phase)
         metrics = {}
-
-        prediction_path = os.environ.get("PREDICTION_PATH", './local_prediction.pkl')
+        prediction_env_var = "PREDICTION_PATH" if self.eval_remote else "PREDICTION_PATH_LOCAL"
+        prediction_path = os.environ.get(prediction_env_var, './local_prediction.pkl')
         if not prediction_path:
             raise ValueError("PREDICTION_PATH not set in remote env which expects it. Cannot forward to separate evaluate runscript.")
         gt_path = os.environ.get("GT_PATH", './local_gt.pkl')
