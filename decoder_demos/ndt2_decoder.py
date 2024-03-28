@@ -26,6 +26,7 @@ from context_general_bci.contexts.context_registry import context_registry
 from context_general_bci.contexts.context_info import FalconContextInfo, ExperimentalTask
 from context_general_bci.model import load_from_checkpoint
 from context_general_bci.model_slim import transfer_model
+from context_general_bci.dataset import explicit_session_reduction
 
 def format_array_name(subject: str):
     return f'FALCON{subject}-M1'
@@ -98,7 +99,9 @@ class NDT2Decoder(BCIDecoder):
         self.observation_buffer = torch.zeros((cfg.dataset.max_length_ms // task_config.bin_size_ms, task_config.n_channels), dtype=torch.uint8, device='cuda:0')
 
     def format_dataset_tag(self, dataset_stem: str):
-        return FalconContextInfo.get_id(self.subject, self.exp_task, FalconContextInfo.get_alias(self.exp_task, self.subject, dataset_stem))
+        alias = FalconContextInfo.get_alias(self.exp_task, self.subject, dataset_stem)
+        reduction = explicit_session_reduction(alias)
+        return FalconContextInfo.get_id(self.subject, self.exp_task, reduction)
 
     def reset(self, dataset: Path = ""):
         dataset_tag = dataset.stem

@@ -17,8 +17,8 @@ ENV GT_PATH "/tmp/ground_truth.pkl"
 
 # Users should install additional decoder-specific dependencies here.
 
-# ENV EVALUATION_LOC remote
-ENV EVALUATION_LOC local
+ENV EVALUATION_LOC remote
+# ENV EVALUATION_LOC local
 
 # Add files from local context into Docker image
 # Note local context reference is the working dir by default, see https://docs.docker.com/engine/reference/commandline/build/
@@ -42,7 +42,7 @@ ENV PHASE "minival"
 # Make sure this matches the mounted data volume path. Generally leave as is.
 ENV EVAL_DATA_PATH "/dataset/evaluation_data"
 
-ADD ./falcon_challenge falcon_challenge
+# ADD ./falcon_challenge falcon_challenge # for local evaluation infra testing
 
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash

@@ -56,7 +56,8 @@ sudo docker run -v PATH_TO_YOUR_DATA_DIR:/dataset/evaluation_data -it sk_smoke
 ```
 
 ## EvalAI Submission
-Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands, or run `test_docker_local.sh`.
+Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands, or run `test_docker_local.sh --docker-name mysubmission`. This should produce a log of nontrivial metrics (evaluation is run on locally available minival).
+
 To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab](https://eval.ai/web/challenges/challenge-page/2264/submission). It should look something like:
 `
 evalai push decoder_container:latest --phase <phase-name>
