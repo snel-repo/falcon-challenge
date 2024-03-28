@@ -15,12 +15,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 HELD_IN_KEYS = {
-    FalconTask.h1: ['S608', 'S610', 'S613', 'S615', 'S619', 'S625'],
+    FalconTask.h1: ['S0_', 'S1_', 'S2_', 'S3_', 'S4_', 'S5_'],
     FalconTask.m1: ['L_20120924', 'L_20120926', 'L_20120927', 'L_20120928'],
 }
 
 HELD_OUT_KEYS = {
-    FalconTask.h1: ['S627', 'S631', 'S633', 'S636', 'S639', 'S641', 'S644'],
+    FalconTask.h1: ['S6_', 'S7_', 'S8_', 'S9_', 'S10_', 'S11_', 'S12_'],
     FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121022', 'L_20121024'],
 }
 
