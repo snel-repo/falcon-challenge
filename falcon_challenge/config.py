@@ -47,6 +47,7 @@ class FalconConfig:
             return 16
         elif self.task == FalconTask.m2:
             return 2
+        raise NotImplementedError(f"Task {self.task} not implemented.")
         
     def hash_dataset(self, handle: str):
         r"""
@@ -54,15 +55,20 @@ class FalconConfig:
             Convenience function to help identify what "session" a datafile belongs to.
         """
         if self.task == FalconTask.h1:
-            # dandi-like atm but not quite determined; e.g. S608_set_1_calib
+            handle = handle.replace('-', '_')
+            # dandi-like atm but not quite determined; e.g. S0_set_1_calib
+            # remove split and set information
             pieces = handle.split('_')
-            if pieces[-1] in ['minival', 'calib', 'calibration', 'eval', 'full']:
-                return '_'.join(pieces[:-1])
-            return handle
+            for piece in pieces:
+                if piece[0] == 'S':
+                    return piece
+            raise ValueError(f"Could not find session in {handle}.")
         elif self.task == FalconTask.h2:
             return NotImplementedError("H2 not implemented.")
-        elif self.task == FalconTask.m1: # return date
+        elif self.task == FalconTask.m1: 
+            # return just the date str
             # sub-MonkeyL-held-in-minival_ses-20120924_behavior+ecephys.nwb
+            # or L_20120924_held_in_eval.nwb
             if 'behavior+ecephys' in handle:
                 return handle.split('_')[-2].split('-')[-1]
             return handle.split('_')[1]

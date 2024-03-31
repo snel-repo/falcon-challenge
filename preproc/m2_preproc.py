@@ -21,6 +21,7 @@ from pprint import pprint
 
 from scipy.io import loadmat
 from scipy.signal import resample_poly
+import matplotlib.pyplot as plt
 
 from dateutil.tz import tzlocal
 
@@ -29,7 +30,7 @@ from pynwb import NWBFile, TimeSeries
 
 from decoder_demos.filtering import smooth
 from preproc.nwb_create_utils import (
-    FEW_SHOT_CALIBRATION_RATIO, EVAL_RATIO, SMOKETEST_NUM, BIN_SIZE_MS,
+    FEW_SHOT_CALIBRATION_RATIO, EVAL_RATIO, SMOKETEST_NUM, BIN_SIZE_MS, BIN_SIZE_S,
     create_multichannel_timeseries,
     write_to_nwb
 )
@@ -43,19 +44,19 @@ FS = 1000
 pprint(files)
 
 DATA_SPLITS = {
-    'Z_Joker_2020-10-19_Run-002': 'train',
-    'Z_Joker_2020-10-19_Run-003': 'train',
-    'Z_Joker_2020-10-20_Run-002': 'train',
-    'Z_Joker_2020-10-20_Run-003': 'train',
-    'Z_Joker_2020-10-27_Run-002': 'train',
-    'Z_Joker_2020-10-27_Run-003': 'train',
-    'Z_Joker_2020-10-28_Run-001': 'train',
-    'Z_Joker_2020-10-30_Run-001': 'test',
-    'Z_Joker_2020-10-30_Run-002': 'test',
-    'Z_Joker_2020-11-18_Run-001': 'test',
-    'Z_Joker_2020-11-19_Run-001': 'test',
-    'Z_Joker_2020-11-24_Run-001': 'test',
-    'Z_Joker_2020-11-24_Run-002': 'test'
+    'Z_Joker_2020-10-19_Run-002': 'held_in',
+    'Z_Joker_2020-10-19_Run-003': 'held_in',
+    'Z_Joker_2020-10-20_Run-002': 'held_in',
+    'Z_Joker_2020-10-20_Run-003': 'held_in',
+    'Z_Joker_2020-10-27_Run-002': 'held_in',
+    'Z_Joker_2020-10-27_Run-003': 'held_in',
+    'Z_Joker_2020-10-28_Run-001': 'held_in',
+    'Z_Joker_2020-10-30_Run-001': 'held_out',
+    'Z_Joker_2020-10-30_Run-002': 'held_out',
+    'Z_Joker_2020-11-18_Run-001': 'held_out',
+    'Z_Joker_2020-11-19_Run-001': 'held_out',
+    'Z_Joker_2020-11-24_Run-001': 'held_out',
+    'Z_Joker_2020-11-24_Run-002': 'held_out'
 }
 
 DATA_RUN_SET = {
@@ -121,7 +122,7 @@ def filt_single_trial(trial):
     return {
         'fingers': trial['FingerAnglesTIMRL'][:, TARGET_FINGERS],
         'spikes': trial['Channel'], # spike time to nearest ms
-        'time': trial['ExperimentTime'], # Clock time since start of block
+        'time': trial['ExperimentTime'], # Clock time since start of block. 0 on first step i.e. start of bin.
         'target': trial['TargetPos'][TARGET_FINGERS]
     }
 
@@ -163,6 +164,7 @@ def to_nwb(path: Path, ):
             bhvr = y_resampled_padded[int(EDGE_PAD / BIN_SIZE_MS):int(-EDGE_PAD / BIN_SIZE_MS)]
             all_bhvr.append(bhvr)
             all_vel.append(np.gradient(bhvr, axis=0))
+            assert np.isclose(np.diff(time), BIN_SIZE_S).all(), "Expecting timestamps to be about 20ms apart"
             all_time.append(time)
 
             for j, spike in enumerate(trial_data['spikes']):
@@ -175,14 +177,22 @@ def to_nwb(path: Path, ):
             nwbfile.add_unit(
                 id=i,
                 spike_times=np.array(spikes) / 1000 - start_time,
-                electrodes=[i]
+                electrodes=[i],
+                obs_intervals=[[i[0], i[-1] + BIN_SIZE_S] for i in all_time]
             )
+            # OK...
+        # trial_diffs = [all_time[i+1][0] - all_time[i][-1] for i in range(len(all_time) - 1)]
         all_time = np.concatenate(all_time, axis=0)
+        diff_check = np.diff(all_time).max()
+        assert (diff_check > 0), "Expecting time to be monotonically increasing across trials."
+        print(f"Max diff b/n consecutive timebins: {diff_check}")
+
+        
         ts = create_multichannel_timeseries(
             data_name='finger_pos',
             chan_names=KIN_LABELS,
             data=np.concatenate(all_bhvr, axis=0),
-            timestamps=all_time,
+            timestamps=all_time, # timestamps denote wall-clock sample is drawn - not evenly spaced
             unit='AU'
         )
         nwbfile.add_acquisition(ts)
@@ -213,7 +223,7 @@ def to_nwb(path: Path, ):
     create_and_write(eval_trials, 'eval')
     create_and_write(full_payload, 'full')
     in_day_full_trials = full_payload[:-eval_num]
-    if DATA_SPLITS[path.stem] == 'train':
+    if DATA_SPLITS[path.stem] == 'held_in':
         create_and_write(in_day_full_trials, 'calibration')
 
         minival_trials = full_payload[:SMOKETEST_NUM]

@@ -163,7 +163,7 @@ class FalconEvaluator:
         if phase == 'test':
             eval_files_held_in = [f for f in eval_files if any(k in f.name for k in HELD_IN_KEYS[self.dataset])]
             eval_files_held_out = [f for f in eval_files if any(k in f.name for k in HELD_OUT_KEYS[self.dataset])]
-            assert len(eval_files) == len(eval_files_held_in) + len(eval_files_held_out), "Mismatch in extracted eval files: Eval file state is not consistent with benchmark creation settings."
+            assert len(eval_files) == len(eval_files_held_in) + len(eval_files_held_out), f"Mismatch in extracted eval #: Eval file state is not consistent with benchmark creation settings. Found {len(eval_files)} files, {len(eval_files_held_in)} held in, {len(eval_files_held_out)} held out."
             all_preds_held_in, all_targets_held_in, all_eval_mask_held_in = self.predict_files(decoder, eval_files_held_in)
             all_preds_held_out, all_targets_held_out, all_eval_mask_held_out = self.predict_files(decoder, eval_files_held_out)
 

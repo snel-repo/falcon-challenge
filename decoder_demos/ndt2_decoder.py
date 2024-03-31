@@ -1,9 +1,5 @@
 r"""
-    Load an sklearn decoder.
-    To train, for example:
-    `python decoder_demos/sklearn_decoder.py --training_dir data/h1/train --calibration_dir data/h1/test --mode all`
-    To evaluate, for example:
-    `python decode_submit.py --evaluation remote/local`
+    NDT2 wrapper. Not for running.
 """
 from typing import List
 from pathlib import Path
@@ -14,7 +10,7 @@ from einops import rearrange
 
 from hydra import compose, initialize_config_module
 
-from falcon_challenge.config import FalconConfig, FalconTask
+from falcon_challenge.config import FalconConfig
 from falcon_challenge.interface import BCIDecoder
 
 from context_general_bci.utils import suppress_default_registry
@@ -26,7 +22,6 @@ from context_general_bci.contexts.context_registry import context_registry
 from context_general_bci.contexts.context_info import FalconContextInfo, ExperimentalTask
 from context_general_bci.model import load_from_checkpoint
 from context_general_bci.model_slim import transfer_model
-from context_general_bci.dataset import explicit_session_reduction
 
 def format_array_name(subject: str):
     return f'FALCON{subject}-M1'
@@ -35,8 +30,6 @@ class NDT2Decoder(BCIDecoder):
     r"""
         Load an NDT2 decoder, prepared in:
         https://github.com/joel99/context_general_bci
-
-        # TODO KV cache - difficult without rotary embeddings
     """
 
     def __init__(
@@ -84,7 +77,7 @@ class NDT2Decoder(BCIDecoder):
             MetaKey.array.name: [format_array_name(self.subject)],
             MetaKey.subject.name: [self.subject],
             MetaKey.session.name: sorted([
-                self.format_dataset_tag(handle) for handle in task_config.dataset_handles
+                self._task_config.hash_dataset(handle) for handle in task_config.dataset_handles
             ]),
             MetaKey.task.name: [self.exp_task],
         }
@@ -98,17 +91,14 @@ class NDT2Decoder(BCIDecoder):
         assert task_config.bin_size_ms == cfg.dataset.bin_size_ms, "Bin size mismatch, transform not implemented."
         self.observation_buffer = torch.zeros((cfg.dataset.max_length_ms // task_config.bin_size_ms, task_config.n_channels), dtype=torch.uint8, device='cuda:0')
 
-    def format_dataset_tag(self, dataset_stem: str):
-        alias = FalconContextInfo.get_alias(self.exp_task, self.subject, dataset_stem)
-        reduction = explicit_session_reduction(alias)
-        return FalconContextInfo.get_id(self.subject, self.exp_task, reduction)
-
     def reset(self, dataset: Path = ""):
         dataset_tag = dataset.stem
-        # dataset_tag =  self.get_file_tag(dataset) # e.g. stem including _set_N suffix
         self.set_steps = 0
         self.observation_buffer.zero_()
-        self.meta_key = torch.tensor([self.model.data_attrs.context.session.index(self.format_dataset_tag(dataset_tag))], device='cuda:0')
+        self.meta_key = torch.tensor([
+            self.model.data_attrs.context.session.index(
+                self._task_config.hash_dataset(dataset_tag)
+            )], device='cuda:0')
 
     def predict(self, neural_observations: np.ndarray):
         r"""
