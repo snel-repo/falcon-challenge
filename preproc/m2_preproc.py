@@ -36,6 +36,7 @@ from preproc.nwb_create_utils import (
 )
 
 root = Path('./data/m2/raw')
+out_root = Path('./data/m2/preproc_src')
 files = list(root.glob('*.mat'))
 KIN_LABELS = ['index', 'mrs']
 CHANNEL_EXPECTATION = 96
@@ -215,7 +216,10 @@ def to_nwb(path: Path, ):
                 unit='bool'
             )
         )
-        write_to_nwb(nwbfile, path.parent.parent / DATA_SPLITS[path.stem] / f"{path.stem}_{suffix}.nwb")
+        date_str = path.stem.split('_')[2].replace('-', '')
+        run = DATA_RUN_SET[path.stem]
+        new_prefix = f'sub-MonkeyNRun{run}_{date_str}_{DATA_SPLITS[path.stem]}'
+        write_to_nwb(nwbfile, out_root / DATA_SPLITS[path.stem] / f"{new_prefix}_{suffix}.nwb")
         print(f"Written {path.stem}_{suffix}.nwb")
 
     eval_num = int(len(full_payload) * EVAL_RATIO)
@@ -224,14 +228,14 @@ def to_nwb(path: Path, ):
     create_and_write(full_payload, 'full')
     in_day_full_trials = full_payload[:-eval_num]
     if DATA_SPLITS[path.stem] == 'held_in':
-        create_and_write(in_day_full_trials, 'calibration')
+        create_and_write(in_day_full_trials, 'calib')
 
         minival_trials = full_payload[:SMOKETEST_NUM]
         create_and_write(minival_trials, 'minival')
     else:
         calibration_num = math.ceil(len(full_payload) * FEW_SHOT_CALIBRATION_RATIO)
         calibration_trials = full_payload[:calibration_num]
-        create_and_write(calibration_trials, 'calibration')
+        create_and_write(calibration_trials, 'calib')
 
         create_and_write(in_day_full_trials, 'in_day_oracle')
 
