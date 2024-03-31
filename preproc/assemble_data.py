@@ -2,8 +2,10 @@ from pathlib import Path
 import shutil
 
 root = Path('./data/h1_src')
-
 out = Path('./data/h1')
+
+root = Path('./data/m2/preproc_src')
+out = Path('./data/m2')
 out.mkdir(exist_ok=True)
 # Assemble eval
 eval_target = out / 'eval'

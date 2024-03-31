@@ -12,7 +12,6 @@ pip install falcon-challenge
 To create Docker containers for submission, you must have Docker installed.
 See, e.g. https://docs.docker.com/desktop/install/linux-install/. 
 
-
 ## Getting started
 
 ### Data downloading
@@ -37,7 +36,7 @@ H1 should unfold correctly just from unzipping the provided directory. M1 should
 
 ### Code
 This codebase contains starter code for implementing your own method for the FALCON challenge. 
-- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must confirm to the interface specified in `falcon_challenge.interface`.
+- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
 - In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented!
 
@@ -52,12 +51,23 @@ To interface with our challenge, your code will need to be packaged in a Docker 
 ```bash
 # Build
 sudo docker build -t sk_smoke -f ./decoder_demos/sklearn_sample.Dockerfile .
-sudo docker run -v PATH_TO_YOUR_DATA_DIR:/evaluation_data -it sk_smoke
+sudo docker run -v PATH_TO_YOUR_DATA_DIR:/dataset/evaluation_data -it sk_smoke
 ## If your solution needs GPUs, append a --gpus all flag to `docker run`
 ```
 
-## EvalAI Submission (under construction)
-To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the EvalAI submission tab. It should look something like:
+## EvalAI Submission
+Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands, or run `test_docker_local.sh --docker-name mysubmission`. This should produce a log of nontrivial metrics (evaluation is run on locally available minival).
+
+To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab](https://eval.ai/web/challenges/challenge-page/2264/submission). It should look something like:
 `
 evalai push decoder_container:latest --phase <phase-name>
 `
+
+### Troubleshooting
+Docker:
+- If this is your first time with docker, note that `sudo` access is needed, or your user needs to be in the `docker` group. `docker info` should run without error.
+- While `sudo` is sufficient for local development, the EvalAI submission step will ultimately require your user to be able to run `docker` commands without `sudo`.
+- To do this, [add yourself to the `docker` group](https://docs.docker.com/engine/install/linux-postinstall/). Note you may [need vigr](https://askubuntu.com/questions/964040/usermod-says-account-doesnt-exist-but-adduser-says-it-does) to add your own user.
+
+EvalAI:
+- `pip install evalai` may fail on python 3.11, see: https://github.com/aio-libs/aiohttp/issues/6600. We recommend creating a separate env for submission in this case. 

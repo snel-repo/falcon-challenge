@@ -24,8 +24,6 @@ from decoder_demos.decoding_utils import (
     fit_and_eval_decoder,
 )
 
-HISTORY = 0
-
 def prepare_train_test(
         binned_spikes: np.ndarray,
         targets: np.ndarray,
@@ -157,7 +155,7 @@ def fit_sklearn_decoder(
         x_std,
         y_mean,
         y_std
-    ) = prepare_train_test(all_neural_data, all_covariates, ~all_eval_mask, history=HISTORY)
+    ) = prepare_train_test(all_neural_data, all_covariates, ~all_eval_mask, history=history)
     score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
     print(f"CV Fit score: {score:.2f}")
     (
@@ -201,7 +199,8 @@ def fit_last_session(
     datafiles: List[Path],
     calibration_datafiles: List[Path],
     task_config: FalconConfig,
-    save_path: Path
+    save_path: Path,
+    history = 0,
 ):
     day_unique = set([f.stem.split('_')[0] for f in datafiles])
     last_day = sorted(day_unique)[-1]
@@ -210,10 +209,11 @@ def fit_last_session(
         fit_datafiles,
         calibration_datafiles,
         task_config,
-        save_path
+        save_path,
+        history = history
     )
 
-def main(task, training_dir, calibration_dir, mode):
+def main(task, training_dir, calibration_dir, history, mode):
     # Your main function logic here
     if mode == 'all':
         fit_fn = fit_sklearn_decoder
@@ -229,7 +229,7 @@ def main(task, training_dir, calibration_dir, mode):
     save_path = Path(f'local_data/sklearn_{task_config.task}.pkl')
     datafiles = list(training_dir.glob('*calib*.nwb'))
     calibration_datafiles = list(calibration_dir.glob('*calib*.nwb'))
-    fit_fn(datafiles, calibration_datafiles, task_config, save_path)
+    fit_fn(datafiles, calibration_datafiles, task_config, save_path, history=history)
     print(f"Saved to {save_path}")
 
 if __name__ == "__main__":
@@ -239,7 +239,8 @@ if __name__ == "__main__":
     parser.add_argument('--training_dir', '-t', type=str, help='Root directory for training files')
     parser.add_argument('--calibration_dir', '-c', type=str, help='Root directory for calibration files')
     parser.add_argument('--mode', '-m', type=str, choices=['all', 'last'], help='Mode for training')
+    parser.add_argument('--history', type=int, default=0, help='History for decoder')
 
     args = parser.parse_args()
 
-    main(args.task, args.training_dir, args.calibration_dir, args.mode)
+    main(args.task, args.training_dir, args.calibration_dir, args.history, args.mode)
