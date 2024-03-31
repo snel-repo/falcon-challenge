@@ -10,54 +10,6 @@ from pynwb import NWBHDF5IO
 from falcon_challenge.config import FalconTask
 
 # Load nwb file
-def bin_units_old(
-        units: pd.DataFrame,
-        bin_size_s: float = 0.01,
-        bin_end_timestamps: Optional[np.ndarray] = None
-    ) -> np.ndarray:
-    r"""
-        units: df with only index (spike index) and spike times (list of times in seconds). From nwb.units.
-        bin_end_timestamps: array of timestamps indicating end of bin
-
-        Returns:
-        - array of spike counts per bin, per unit. Shape is (bins x units)
-    """
-    bin_mask = None
-    if bin_end_timestamps is None:
-        end_time = units.spike_times.apply(lambda s: max(s) if len(s) else 0).max() + bin_size_s
-        bin_end_timestamps = np.arange(0, end_time, bin_size_s)
-    else:
-        # Check contiguous else force cropping for even bins
-        gaps = np.diff(bin_end_timestamps)
-        if (gaps <= 0).any():
-            raise ValueError("bin_end_timestamps must be monotonically increasing.")
-        min_gap = np.min(gaps)
-        if not np.allclose(gaps, min_gap):
-            # breakpoint() # TODO test this
-            # Adjust bin_end_timestamps to include bins at the end of discontinuities
-            new_bins = []
-            bin_mask = [] # bool True if bin ending at this timepoint should be included
-            for i, gap in enumerate(gaps):
-                new_bins.append(bin_end_timestamps[i])
-                bin_mask.append(True)
-                if not np.isclose(gap, min_gap):
-                    # Calculate the start of the last bin_size_s before the next bin_end_timestamp
-                    last_bin_start = bin_end_timestamps[i+1] - bin_size_s
-                    new_bins.append(last_bin_start)
-                    bin_mask.append(False)
-            bin_mask.append(True)
-            bin_end_timestamps = np.array(new_bins)
-            bin_mask = np.array(bin_mask)
-    spike_arr = np.zeros((len(bin_end_timestamps), len(units)), dtype=np.uint8)
-    bin_edges = np.concatenate([np.array([bin_end_timestamps[0] - bin_size_s]), bin_end_timestamps])
-    for idx, (_, unit) in enumerate(units.iterrows()):
-        spike_cnt, _ = np.histogram(unit.spike_times, bins=bin_edges)
-        if bin_mask is not None:
-            spike_cnt = spike_cnt[bin_mask]
-        spike_arr[:, idx] = spike_cnt
-    return spike_arr
-
-# Load nwb file
 def bin_units(
         units: pd.DataFrame,
         bin_size_s: float = 0.02,
@@ -142,10 +94,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
-            if bin_old:
-                binned_units = bin_units_old(units, bin_size_s=0.02, bin_end_timestamps=timestamps)
-            else:
-                binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=timestamps)
+            binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=timestamps)
             return binned_units, kin, np.zeros(kin.shape[0]), eval_mask
         elif dataset == FalconTask.m1:
             raw_emg = nwbfile.acquisition['preprocessed_emg']
@@ -160,10 +109,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
                 emg_timestamps.append(timestamps)
             emg_data = np.vstack(emg_data).T
             emg_timestamps = emg_timestamps[0]
-            if bin_old:
-                binned_units = bin_units_old(units, bin_size_s=0.02, bin_end_timestamps=emg_timestamps)
-            else:
-                binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=emg_timestamps)
+            binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=emg_timestamps)
 
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
 
