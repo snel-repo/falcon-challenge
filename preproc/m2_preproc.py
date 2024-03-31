@@ -30,7 +30,7 @@ from pynwb import NWBFile, TimeSeries
 
 from decoder_demos.filtering import smooth
 from preproc.nwb_create_utils import (
-    FEW_SHOT_CALIBRATION_RATIO, EVAL_RATIO, SMOKETEST_NUM, BIN_SIZE_MS, BIN_SIZE_S,
+    FEW_SHOT_CALIBRATION_RATIO_M2 as FEW_SHOT_CALIBRATION_RATIO, EVAL_RATIO, SMOKETEST_NUM, BIN_SIZE_MS, BIN_SIZE_S,
     create_multichannel_timeseries,
     write_to_nwb
 )
