@@ -79,6 +79,15 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1) -> Tuple
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
             binned_units = bin_units(units, bin_end_timestamps=timestamps)
             return binned_units, kin, np.zeros(kin.shape[0]), eval_mask
+        elif dataset == FalconTask.h2: 
+            binned_spikes = nwbfile.acquisition['binned_spikes'].data[()]
+            time = nwbfile.acquisition['binned_spikes'].timestamps[()]
+            eval_mask = nwbfile.acquisition['eval_mask'].data[()].astype(bool)
+            trial_info = (
+                nwbfile.trials.to_dataframe()
+                .reset_index()
+            )
+            return binned_spikes, trial_info.cue.values, np.concatenate([[False], np.diff(time) > 0.02]), eval_mask
         elif dataset == FalconTask.m1:
             raw_emg = nwbfile.acquisition['preprocessed_emg']
             muscles = [ts for ts in raw_emg.time_series]

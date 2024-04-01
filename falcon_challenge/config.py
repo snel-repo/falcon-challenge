@@ -31,6 +31,8 @@ class FalconConfig:
     def n_channels(self):
         if self.task == FalconTask.h1:
             return 176
+        elif self.task == FalconTask.h2:
+            return 192
         elif self.task == FalconTask.m1:
             return 96
         elif self.task == FalconTask.m2:
@@ -60,7 +62,7 @@ class FalconConfig:
                 return '_'.join(pieces[:-1])
             return handle
         elif self.task == FalconTask.h2:
-            return NotImplementedError("H2 not implemented.")
+            return handle.split('_')[-1].split('-')[-1]
         elif self.task == FalconTask.m1: # return date
             # sub-MonkeyL-held-in-minival_ses-20120924_behavior+ecephys.nwb
             if 'behavior+ecephys' in handle:
