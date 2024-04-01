@@ -123,7 +123,7 @@ def rasterplot(spike_arr, bin_size_s=0.02, ax=None, spike_alpha=0.3, lw=0.2, s=1
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 20))
     ax.set_ylabel('Channel #')
 
-def plot_firing_rate_distributions(lengths, binned_neural, start_dates, axes):
+def plot_firing_rate_distributions(lengths, binned_neural, start_dates, axes, bin_size_s=0.02):
     """
     Plot the firing rate distributions for each day
 
@@ -137,7 +137,7 @@ def plot_firing_rate_distributions(lengths, binned_neural, start_dates, axes):
     daily_means = []
     day_intervals = [0, *np.cumsum([lengths[x] for x in lengths])]
     for start, end in zip(day_intervals[:-1], day_intervals[1:]):
-        daily_means.append(np.mean(binned_neural[start:end], axis=0))
+        daily_means.append(np.mean(binned_neural[start:end], axis=0) / bin_size_s)
     # daily_means is a list of 8 arrays, each of shape (N,) - histplot them separately using sns and pd
     flattened_data = {'Day': [], 'Mean Firing Rate (Hz)': []}
     for day, means in zip(start_dates, daily_means):

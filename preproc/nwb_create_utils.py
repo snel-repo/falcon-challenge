@@ -1,4 +1,7 @@
+from typing import List
 from pathlib import Path
+import numpy as np
+import pandas as pd 
 from pynwb import NWBFile, NWBHDF5IO
 from pynwb import TimeSeries
 from pynwb.behavior import Position
@@ -11,6 +14,7 @@ r"""
 BIN_SIZE_MS = 20
 BIN_SIZE_S = BIN_SIZE_MS / 1000
 FEW_SHOT_CALIBRATION_RATIO = 0.2
+FEW_SHOT_CALIBRATION_RATIO_M2 = 0.1
 EVAL_RATIO = 0.4
 EVAL_RATIO_HUMAN = 0.2
 SMOKETEST_NUM = 2
@@ -48,3 +52,14 @@ def apply_filt_to_multi_timeseries(m_ts, filt_func, name, *args, timestamps=None
                                     timestamps=timestamps)
 
     return filt_m_ts
+
+def create_continuous_eval_mask_for_trialized_data(t_new: np.ndarray, trial_start_times: np.ndarray, trial_end_times: np.ndarray):
+    convert_trial_start_time = pd.to_datetime(trial_start_times, unit='s').round('20ms').values.astype('float64') * 1e-9
+    convert_trial_end_time = pd.to_datetime(trial_end_times, unit='s').round('20ms').values.astype('float64') * 1e-9
+    eval_mask = np.full(t_new.size, False)
+    # now add a mask for getting within-trial periods
+    for start, stop in zip(convert_trial_start_time, convert_trial_end_time):
+        start_ind = np.searchsorted(t_new, start)
+        stop_ind = np.searchsorted(t_new, stop)
+        eval_mask[start_ind:stop_ind] = True
+    return eval_mask
