@@ -60,7 +60,7 @@ Please ensure that your submission runs locally before running remote evaluation
 
 To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab](https://eval.ai/web/challenges/challenge-page/2264/submission). It should look something like:
 `
-evalai push decoder_container:latest --phase <phase-name>
+evalai push mysubmission:latest --phase <phase-name> (dev or test)
 `
 
 ### Troubleshooting

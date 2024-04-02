@@ -62,7 +62,7 @@ class FalconConfig:
             # remove split and set information
             pieces = handle.split('_')
             for piece in pieces:
-                if piece[0] == 'S':
+                if piece[0].lower() == 's' and piece != 'set':
                     return piece
             raise ValueError(f"Could not find session in {handle}.")
         elif self.task == FalconTask.h2:

@@ -79,9 +79,12 @@ DATA_RUN_SET = {
 #%%
 def create_nwb_shell(path: Path, split, suffix='full'):
     start_date = path.stem.split('_')[2] # YYYY-MM-DD
+    session_start_time = datetime.strptime(start_date, '%Y-%m-%d')
+    # inject arbitrary hour to distinguish sets
+    session_start_time = session_start_time.replace(hour=12 + DATA_RUN_SET[path.stem])
     hash = '_'.join(path.stem.split('_')[2:])
     subject = pynwb.file.Subject(
-        subject_id=f'MonkeyN-set{DATA_RUN_SET[path.stem]}-{split}-{suffix}',
+        subject_id=f'MonkeyN-{split}-{suffix}',
         description='MonkeyN, Chestek Lab, number indicates experimental set from day',
         species='Rhesus macaque',
         sex='M',

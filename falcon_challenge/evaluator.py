@@ -75,6 +75,7 @@ def evaluate(
                     split_result[f'{HELDIN_OR_OUT_MAP[in_or_out]} {k}'] = metrics_held_in[k]
         result.append({datasplit: split_result})
             
+    print(f"Returning result from phase: {phase_codename}: {result}")
     # Out struct according to https://evalai.readthedocs.io/en/latest/evaluation_scripts.html
     return {"result": result, 'submission_result': result[0]}
 
@@ -212,15 +213,18 @@ class FalconEvaluator:
             with open(gt_path, 'wb') as f:
                 pickle.dump(truth_payload, f)
             import time
-            time.sleep(300) # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
-            # Sleep so it's definitely available
 
-            # TODO - this subsequent line of logic needs to be owned by challenge worker - currently in here for Beta testing.
-            print(evaluate(
-                test_annotation_file=gt_path,
-                user_submission_file=prediction_path,
-                phase_codename=phase
-            ))
+            if self.eval_remote:
+                print("Sleeping before exiting for remote eval - feel free to interrupt for local eval.", flush=True)
+                # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
+                # Sleep so it's definitely available
+                time.sleep(300) 
+            else:
+                print(evaluate(
+                    test_annotation_file=gt_path,
+                    user_submission_file=prediction_path,
+                    phase_codename=phase
+                ), flush=True)
         else:
             for k, v in metrics.items():
                 logger.info("{}: {}".format(k, v))
