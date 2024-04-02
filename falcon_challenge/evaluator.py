@@ -208,6 +208,9 @@ class FalconEvaluator:
                 pickle.dump(pred_payload, f)
             with open(gt_path, 'wb') as f:
                 pickle.dump(truth_payload, f)
+            import time
+            time.sleep(300) # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
+            # Sleep so it's definitely available
 
             # TODO - this subsequent line of logic needs to be owned by challenge worker - currently in here for Beta testing.
             print(evaluate(
@@ -232,8 +235,8 @@ class FalconEvaluator:
     @staticmethod
     def compute_metrics_classification(preds, targets, eval_mask):
         return {
-            "WER": 1-(preds == targets)[eval_mask].mean(),
-            "WER Std.": 0, # TODO Clay
+            "CER": 1-(preds == targets)[eval_mask].mean(),
+            "CER Std.": 0, # TODO Clay
         }
 
     def compute_metrics(self, all_preds, all_targets, all_eval_mask=None):
