@@ -48,7 +48,10 @@ def evaluate(
     # ! Remotely, it shoudl be /submission/submission.csv exactly.
     # Ignore explicit annotations provided and directly search for concatenated answers
     test_annotation_file = os.environ.get("GT_PATH", './local_gt.pkl')
+    logger.info(f"Evaluation: Docker side")
     logger.info(f"Loading GT from {test_annotation_file}")
+    logger.info(f"Loading submission from {user_submission_file}")
+    logger.info(f"Phase: {phase_codename}")
 
     result = []
     # Load pickles
