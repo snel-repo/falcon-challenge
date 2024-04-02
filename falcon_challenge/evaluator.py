@@ -212,7 +212,6 @@ class FalconEvaluator:
             with open(gt_path, 'wb') as f:
                 pickle.dump(truth_payload, f)
             import time
-            time.sleep(300) # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
             # Sleep so it's definitely available
 
             # TODO - this subsequent line of logic needs to be owned by challenge worker - currently in here for Beta testing.
@@ -221,6 +220,8 @@ class FalconEvaluator:
                 user_submission_file=prediction_path,
                 phase_codename=phase
             ))
+            print("Sleeping for remote eval - feel free to interrupt for local eval.")
+            time.sleep(300) # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
         else:
             for k, v in metrics.items():
                 logger.info("{}: {}".format(k, v))
