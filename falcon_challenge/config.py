@@ -61,12 +61,15 @@ class FalconConfig:
             handle = handle.stem
         if self.task == FalconTask.h1:
             handle = handle.replace('-', '_')
+            handle = '_'.join(handle.split('_')[:-1]) # exclude split annotation
+            # print(handle)
+            return handle
             # dandi-like atm but not quite determined; e.g. S0_set_1_calib
             # remove split and set information
-            pieces = handle.split('_')
-            for piece in pieces:
-                if piece[0].lower() == 's' and piece != 'set':
-                    return piece
+            # pieces = handle.split('_')
+            # for piece in pieces:
+                # if piece[0].lower() == 's' and piece != 'set':
+                    # return piece
             raise ValueError(f"Could not find session in {handle}.")
         elif self.task == FalconTask.h2:
             return handle.split('_')[-1].split('-')[-1]

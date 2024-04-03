@@ -17,8 +17,37 @@ logger = logging.getLogger(__name__)
 
 DATASET_HELDINOUT_MAP = {
     'h1': {
-        'held_in': ['S0', 'S1', 'S2', 'S3', 'S4', 'S5'],
-        'held_out': ['S6', 'S7', 'S8', 'S9', 'S10', 'S11', 'S12'],
+        'held_in': [
+            'S0_set_1', 
+            'S0_set_2', 
+            'S1_set_1', 
+            'S1_set_2', 
+            'S1_set_3',
+            'S2_set_1',
+            'S2_set_2',
+            'S3_set_1',
+            'S3_set_2',
+            'S4_set_1',
+            'S4_set_2',
+            'S5_set_1',
+            'S5_set_2',
+        ],
+        'held_out': [
+            'S6_set_1', 
+            'S6_set_2', 
+            'S7_set_1', 
+            'S7_set_2', 
+            'S8_set_1', 
+            'S8_set_2', 
+            'S9_set_1', 
+            'S9_set_2', 
+            'S10_set_1', 
+            'S10_set_2', 
+            'S11_set_1', 
+            'S11_set_2', 
+            'S12_set_1'
+            'S12_set_2'
+        ],
     },
     'm1': {
         'held_in': ['20120924', '20120926', '20120927', '20120928'],
@@ -127,6 +156,7 @@ def evaluate(
     # ! Remotely, it shoudl be /submission/submission.csv exactly.
     # Ignore explicit annotations provided and directly search for concatenated answers
     logger.info(f"Evaluation: Docker side")
+    # test_annotation_file = '/dataset/evaluation_data/answer_key/minival.pkl'
     logger.info(f"Loading GT from {test_annotation_file}")
     logger.info(f"Loading submission from {user_submission_file}")
     logger.info(f"Phase: {phase_codename}")
@@ -139,7 +169,7 @@ def evaluate(
             user_submission = pickle.load(user_submission_file)
     except Exception as e:
         logger.error(f"Checking root: {os.listdir('/')}")
-        raise ValueError(f"Failed to load submission pickles: {e}. dir is {os.getcwd()}; contents {os.listdir()}. \nChecking tmp: {os.listdir('/tmp')}\n Checking root {os.listdir('/')}")
+        raise ValueError(f"Failed to load submission pickles: {e}. dir is {os.getcwd()}; contents {os.listdir()}.")
     for datasplit in user_submission: # datasplit e.g. h1, m1
         if datasplit not in test_annotations:
             raise ValueError(f"Missing {datasplit} in GT labels.")
