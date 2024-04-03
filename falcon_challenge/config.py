@@ -1,4 +1,5 @@
 import enum
+from pathlib import Path
 from dataclasses import dataclass, field
 
 from hydra.core.config_store import ConfigStore
@@ -25,7 +26,7 @@ class FalconConfig:
     task: FalconTask = FalconTask.h1
     # n_channels: int = 176
     bin_size_ms: int = 20
-    dataset_handles: list[str] = field(default_factory=lambda: []) # Compute with evaluator.get_eval_handles
+    # dataset_handles: list[str] = field(default_factory=lambda: []) # Compute with evaluator.get_eval_handles
 
     @property
     def n_channels(self):
@@ -51,11 +52,13 @@ class FalconConfig:
             return 2
         raise NotImplementedError(f"Task {self.task} not implemented.")
         
-    def hash_dataset(self, handle: str):
+    def hash_dataset(self, handle: str | Path):
         r"""
             handle - path.stem of a datafile.
-            Convenience function to help identify what "session" a datafile belongs to.
+            Convenience function to help identify what "session" a datafile belongs to.. If multiple files per session in real-world time, this may _not_ uniquely identify runfile.
         """
+        if isinstance(handle, Path):
+            handle = handle.stem
         if self.task == FalconTask.h1:
             handle = handle.replace('-', '_')
             # dandi-like atm but not quite determined; e.g. S0_set_1_calib
