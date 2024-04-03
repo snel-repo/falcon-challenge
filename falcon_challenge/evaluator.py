@@ -302,7 +302,7 @@ class FalconEvaluator:
             inner_pred = {**all_preds}
             inner_tgt_spoof = { # spoof for local mirror of eval ai path, in reality targets are already compiled on eval ai side.
                 k: {
-                    'data': all_targets[k],
+                    'data': all_targets[k][all_eval_mask[k]],
                     'mask': all_eval_mask[k],
                 } for k in all_targets
             }
@@ -341,11 +341,12 @@ class FalconEvaluator:
             for k, v in metrics.items():
                 logger.info("{}: {}".format(k, v))
         
-
     @staticmethod
     def compute_metrics_regression(preds, targets, eval_mask):
-        targets = targets[eval_mask]
+        # assumes targets are already masked
         preds = preds[eval_mask]
+        if not targets.shape[0] == preds.shape[0]:
+            raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
         return {
             "R2": r2_score(targets, preds, multioutput='variance_weighted'),
             "R2 Std.": 0, # TODO Clay
@@ -353,9 +354,12 @@ class FalconEvaluator:
 
     @staticmethod
     def compute_metrics_classification(preds, targets, eval_mask):
+        preds = preds[eval_mask]
+        if not targets.shape[0] == preds.shape[0]:
+            raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
         return {
-            "CER": 1-(preds == targets)[eval_mask].mean(),
-            "CER Std.": 0, # TODO Clay
+            "WER": 1-(preds == targets).mean(),
+            "WER Std.": 0, # TODO Clay
         }
 
     def compute_metrics(self, all_preds, all_targets, all_eval_mask=None):

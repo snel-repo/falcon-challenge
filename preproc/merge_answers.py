@@ -32,7 +32,7 @@ def assemble_phase_answer_key(phase='minival', answer_key_dir='./data/answer_key
             print(d.stem)
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(d, dataset=task)
             annotations[dataset][config.hash_dataset(d.stem)] = {
-                'data': decoding_targets,
+                'data': decoding_targets[eval_mask],
                 'mask': eval_mask
             }
     return annotations
