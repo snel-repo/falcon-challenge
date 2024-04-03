@@ -44,7 +44,7 @@ ENV EVAL_DATA_PATH "/dataset/evaluation_data"
 
 RUN pwd
 # for local evaluation infra testing
-ADD ./falcon_challenge falcon_challenge 
+# ADD ./falcon_challenge falcon_challenge 
 
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash
