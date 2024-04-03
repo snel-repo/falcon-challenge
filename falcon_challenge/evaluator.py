@@ -45,8 +45,8 @@ DATASET_HELDINOUT_MAP = {
             'S10_set_2', 
             'S11_set_1', 
             'S11_set_2', 
-            'S12_set_1'
-            'S12_set_2'
+            'S12_set_1',
+            'S12_set_2',
         ],
     },
     'm1': {
@@ -207,7 +207,7 @@ def evaluate(
                 raise ValueError(f"Failed to compute metrics for {datasplit} {in_or_out}: {e}")
             for k in metrics:
                 split_result[f'{HELDIN_OR_OUT_MAP[in_or_out]} {k}'] = metrics[k]
-        result.append({datasplit: split_result})
+        result.append({f'{phase_codename}_split_{datasplit}': split_result})
 
     print(f"Returning result from phase: {phase_codename}: {result}")
     # Out struct according to https://evalai.readthedocs.io/en/latest/evaluation_scripts.html
