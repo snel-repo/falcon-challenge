@@ -1,4 +1,5 @@
 import enum
+from typing import Union
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -52,7 +53,7 @@ class FalconConfig:
             return 2
         raise NotImplementedError(f"Task {self.task} not implemented.")
         
-    def hash_dataset(self, handle: str | Path):
+    def hash_dataset(self, handle: Union[str, Path]):
         r"""
             handle - path.stem of a datafile.
             Convenience function to help identify what "session" a datafile belongs to.. If multiple files per session in real-world time, this may _not_ uniquely identify runfile.

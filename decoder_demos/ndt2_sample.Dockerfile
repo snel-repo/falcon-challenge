@@ -24,7 +24,7 @@ ENV EVALUATION_LOC remote
 
 # Add ckpt
 # Note that Docker cannot easily import across symlinks, make sure data is not symlinked
-ADD ./local_data/ndt2_h1_sample.pth data/decoder.pth
+ADD ./local_data/ndt2_h1_sample_nokey.pth data/decoder.pth
 ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
 
 # Add runfile
@@ -38,6 +38,7 @@ ENV PHASE "test"
 
 # Make sure this matches the mounted data volume path. Generally leave as is.
 ENV EVAL_DATA_PATH "/dataset/evaluation_data"
+ADD ./falcon_challenge falcon_challenge 
 
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash

@@ -18,8 +18,7 @@ suppress_default_registry()
 from context_general_bci.config import RootConfig, propagate_config, DataKey, MetaKey
 from context_general_bci.dataset import DataAttrs, ContextAttrs
 from context_general_bci.subjects import SubjectName
-from context_general_bci.contexts.context_registry import context_registry
-from context_general_bci.contexts.context_info import FalconContextInfo, ExperimentalTask
+from context_general_bci.contexts.context_info import ExperimentalTask
 from context_general_bci.model import load_from_checkpoint
 from context_general_bci.model_slim import transfer_model
 
@@ -38,6 +37,7 @@ class NDT2Decoder(BCIDecoder):
             model_ckpt_path: str,
             model_cfg_stem: str,
             zscore_path: str,
+            dataset_handles: List[str] = []
         ):
         r"""
             Loading NDT2 requires both weights and model config. Weight loading through a checkpoint is standard.
@@ -45,17 +45,6 @@ class NDT2Decoder(BCIDecoder):
         """
         self._task_config = task_config
         self.exp_task = getattr(ExperimentalTask, f'falcon_{task_config.task.name}')
-
-        context_registry.register([
-            *FalconContextInfo.build_from_dir(
-                f'./data/{task_config.task.name}/eval',
-                task=self.exp_task,
-                suffix='eval'),
-            *FalconContextInfo.build_from_dir(
-                f'./data/{task_config.task.name}/minival',
-                task=self.exp_task,
-                suffix='minival')])
-
         try:
             initialize_config_module(
                 config_module="context_general_bci.config",
@@ -76,9 +65,7 @@ class NDT2Decoder(BCIDecoder):
         context_idx = {
             MetaKey.array.name: [format_array_name(self.subject)],
             MetaKey.subject.name: [self.subject],
-            MetaKey.session.name: sorted([
-                self._task_config.hash_dataset(handle) for handle in task_config.dataset_handles
-            ]),
+            MetaKey.session.name: sorted([self._task_config.hash_dataset(handle) for handle in dataset_handles]),
             MetaKey.task.name: [self.exp_task],
         }
         data_attrs = DataAttrs.from_config(cfg.dataset, context=ContextAttrs(**context_idx))

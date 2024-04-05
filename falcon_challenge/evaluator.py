@@ -80,51 +80,6 @@ HELDIN_OR_OUT_MAP = {
     'held_out': "Held Out",
 }
 
-# def evaluate(
-#     test_annotation_file: str, # The annotation file for the phase - but our labels are pulled from eval data.
-#     user_submission_file: str, # * JY: This appears to always be /submission/submission.csv on EvalAI. No matter - load it as a pickle.
-#     phase_codename: str, # e.g. minival or test
-#     **kwargs
-# ):
-#     r"""
-#         Evaluate payloads with potentially multiple splits worth of data
-#         - Low pri: can I provide all results or just one split's worth entry? Currently providing 1, examples just provide 1, but in general would be nice to provide all. User shouldn't be able to submit more than 1, though.
-#     """
-#     # ! Want: Locally, test_annotation should be somewhere safe (tmp)
-#     # ! Remotely, it shoudl be /submission/submission.csv exactly.
-#     # Ignore explicit annotations provided and directly search for concatenated answers
-#     logger.info(f"Evaluation: Docker side")
-#     logger.info(f"Loading GT from {test_annotation_file}")
-#     logger.info(f"Loading submission from {user_submission_file}")
-#     logger.info(f"Phase: {phase_codename}")
-
-#     result = []
-#     # Load pickles
-#     with open(test_annotation_file, 'rb') as test_annotation_file, open(user_submission_file, 'rb') as user_submission_file:
-#         test_annotations = pickle.load(test_annotation_file)
-#         user_submission = pickle.load(user_submission_file)
-#     for datasplit in user_submission: # datasplit e.g. h1, m1
-#         if datasplit not in test_annotations:
-#             raise ValueError(f"Missing {datasplit} in GT labels.")
-#         split_annotations = test_annotations[datasplit]
-#         split_result = {}
-#         split_result["Normalized Latency"] = user_submission[datasplit]["normalized_latency"]
-#         for in_or_out in split_annotations.keys():
-#             if f'{in_or_out}_pred' in user_submission[datasplit]:
-#                 pred = user_submission[datasplit][f'{in_or_out}_pred']
-#                 mask = user_submission[datasplit][f'{in_or_out}_eval_mask']
-#                 # User submission should be in an expected format because we force predictions through our codepack interface... right? They could hypothetically spoof. But we see dockerfile.
-#                 eval_fn = FalconEvaluator.compute_metrics_classification if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression
-#                 metrics_held_in = eval_fn(pred, split_annotations[in_or_out], mask)
-#                 for k in metrics_held_in:
-#                     split_result[f'{HELDIN_OR_OUT_MAP[in_or_out]} {k}'] = metrics_held_in[k]
-#         result.append({datasplit: split_result})
-            
-#     print(f"Returning result from phase: {phase_codename}: {result}")
-#     # Out struct according to https://evalai.readthedocs.io/en/latest/evaluation_scripts.html
-#     return {"result": result, 'submission_result': result[0]}
-
-
 def evaluate(
     test_annotation_file: str, # The annotation file for the phase
     user_submission_file: str, # * JY: This appears to always be /submission/submission.csv on EvalAI. No matter - load it as a pickle.
@@ -341,17 +296,12 @@ class FalconEvaluator:
             truth_payload = {self.dataset.name: inner_tgt_spoof}
         else:
             pass
-            # TODO restore
-            # metrics_held_in = self.compute_metrics(all_preds_held_in, all_targets_held_in, all_eval_mask_held_in)
-            # metrics_held_out = self.compute_metrics(all_preds_held_out, all_targets_held_out, all_eval_mask_held_out)
-            # for k, v in metrics_held_in.items():
-                # metrics[f'{HELDIN_OR_OUT_MAP["held_in"]} {k}'] = v
-            # for k, v in metrics_held_out.items():
-                # metrics[f'{HELDIN_OR_OUT_MAP["held_out"]} {k}'] = v            
             
         if USE_PKLS:
+            Path(prediction_path).parent.mkdir(parents=True, exist_ok=True)
             with open(prediction_path, 'wb') as f:
                 pickle.dump(pred_payload, f)
+            Path(gt_path).parent.mkdir(parents=True, exist_ok=True)
             with open(gt_path, 'wb') as f:
                 pickle.dump(truth_payload, f)
             import time

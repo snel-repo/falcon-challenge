@@ -41,16 +41,14 @@ def main():
         split=args.split)
 
     task = getattr(FalconTask, args.split)
-    config = FalconConfig(
-        task=task,
-        dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=args.phase)]
-    )
+    config = FalconConfig(task=task)
 
     decoder = NDT2Decoder(
         task_config=config,
         model_ckpt_path=args.model_path,
         model_cfg_stem=args.config_stem,
-        zscore_path=args.zscore_path
+        zscore_path=args.zscore_path,
+        dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=args.phase)]
     )
 
 
