@@ -312,11 +312,11 @@ class FalconEvaluator:
                 # Sleep so it's definitely available
                 time.sleep(300) 
             else:
-                print(evaluate(
+                return evaluate(
                     test_annotation_file=gt_path,
                     user_submission_file=prediction_path,
                     phase_codename=phase
-                ), flush=True)
+                )
         else:
             for k, v in metrics.items():
                 logger.info("{}: {}".format(k, v))

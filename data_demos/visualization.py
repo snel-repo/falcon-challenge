@@ -26,12 +26,13 @@ def plot_split_bars(df, fig, ax):
         hue='Split Type',
         palette=palette
     )
-    train_ratio = len(df[df['Split Type'] == 'Train']) / len(df)
+    split_label = ('Train', 'Test') if 'Train' in df['Split Type'].unique() else ('Held In', 'Held Out')
+    train_ratio = len(df[df['Split Type'] == split_label[0]]) / len(df)
     train_center_of_mass = train_ratio / 2
     test_center_of_mass = (1 - train_ratio) / 2 + train_ratio
     ax.get_legend().remove()
-    ax.text(train_center_of_mass, 0.3, 'Train', color=palette[0], fontsize=36, transform=ax.transAxes, backgroundcolor='white', ha='center')
-    ax.text(test_center_of_mass, 0.3, 'Test', color=palette[1], fontsize=36, transform=ax.transAxes, backgroundcolor='white', ha='center')
+    ax.text(train_center_of_mass, 0.3, split_label[0], color=palette[0], fontsize=36, transform=ax.transAxes, backgroundcolor='white', ha='center')
+    ax.text(test_center_of_mass, 0.3, split_label[1], color=palette[1], fontsize=36, transform=ax.transAxes, backgroundcolor='white', ha='center')
     fig.autofmt_xdate()  # Rotate dates for readability
 
 def find_time_ratio(datestr_start, datestr_mid, datestr_end, year='2010'):
@@ -80,18 +81,23 @@ def plot_timeline(ax, sections, year='2010'):
                 arrowprops=dict(arrowstyle="->", color='black'),
                 xycoords=('axes fraction', 'data'), textcoords=('axes fraction', 'data'))
 
-    train_ratio = find_time_ratio(sections['Train'][0], sections['Test'][0], sections['Test'][-1], year=year)
+    if 'Train' in sections:
+        split_label = ('Train', 'Test')
+    else:
+        split_label = ('Held In', 'Held Out')
+
+    train_ratio = find_time_ratio(sections[split_label[0]][0], sections[split_label[1]][0], sections[split_label[1]][-1], year=year)
     train_center_of_mass = train_ratio / 2
     test_center_of_mass = (1 - train_ratio) / 2 + train_ratio
     ax_inset.text(
-        train_center_of_mass, 0.7, 'Train',
+        train_center_of_mass, 0.7, split_label[0],
         color=palette[0],
         fontsize=20,
         transform=ax_inset.transAxes,
         ha='center'
     )
     ax_inset.text(
-        test_center_of_mass, 0.7, 'Test',
+        test_center_of_mass, 0.7, split_label[1],
         color=palette[1],
         fontsize=20,
         transform=ax_inset.transAxes,
