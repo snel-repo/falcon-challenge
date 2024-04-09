@@ -43,7 +43,7 @@ This codebase contains starter code for implementing your own method for the FAL
 For example, you can prepare and evaluate a linear decoder by running:
 ```bash
 python decoder_demos/sklearn_decoder.py --training_dir data/h1/held_in_calib/ --calibration_dir data/h1/held_out_calib/ --mode all --task h1
-python sklearn_sample.py --evaluation local --phase minival --split h1
+python decoder_demos/sklearn_sample.py --evaluation local --phase minival --split h1
 ```
 
 ### Docker Submission
