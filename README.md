@@ -50,18 +50,19 @@ python sklearn_sample.py --evaluation local --phase minival --split h1
 To interface with our challenge, your code will need to be packaged in a Docker container that is submitted to EvalAI. Try this process by building and running the provided `sklearn_sample.Dockerfile`, to confirm your setup works. Do this with the following commands (once Docker is installed)
 ```bash
 # Build
-sudo docker build -t sk_smoke -f ./decoder_demos/sklearn_sample.Dockerfile .
-sudo docker run -v PATH_TO_YOUR_DATA_DIR:/dataset/evaluation_data -it sk_smoke
-## If your solution needs GPUs, append a --gpus all flag to `docker run`
+docker build -t sk_smoke -f ./decoder_demos/sklearn_sample.Dockerfile .
+bash test_docker_local.sh --docker-name sk_smoke
 ```
 
 ## EvalAI Submission
-Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands, or run `test_docker_local.sh --docker-name mysubmission`. This should produce a log of nontrivial metrics (evaluation is run on locally available minival).
+Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands with your own Dockerfile (in place of sk_smoke). This should produce a log of nontrivial metrics (evaluation is run on locally available minival).
 
-To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab](https://eval.ai/web/challenges/challenge-page/2264/submission). It should look something like:
+To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab](https://eval.ai/web/challenges/challenge-page/2264/submission). This will instruct you to first install EvalAI, then add your token, and finally push the submission. It should look something like:
 `
 evalai push mysubmission:latest --phase <phase-name> (dev or test)
 `
+(Note that you will not see these instruction unless you have first created a team to submit. The phase should contain a specific challenge identifier. You may need to refresh the page before instructions will appear.)
+
 
 ### Troubleshooting
 Docker:
