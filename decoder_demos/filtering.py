@@ -8,7 +8,7 @@ r"""
 """
 NEURAL_TAU_MS = 240. # exponential filter from H1 Lab
 def apply_exponential_filter(
-        x, tau=NEURAL_TAU_MS, bin_size=10, extent: int=1
+        x, tau=NEURAL_TAU_MS, bin_size=20, extent: int=1
     ):
     """
     Apply a **causal** exponential filter to the neural signal.

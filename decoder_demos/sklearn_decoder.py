@@ -103,6 +103,13 @@ class SKLearnDecoder(BCIDecoder):
         else:
             self.local_x_mean = self.x_mean
             self.local_x_std = self.x_std
+        if isinstance(self.clf, dict):
+            dataset_tag =  self._task_config.hash_dataset(dataset.stem)
+            if dataset_tag not in self.clf:
+                raise ValueError(f"Dataset tag {dataset_tag} not found decoder set {self.clf.keys()}")
+            self.local_clf = self.clf[dataset_tag]
+        else:
+            self.local_clf = self.clf
         self.raw_history_buffer = np.zeros_like(self.raw_history_buffer)
         self.observation_buffer = np.zeros_like(self.observation_buffer)
 
@@ -112,7 +119,7 @@ class SKLearnDecoder(BCIDecoder):
         """
         self.observe(neural_observations)
         decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1) # Reverse since this happens to be how the lagged matrix is formatted
-        out = self.clf.predict(decoder_in)[0]
+        out = self.local_clf.predict(decoder_in)[0]
         return out
 
     def observe(self, neural_observations: np.ndarray):
@@ -213,12 +220,68 @@ def fit_last_session(
         history = history
     )
 
+def fit_many_decoders(
+    datafiles: List[Path],
+    calibration_datafiles: List[Path],
+    task_config: FalconConfig,
+    save_path: Path,
+    history = 0,
+):
+    all_datafiles = [*calibration_datafiles, *datafiles]
+    day_unique = set([f.stem.split('_')[0] for f in all_datafiles])
+    all_decoders = {}
+    x_means = {}
+    x_stds = {}
+    for day in sorted(day_unique):
+        print(f"Training on day {day}")
+        fit_datafiles = [d for d in all_datafiles if day == d.stem.split('_')[0]]
+        (
+            neural_data,
+            covariates,
+            trial_change,
+            eval_mask
+        ) = zip(*[load_nwb(fn, task_config.task) for fn in fit_datafiles])
+        neural_data = np.concatenate(neural_data)
+        covariates = np.concatenate(covariates)
+        trial_change = np.concatenate(trial_change)
+        eval_mask = np.concatenate(eval_mask)
+        (
+            train_x,
+            train_y,
+            test_x,
+            test_y,
+            x_mean,
+            x_std,
+            y_mean,
+            y_std
+        ) = prepare_train_test(neural_data, covariates, ~eval_mask, history=history)
+        score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
+        for f in fit_datafiles:
+            fn = task_config.hash_dataset(f.stem)
+            all_decoders[fn] = decoder
+            x_means[fn], x_stds[fn] = np.mean(neural_data, axis=0), np.std(neural_data, axis=0)
+            if np.any(x_stds[fn] == 0):
+                x_stds[fn][x_stds[fn] == 0] = 1
+        print(f"CV Fit score: {score:.2f}")
+    decoder_obj = {
+        'decoder': all_decoders,
+        'task': task_config.task,
+        'history': history,
+        'x_mean': x_means,
+        'x_std': x_stds,
+    }
+    with open(save_path, 'wb') as f:
+        pickle.dump(decoder_obj, f)
+    return decoder_obj
+
 def main(task, training_dir, calibration_dir, history, mode):
     # Your main function logic here
     if mode == 'all':
         fit_fn = fit_sklearn_decoder
     elif mode == 'last':
         fit_fn = fit_last_session
+    elif mode == 'per-day':
+        fit_fn = fit_many_decoders # saves down a dict
     else:
         raise ValueError(f"Unknown mode: {mode}")
     training_dir = Path(training_dir)
@@ -238,7 +301,7 @@ if __name__ == "__main__":
     parser.add_argument('--task', type=str, choices=['h1', 'm1', 'm2'], help='Task for training')
     parser.add_argument('--training_dir', '-t', type=str, help='Root directory for training files')
     parser.add_argument('--calibration_dir', '-c', type=str, help='Root directory for calibration files')
-    parser.add_argument('--mode', '-m', type=str, choices=['all', 'last'], help='Mode for training')
+    parser.add_argument('--mode', '-m', type=str, choices=['all', 'last', 'per-day'], help='Mode for training')
     parser.add_argument('--history', type=int, default=0, help='History for decoder')
 
     args = parser.parse_args()

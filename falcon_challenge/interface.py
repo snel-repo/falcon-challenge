@@ -3,6 +3,9 @@ from pathlib import Path
 import numpy as np
 
 class BCIDecoder:
+
+    batch_size: int = 1
+
     @abc.abstractmethod
     def reset(self, dataset_tag: str = ""):
         pass
@@ -38,3 +41,6 @@ class BCIDecoder:
     def on_trial_end(self):
         # Optional hook available in H2 (handwriting) to allow periodic test-time adaptation
         pass
+
+    def set_batch_size(self, batch_size: int):
+        self.batch_size = batch_size

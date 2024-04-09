@@ -35,6 +35,7 @@ def assemble_phase_answer_key(phase='minival', answer_key_dir='./data/answer_key
                 'data': decoding_targets[eval_mask],
                 'mask': eval_mask
             }
+        print(annotations[dataset].keys())
     return annotations
 
 minival_annotations = assemble_phase_answer_key('minival')

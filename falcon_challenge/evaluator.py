@@ -236,7 +236,13 @@ class FalconEvaluator:
         metrics = self.compute_metrics(all_preds, all_targets, all_eval_mask)
         return metrics
 
-    def evaluate(self, decoder: BCIDecoder, phase: str, held_out_only: bool = False, specific_keys: List = []):
+    def evaluate(
+            self, 
+            decoder: BCIDecoder, 
+            phase: str, 
+            held_out_only: bool = False, 
+            specific_keys: List = []
+        ):
         r"""
             Note: Locally, this can produce metrics, but locally and remotely it should also write a submission file 
             that the actual evaluator on remote uses. The evaluation is done separately on remote.
