@@ -89,8 +89,8 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
         raise ValueError(f"Unknown dataset {dataset}")
     with NWBHDF5IO(str(fn), 'r') as io:
         nwbfile = io.read()
-        units = nwbfile.units.to_dataframe()
         if dataset == FalconTask.h1:
+            units = nwbfile.units.to_dataframe()
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
             timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
@@ -106,6 +106,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
             )
             return binned_spikes, trial_info.cue.values, np.concatenate([[False], np.diff(time) > 0.02]), eval_mask
         elif dataset == FalconTask.m1:
+            units = nwbfile.units.to_dataframe()
             raw_emg = nwbfile.acquisition['preprocessed_emg']
             muscles = [ts for ts in raw_emg.time_series]
             emg_data = []
@@ -133,6 +134,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
 
             return binned_units, emg_data, trial_change, eval_mask
         elif dataset == FalconTask.m2:
+            units = nwbfile.units.to_dataframe()
             vel_container = nwbfile.acquisition['finger_vel']
             labels = [ts for ts in vel_container.time_series]
             vel_data = []
