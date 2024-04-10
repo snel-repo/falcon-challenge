@@ -7,6 +7,8 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from sklearn.metrics import r2_score
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset, DataLoader
 
 from falcon_challenge.config import FalconTask, FalconConfig
 from falcon_challenge.interface import BCIDecoder
@@ -168,6 +170,39 @@ def evaluate(
     # Out struct according to https://evalai.readthedocs.io/en/latest/evaluation_scripts.html
     return {"result": result, 'submission_result': result[0]}
 
+class EvalDataset(Dataset):
+    r"""
+        Simple class to help with batched evaluation.
+        data: List of numpy arrays, one per datafile
+        datafiles: str names, for cuing models which dataset is being evaluated
+        trial_mode: serve trialized data (padded) or just parallelize among datafiles
+    """
+    def __init__(self, 
+                 data: List[np.ndarray], 
+                 trial_change: List[np.ndarray], 
+                 targets: List[np.ndarray], 
+                 eval_mask: List[np.ndarray], 
+                 datafiles: List[str],
+                 trial_mode=False):
+        self.data = data
+        self.trial_change = trial_change
+        self.targets = targets
+        self.eval_mask = eval_mask
+        self.datafiles = datafiles
+        assert not trial_mode, "Trial mode not implemented."
+
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return (
+            self.data[idx], 
+            self.targets[idx], 
+            self.trial_change[idx], 
+            self.eval_mask[idx], 
+            self.datafiles[idx]
+        )
+
 class FalconEvaluator:
 
     def __init__(self, eval_remote=False, split='h1'):
@@ -208,10 +243,30 @@ class FalconEvaluator:
         all_targets = defaultdict(list)
         all_eval_mask = defaultdict(list)
 
-        for datafile in tqdm(sorted(eval_files)):
+        # Pre-loop before starting batch loads
+        all_neural_data = []
+        all_trial_change = []
+        all_targets = []
+        all_eval_mask = []
+        datafiles = list(sorted(eval_files))
+        for datafile in tqdm(datafiles):
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
+            all_neural_data.append(neural_data)
+            all_trial_change.append(trial_change)
+            all_targets.append(decoding_targets)
+            all_eval_mask.append(eval_mask)
+        
+        dataset = EvalDataset(
+            data=all_neural_data,
+            trial_change=all_trial_change,
+            targets=all_targets,
+            eval_mask=all_eval_mask,
+            datafiles=datafiles,
+        )
+
+        for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
             decoder.reset(dataset=datafile)
             trial_preds = []
             for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):

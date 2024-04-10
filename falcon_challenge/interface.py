@@ -1,13 +1,22 @@
 import abc
+from typing import List
 from pathlib import Path
 import numpy as np
 
 class BCIDecoder:
 
+    r"""
+        Evaluation can proceed with batch_size > 1, but user/decoder is currently responsible for setting a good amount with OOM.
+        Evaluator reads this batch size to determine how much data to serve at once (will serve 0s to fill to batch size if needed)
+    """
     batch_size: int = 1
 
     @abc.abstractmethod
-    def reset(self, dataset_tag: str = ""):
+    def reset(self, dataset_tags: List[str] = [""]):
+        r"""
+            Called when at least one datafile in batch changes.
+            When called, dataset_tags will be of length batch_size, and nonempty str if datafile changed.
+        """
         pass
 
     # @staticmethod
