@@ -1,7 +1,7 @@
 r"""
     Load an sklearn decoder.
     To train, for example:
-    `python decoder_demos/sklearn_decoder.py --training_dir data/h1/held_in_calib --calibration_dir data/h1/held_out_calib --mode all`
+    `python decoder_demos/sklearn_decoder.py --training_dir data/h1/held_in_calib --calibration_dir data/h1/held_out_calib --mode all --task h1`
     To evaluate, see `sklearn_sample.py`
 """
 from typing import List, Union, Optional
