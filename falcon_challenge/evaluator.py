@@ -272,32 +272,32 @@ class FalconEvaluator:
     def predict_files(self, decoder: BCIDecoder, eval_files: List):
         # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective
         # TODO this does not return uniquely identifiable data if eval_files is partial, e.g. if we only has set 2 of a day with 2 sets, we'll happily just provide partial predictions.
-        all_preds = defaultdict(list)
-        all_targets = defaultdict(list)
-        all_eval_mask = defaultdict(list)
-
         # Pre-loop before starting batch loads
-        all_neural_data = []
-        all_trial_change = []
-        all_targets = []
-        all_eval_mask = []
+        file_neural_data = []
+        file_trial_change = []
+        file_targets = []
+        file_eval_mask = []
         datafiles = list(sorted(eval_files))
-        for datafile in tqdm(datafiles):
+        for datafile in datafiles:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
-            all_neural_data.append(neural_data)
-            all_trial_change.append(trial_change)
-            all_targets.append(decoding_targets)
-            all_eval_mask.append(eval_mask)
-        
+            file_neural_data.append(neural_data)
+            file_trial_change.append(trial_change)
+            file_targets.append(decoding_targets)
+            file_eval_mask.append(eval_mask)
+    
         dataset = EvalDataset(
-            data=all_neural_data,
-            trial_change=all_trial_change,
-            targets=all_targets,
-            eval_mask=all_eval_mask,
+            data=file_neural_data,
+            trial_change=file_trial_change,
+            targets=file_targets,
+            eval_mask=file_eval_mask,
             datafiles=datafiles,
         )
+        
+        all_preds = defaultdict(list)
+        all_targets = defaultdict(list)
+        all_eval_mask = defaultdict(list)
 
         for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
             decoder.reset(dataset=datafile)
@@ -378,7 +378,6 @@ class FalconEvaluator:
                 raise NotImplementedError("not sure what metrics to compute for specific keys yet.")
             elif held_out_only:
                 eval_files_held_in = []
-
             all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files_held_out)
             if eval_files_held_in:
                 all_preds_held_in, all_targets_held_in, all_eval_mask_held_in = self.predict_files(decoder, eval_files_held_in)
