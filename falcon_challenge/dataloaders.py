@@ -104,7 +104,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
                 nwbfile.trials.to_dataframe()
                 .reset_index()
             )
-            return binned_spikes, trial_info.cue.values, np.concatenate([[False], np.diff(time) > 0.02]), eval_mask
+            return binned_spikes, trial_info.cue.values, np.concatenate([[False], np.diff(time) > 0.021]), eval_mask
         elif dataset == FalconTask.m1:
             units = nwbfile.units.to_dataframe()
             raw_emg = nwbfile.acquisition['preprocessed_emg']

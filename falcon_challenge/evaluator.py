@@ -1,12 +1,14 @@
 from typing import List
 import os
 import pickle
+import re
 from collections import defaultdict
 import logging
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from sklearn.metrics import r2_score
+from edit_distance import SequenceMatcher
 
 from falcon_challenge.config import FalconTask, FalconConfig
 from falcon_challenge.interface import BCIDecoder
@@ -54,7 +56,36 @@ DATASET_HELDINOUT_MAP = {
         'held_out': ['20121004', '20121017', '20121022', '20121024'],
     },
     'h2': {
-
+        'held_in': [
+            '2022.05.18', 
+            '2022.05.23', 
+            '2022.05.25', 
+            '2022.06.01', 
+            '2022.06.03', 
+            '2022.06.06', 
+            '2022.06.08', 
+            '2022.06.13', 
+            '2022.06.15', 
+            '2022.06.22', 
+            '2022.09.01', 
+            '2022.09.29', 
+            '2022.10.06',
+            '2022.10.18', 
+            '2022.10.25', 
+            '2022.10.27', 
+            '2022.11.01', 
+            '2022.11.03', 
+            '2022.12.08',
+            '2022.12.15', 
+            '2023.02.28',
+        ],
+        'held_out': [
+            '2023.04.17', 
+            '2023.05.31', 
+            '2023.06.28', 
+            '2023.08.16', 
+            '2023.10.09'
+        ]
     },
     'm2': {
     },
@@ -63,11 +94,13 @@ DATASET_HELDINOUT_MAP = {
 HELD_IN_KEYS = {
     FalconTask.h1: ['S0_', 'S1_', 'S2_', 'S3_', 'S4_', 'S5_'],
     FalconTask.m1: ['L_20120924', 'L_20120926', 'L_20120927', 'L_20120928'],
+    FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_in'],
 }
 
 HELD_OUT_KEYS = {
     FalconTask.h1: ['S6_', 'S7_', 'S8_', 'S9_', 'S10_', 'S11_', 'S12_'],
     FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121022', 'L_20121024'],
+    FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_out'],
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
@@ -155,7 +188,7 @@ def evaluate(
             pred = np.concatenate(pred_dict[in_or_out])
             tgt = np.concatenate(tgt_dict[in_or_out])
             mask = np.concatenate(mask_dict[in_or_out])
-            eval_fn = FalconEvaluator.compute_metrics_classification if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression
+            eval_fn = FalconEvaluator.compute_metrics_edit_distance if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression
             try:
                 metrics = eval_fn(pred, tgt, mask)
             except Exception as e:
@@ -215,18 +248,31 @@ class FalconEvaluator:
             decoder.reset(dataset=datafile)
             trial_preds = []
             for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
-                if trial_delta_obs:
-                    decoder.on_trial_end()
-                if step_mask:
-                    trial_preds.append(decoder.predict(neural_observations))
+                if self.dataset == FalconTask.h2:
+                    if trial_delta_obs:
+                        trial_preds.append(decoder.on_trial_end())
+                    if step_mask:
+                        decoder.predict(neural_observations)
                 else:
-                    decoder.observe(neural_observations)
-                    trial_preds.append(np.full(self.cfg.out_dim, np.nan))
-            all_preds[self.cfg.hash_dataset(datafile)].append(np.stack(trial_preds))
+                    if trial_delta_obs:
+                        decoder.on_trial_end()
+                    if step_mask:
+                        trial_preds.append(decoder.predict(neural_observations))
+                    else:
+                        decoder.observe(neural_observations)
+                        trial_preds.append(np.full(self.cfg.out_dim, np.nan))
+            if self.dataset == FalconTask.h2:
+                trial_preds.append(decoder.on_trial_end())
+                all_preds[self.cfg.hash_dataset(datafile)].append(trial_preds)
+            else:
+                all_preds[self.cfg.hash_dataset(datafile)].append(np.stack(trial_preds))
             all_targets[self.cfg.hash_dataset(datafile)].append(decoding_targets)
             all_eval_mask[self.cfg.hash_dataset(datafile)].append(eval_mask)
         for k in all_preds:
-            all_preds[k] = np.concatenate(all_preds[k])
+            if self.dataset == FalconTask.h2:
+                all_preds[k] = [x for y in all_preds[k] for x in y]
+            else:
+                all_preds[k] = np.concatenate(all_preds[k])
             all_targets[k] = np.concatenate(all_targets[k])
             all_eval_mask[k] = np.concatenate(all_eval_mask[k])
         return all_preds, all_targets, all_eval_mask
@@ -293,7 +339,7 @@ class FalconEvaluator:
             inner_pred = {**all_preds}
             inner_tgt_spoof = { # spoof for local mirror of eval ai path, in reality targets are already compiled on eval ai side.
                 k: {
-                    'data': all_targets[k][all_eval_mask[k]],
+                    'data': all_targets[k][all_eval_mask[k]] if self.dataset != FalconTask.h2 else all_targets[k],
                     'mask': all_eval_mask[k],
                 } for k in all_targets
             }
@@ -339,13 +385,37 @@ class FalconEvaluator:
         }
 
     @staticmethod
-    def compute_metrics_classification(preds, targets, eval_mask):
-        preds = preds[eval_mask]
-        if not targets.shape[0] == preds.shape[0]:
-            raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
+    def compute_metrics_edit_distance(preds, targets, eval_mask):
+        k = list(preds.keys())[0]  # TODO: This is a hack. We should be able to handle multiple keys.
+        preds = preds[k]
+        targets = targets[k]
+
+        if len(preds) != len(targets):
+            raise ValueError(f"Targets and predictions have different lengths: {len(targets)} vs {len(preds)}.")
+        
+        def _to_words(s):
+            return s.replace(">", " ").replace(r"([~,!?])", r" \1").split(" ")
+        
+        char_counts = []
+        word_counts = []
+        char_distances = []
+        word_distances = []
+        for pred, target in zip(preds, targets):
+            matcher = SequenceMatcher([c for c in pred], [c for c in target])
+            char_distances.append(matcher.distance())
+            char_counts.append(len(target))
+
+            pred = _to_words(pred)
+            target = _to_words(target)
+            matcher = SequenceMatcher(pred, target)
+            word_distances.append(matcher.distance())
+            word_counts.append(len(target))
+
         return {
-            "WER": 1-(preds == targets).mean(),
-            "WER Std.": 0, # TODO Clay
+            "WER": np.sum(word_distances) / np.sum(word_counts),
+            "CER": np.sum(char_distances) / np.sum(char_counts),
+            "WER Std.": np.std(np.array(word_distances) / np.array(word_counts)),
+            "CER Std.": np.std(np.array(char_distances) / np.array(char_counts)),
         }
 
     def compute_metrics(self, all_preds, all_targets, all_eval_mask=None):
@@ -357,7 +427,7 @@ class FalconEvaluator:
         if self.dataset in [FalconTask.h1, FalconTask.m1, FalconTask.m2]:
             metrics = self.compute_metrics_regression(all_preds, all_targets, all_eval_mask)
         elif self.dataset in [FalconTask.h2]:
-            metrics = self.compute_metrics_classification(all_preds, all_targets, all_eval_mask)
+            metrics = self.compute_metrics_edit_distance(all_preds, all_targets, all_eval_mask)
         else:
             raise ValueError(f"Unknown dataset {self.dataset}")
         return metrics
