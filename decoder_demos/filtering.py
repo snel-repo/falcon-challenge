@@ -13,7 +13,7 @@ def apply_exponential_filter(
     """
     Apply a **causal** exponential filter to the neural signal.
 
-    :param x: NumPy array of shape (time, channels)
+    :param x: NumPy array of shape (time, (batch), channels)
     :param tau: Decay rate (time constant) of the exponential filter
     :param bin_size: Bin size in ms (default is 10ms)
     :return: Filtered signal
@@ -26,8 +26,10 @@ def apply_exponential_filter(
     # Exponential filter kernel
     kernel = np.exp(-t / tau)
     kernel /= np.sum(kernel)
+    if len(x.shape) == 3:
+        kernel = kernel[:, np.newaxis]
     # Apply the filter
-    filtered_signal = np.array([signal.convolve(x[:, ch], kernel, mode='full')[:len(x)] for ch in range(x.shape[1])]).T
+    filtered_signal = np.array([signal.convolve(x[..., ch], kernel, mode='full')[:len(x)] for ch in range(x.shape[-1])]).T
     return filtered_signal
 
 

@@ -22,6 +22,7 @@ def main():
     parser.add_argument(
         '--phase', choices=['minival', 'test'], default='minival'
     )
+    parser.add_argument('--batch-size', type=int, help='size of batch for evaluation', default=1)
     args = parser.parse_args()
 
     task = getattr(FalconTask, args.split)
@@ -29,7 +30,7 @@ def main():
         task=task,
     )
 
-    decoder = SKLearnDecoder(task_config=config, model_path=args.model_path)
+    decoder = SKLearnDecoder(task_config=config, model_path=args.model_path, batch_size=args.batch_size)
 
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",

@@ -80,8 +80,9 @@ class SKLearnDecoder(BCIDecoder):
     r"""
         Load an sklearn decoder. Assumes the dimensionality is correct.
     """
-    def __init__(self, task_config: FalconConfig, model_path: str):
+    def __init__(self, task_config: FalconConfig, model_path: str, batch_size: int = 1):
         self._task_config = task_config
+        self.batch_size = batch_size
         with open(model_path, 'rb') as f:
             payload = pickle.load(f)
             assert payload['task'] == task_config.task
@@ -90,24 +91,28 @@ class SKLearnDecoder(BCIDecoder):
             MAX_HISTORY = int(NEURAL_TAU_MS / task_config.bin_size_ms) * 5 # bin size ms
             self.x_mean = payload['x_mean']
             self.x_std = payload['x_std']
-            self.raw_history_buffer = np.zeros((MAX_HISTORY, task_config.n_channels))
-            self.observation_buffer = np.zeros((self.history, task_config.n_channels))
+            self.raw_history_buffer = np.zeros((MAX_HISTORY, batch_size, task_config.n_channels))
+            self.observation_buffer = np.zeros((self.history, batch_size, task_config.n_channels))
 
-    def reset(self, dataset: Path = ""):
+    def reset(self, dataset_tags: List[Path] = [""]):
         if isinstance(self.x_mean, dict):
-            dataset_tag =  self._task_config.hash_dataset(dataset.stem)
-            if dataset_tag not in self.x_mean:
-                raise ValueError(f"Dataset tag {dataset_tag} not found in calibration set {self.x_mean.keys()} - did you calibrate on this dataset?")
-            self.local_x_mean = self.x_mean[dataset_tag]
-            self.local_x_std = self.x_std[dataset_tag]
+            # TODO retrieve a list of x_means
+            dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
+            for dataset_tag in dataset_tags:
+                if dataset_tag not in self.x_mean:
+                    raise ValueError(f"Dataset tag {dataset_tag} not found in calibration set {self.x_mean.keys()} - did you calibrate on this dataset?")
+            self.local_x_mean = [self.x_mean[dset_tag] for dset_tag in dataset_tags]
+            self.local_x_std = [self.x_std[dset_tag] for dset_tag in dataset_tags]
         else:
             self.local_x_mean = self.x_mean
             self.local_x_std = self.x_std
+        # TODO this one too...
         if isinstance(self.clf, dict):
-            dataset_tag =  self._task_config.hash_dataset(dataset.stem)
-            if dataset_tag not in self.clf:
-                raise ValueError(f"Dataset tag {dataset_tag} not found decoder set {self.clf.keys()}")
-            self.local_clf = self.clf[dataset_tag]
+            dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
+            for dataset_tag in dataset_tags:
+                if dataset_tag not in self.clf:
+                    raise ValueError(f"Dataset tag {dataset_tag} not found decoder set {self.clf.keys()}")
+            self.local_clf = [self.clf[dataset_tag] for dataset_tag in dataset_tags]
         else:
             self.local_clf = self.clf
         self.raw_history_buffer = np.zeros_like(self.raw_history_buffer)
@@ -115,23 +120,36 @@ class SKLearnDecoder(BCIDecoder):
 
     def predict(self, neural_observations: np.ndarray):
         r"""
-            neural_observations: array of shape (n_channels), binned spike counts
+            neural_observations: array of shape (batch, n_channels), binned spike counts
+            
+            return: array of shape (batch, n_features), predicted kinematics
         """
         self.observe(neural_observations)
-        decoder_in = self.observation_buffer[::-1].copy().flatten().reshape(1, -1) # Reverse since this happens to be how the lagged matrix is formatted
-        out = self.local_clf.predict(decoder_in)[0]
-        return out
+        decoder_in = self.observation_buffer[::-1].copy().transpose(  # Reverse since this happens to be how the lagged matrix is formatted
+            1, 0, 2 # batch, history, channels
+        ).reshape(self.observation_buffer.shape[1], -1)
+        if isinstance(self.clf, dict):
+            out = []
+            for idx in range(len(self.local_clf)):
+                out.append(self.local_clf[idx].predict(decoder_in[idx:idx+1])[0]) # needs batch=1 dim
+            return np.stack(out, 0)
+        else:
+            return self.local_clf.predict(decoder_in[:neural_observations.shape[0]])
 
     def observe(self, neural_observations: np.ndarray):
         r"""
-            neural_observations: array of shape (n_channels), binned spike counts
+            neural_observations: array of shape (batch, n_channels), binned spike counts
             - for timestamps where we don't want predictions but neural data may be informative (start of trial)
         """
+        # pad neural observation to batch size
+        if neural_observations.shape[0] < self.batch_size:
+            neural_observations = np.pad(neural_observations, ((0, self.batch_size - neural_observations.shape[0]), (0, 0)))
         self.raw_history_buffer = np.roll(self.raw_history_buffer, -1, axis=0)
         self.raw_history_buffer[-1] = neural_observations
         smth_history = apply_exponential_filter(self.raw_history_buffer, NEURAL_TAU_MS)
         self.observation_buffer = np.roll(self.observation_buffer, -1, axis=0)
-        self.observation_buffer[-1] = (smth_history[-1] - self.local_x_mean) / self.local_x_std
+        for idx in range(len(self.local_x_mean)):
+            self.observation_buffer[-1, idx] = (smth_history[-1, idx] - self.local_x_mean[idx]) / self.local_x_std[idx]
 
 def fit_sklearn_decoder(
     datafiles: List[Path],
