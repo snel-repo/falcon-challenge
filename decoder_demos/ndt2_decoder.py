@@ -91,24 +91,24 @@ class NDT2Decoder(BCIDecoder):
         for dataset_tag in dataset_tags:
             if dataset_tag not in self.model.data_attrs.context.session:
                 raise ValueError(f"Dataset tag {dataset_tag} not found in calibration sets {self.model.data_attrs.context.session} - did you calibrate on this dataset?")
-            meta_keys.append(self.model.data_attrs.context.session.index(
-                self._task_config.hash_dataset(dataset_tag)
-            ))
+            meta_keys.append(self.model.data_attrs.context.session.index(dataset_tag))
         self.meta_key = torch.tensor(meta_keys, device='cuda:0')
 
     def predict(self, neural_observations: np.ndarray):
         r"""
-            neural_observations: array of shape (n_channels), binned spike counts
+            neural_observations: array of shape (batch, n_channels), binned spike counts
+            
+            return:
+                out: (batch, n_dims)
         """
         self.observe(neural_observations)
         decoder_in = rearrange(self.observation_buffer[-self.set_steps:], 't b c -> b t c 1')
-        breakpoint() # TODO implement/verify self.meta_key can be a batch
-        out = self.model(decoder_in, self.meta_key) # Remove batch dim
-        return out[0].cpu().numpy()
+        out = self.model(decoder_in, self.meta_key)
+        return out.cpu().numpy()
     
     def observe(self, neural_observations: np.ndarray):
         r"""
-            neural_observations: array of shape (n_channels), binned spike counts
+            neural_observations: array of shape (batch, n_channels), binned spike counts
             - for timestamps where we don't want predictions but neural data may be informative (start of trial)
         """
         if neural_observations.shape[0] < self.batch_size:

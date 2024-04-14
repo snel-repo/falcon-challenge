@@ -323,14 +323,15 @@ class FalconEvaluator:
         all_targets = defaultdict(list)
         all_eval_mask = defaultdict(list)
         
-        num_workers = 0
+        num_workers = 8
         dataloader = DataLoader(
             dataset, shuffle=False,
             batch_size=decoder.batch_size,
-            num_workers=0,
+            num_workers=num_workers,
             persistent_workers=num_workers > 0,
             collate_fn=simple_collater,
         )
+        
         # for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
         for neural_data, decoding_targets, trial_change, eval_mask, datafile_idx in tqdm(dataloader):
             neural_data: np.ndarray

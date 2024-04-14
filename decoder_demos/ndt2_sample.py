@@ -34,6 +34,9 @@ def main():
     parser.add_argument(
         '--phase', choices=['minival', 'test'], default='minival'
     )
+    parser.add_argument(
+        '--batch-size', type=int, default=1
+    )
     args = parser.parse_args()
 
     evaluator = FalconEvaluator(
@@ -48,7 +51,8 @@ def main():
         model_ckpt_path=args.model_path,
         model_cfg_stem=args.config_stem,
         zscore_path=args.zscore_path,
-        dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=args.phase)]
+        dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=args.phase)],
+        batch_size=args.batch_size
     )
 
 
