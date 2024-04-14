@@ -146,10 +146,10 @@ class SKLearnDecoder(BCIDecoder):
             neural_observations = np.pad(neural_observations, ((0, self.batch_size - neural_observations.shape[0]), (0, 0)))
         self.raw_history_buffer = np.roll(self.raw_history_buffer, -1, axis=0)
         self.raw_history_buffer[-1] = neural_observations
-        smth_history = apply_exponential_filter(self.raw_history_buffer, NEURAL_TAU_MS)
         self.observation_buffer = np.roll(self.observation_buffer, -1, axis=0)
         for idx in range(len(self.local_x_mean)):
-            self.observation_buffer[-1, idx] = (smth_history[-1, idx] - self.local_x_mean[idx]) / self.local_x_std[idx]
+            smth_history_idx = apply_exponential_filter(self.raw_history_buffer[:, idx], NEURAL_TAU_MS)
+            self.observation_buffer[-1, idx] = (smth_history_idx[-1] - self.local_x_mean[idx]) / self.local_x_std[idx]
 
 def fit_sklearn_decoder(
     datafiles: List[Path],
