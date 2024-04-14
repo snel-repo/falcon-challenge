@@ -3,6 +3,8 @@ from typing import List
 from pathlib import Path
 import numpy as np
 
+from falcon_challenge.config import FalconConfig
+
 class BCIDecoder:
 
     r"""
@@ -11,7 +13,10 @@ class BCIDecoder:
         Currently the evaluator batches different session predictions, not different trials within a session; this prevents disruption of neural history.
         User/decoder is currently responsible for setting a batch size that does not OOM.
     """
-    batch_size: int = 1
+    
+    def __init__(self, task_config: FalconConfig, batch_size: int = 1):
+        self._task_config = task_config
+        self.batch_size = batch_size
 
     @abc.abstractmethod
     def reset(self, dataset_tags: List[str] = [""]):

@@ -81,6 +81,7 @@ class SKLearnDecoder(BCIDecoder):
         Load an sklearn decoder. Assumes the dimensionality is correct.
     """
     def __init__(self, task_config: FalconConfig, model_path: str, batch_size: int = 1):
+        super().__init__(task_config=task_config, batch_size=batch_size)
         self._task_config = task_config
         self.batch_size = batch_size
         with open(model_path, 'rb') as f:

@@ -37,13 +37,14 @@ class NDT2Decoder(BCIDecoder):
             model_ckpt_path: str,
             model_cfg_stem: str,
             zscore_path: str,
-            dataset_handles: List[str] = []
+            dataset_handles: List[str] = [],
+            batch_size: int = 1
         ):
         r"""
             Loading NDT2 requires both weights and model config. Weight loading through a checkpoint is standard.
             Model config is typically stored on wandb, but this is not portable enough. Instead, directly reference the model config file.
         """
-        self._task_config = task_config
+        super().__init__(task_config=task_config, batch_size=batch_size)
         self.exp_task = getattr(ExperimentalTask, f'falcon_{task_config.task.name}')
         try:
             initialize_config_module(
@@ -76,23 +77,32 @@ class NDT2Decoder(BCIDecoder):
         self.model.eval()
 
         assert task_config.bin_size_ms == cfg.dataset.bin_size_ms, "Bin size mismatch, transform not implemented."
-        self.observation_buffer = torch.zeros((cfg.dataset.max_length_ms // task_config.bin_size_ms, task_config.n_channels), dtype=torch.uint8, device='cuda:0')
+        self.observation_buffer = torch.zeros((
+            cfg.dataset.max_length_ms // task_config.bin_size_ms, 
+            self.batch_size,
+            task_config.n_channels
+        ), dtype=torch.uint8, device='cuda:0')
 
-    def reset(self, dataset: Path = ""):
-        dataset_tag = dataset.stem
+    def reset(self, dataset_tags: List[Path] = [""]):
         self.set_steps = 0
         self.observation_buffer.zero_()
-        self.meta_key = torch.tensor([
-            self.model.data_attrs.context.session.index(
+        dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
+        meta_keys = []
+        for dataset_tag in dataset_tags:
+            if dataset_tag not in self.model.data_attrs.context.session:
+                raise ValueError(f"Dataset tag {dataset_tag} not found in calibration sets {self.model.data_attrs.context.session} - did you calibrate on this dataset?")
+            meta_keys.append(self.model.data_attrs.context.session.index(
                 self._task_config.hash_dataset(dataset_tag)
-            )], device='cuda:0')
+            ))
+        self.meta_key = torch.tensor(meta_keys, device='cuda:0')
 
     def predict(self, neural_observations: np.ndarray):
         r"""
             neural_observations: array of shape (n_channels), binned spike counts
         """
         self.observe(neural_observations)
-        decoder_in = rearrange(self.observation_buffer[-self.set_steps:], 't c -> 1 t c 1')
+        decoder_in = rearrange(self.observation_buffer[-self.set_steps:], 't b c -> b t c 1')
+        breakpoint() # TODO implement/verify self.meta_key can be a batch
         out = self.model(decoder_in, self.meta_key) # Remove batch dim
         return out[0].cpu().numpy()
     
@@ -101,14 +111,18 @@ class NDT2Decoder(BCIDecoder):
             neural_observations: array of shape (n_channels), binned spike counts
             - for timestamps where we don't want predictions but neural data may be informative (start of trial)
         """
+        if neural_observations.shape[0] < self.batch_size:
+            neural_observations = np.pad(neural_observations, ((0, self.batch_size - neural_observations.shape[0]), (0, 0)))
         self.set_steps += 1
         self.observation_buffer = torch.roll(self.observation_buffer, -1, dims=0)
         self.observation_buffer[-1] = torch.as_tensor(neural_observations, dtype=torch.uint8, device='cuda:0')
 
-    def on_trial_end(self):
+    def on_dones(self, dones: np.ndarray):
         # reset - for some reason m1 benefits from this
         self.set_steps = 0
-        self.observation_buffer.zero_()
+        if dones.shape[0] < self.batch_size:
+            dones = np.pad(dones, (0, self.batch_size - dones.shape[0]))
+        self.observation_buffer[:, dones].zero_()
 
 if __name__ == "__main__":
     print(f"No train/calibration capabilities in {__file__}, use `context_general_bci` codebase.")
