@@ -331,7 +331,7 @@ class FalconEvaluator:
             persistent_workers=num_workers > 0,
             collate_fn=simple_collater,
         )
-        
+        # from time import time
         # for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
         for neural_data, decoding_targets, trial_change, eval_mask, datafile_idx in tqdm(dataloader):
             neural_data: np.ndarray
@@ -339,9 +339,9 @@ class FalconEvaluator:
             trial_change: np.ndarray
             eval_mask: np.ndarray
             datafile_idx: np.ndarray
-            
             decoder.reset(dataset_tags=[dataset.datafiles[idx] for idx in datafile_idx])
             trial_preds = []
+            # loop_times = []
             for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
                 neural_observations: np.ndarray
                 trial_delta_obs: np.ndarray
@@ -354,18 +354,25 @@ class FalconEvaluator:
                     if step_mask:
                         decoder.predict(neural_observations)
                 else:
+                    # loop_start = time()
                     decoder.on_done(trial_delta_obs)
-                    if step_mask.any():
-                        trial_preds.append(decoder.predict(neural_observations))
-                    else:
-                        decoder.observe(neural_observations)
-                        trial_preds.append(np.full((decoder.batch_size, self.cfg.out_dim), np.nan))
+                    trial_preds.append(decoder.predict(neural_observations))
+                    
+                    # if step_mask.any():
+                    #     trial_preds.append(decoder.predict(neural_observations))
+                    # else:
+                    #     decoder.observe(neural_observations)
+                    #     trial_preds.append(np.full((decoder.batch_size, self.cfg.out_dim), np.nan))
+                # loop_times.append(time() - loop_start)
+            # loop_times = np.array(loop_times)
+            # print(f"Loop {len(loop_times)}: {loop_times.mean()} +/- {loop_times.std()}")
+            
             if self.dataset == FalconTask.h2:
                 trial_preds.append(decoder.on_done()) # ? JY -> CF: Not sure why we need an additional on_done here? Which trials have further terminated?
                 datafile = dataset.get_datafile(datafile_idx[0])
                 all_preds[self.cfg.hash_dataset(datafile)].append(trial_preds)
             else:
-                trial_preds = np.stack(trial_preds) # T x B x H
+                trial_preds = np.stack(trial_preds) # -> T x B x H
                 for idx in range(len(datafile_idx)):
                     datafile = dataset.get_datafile(datafile_idx[idx])
                     all_preds[self.cfg.hash_dataset(datafile)].append(trial_preds[:, idx])

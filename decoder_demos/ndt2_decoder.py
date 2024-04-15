@@ -72,7 +72,7 @@ class NDT2Decoder(BCIDecoder):
         data_attrs = DataAttrs.from_config(cfg.dataset, context=ContextAttrs(**context_idx))
         cfg.model.task.decode_normalizer = zscore_path
         model = load_from_checkpoint(model_ckpt_path, cfg=cfg.model, data_attrs=data_attrs)
-        model = transfer_model(model, cfg.model, data_attrs)
+        model = transfer_model(model, cfg.model, data_attrs, batch_size=batch_size)
         self.model = model.to('cuda:0')
         self.model.eval()
 
@@ -104,7 +104,7 @@ class NDT2Decoder(BCIDecoder):
         self.observe(neural_observations)
         decoder_in = rearrange(self.observation_buffer[-self.set_steps:], 't b c -> b t c 1')
         out = self.model(decoder_in, self.meta_key)
-        return out.cpu().numpy()
+        return out
     
     def observe(self, neural_observations: np.ndarray):
         r"""
@@ -115,6 +115,7 @@ class NDT2Decoder(BCIDecoder):
             neural_observations = np.pad(neural_observations, ((0, self.batch_size - neural_observations.shape[0]), (0, 0)))
         self.set_steps += 1
         self.observation_buffer = torch.roll(self.observation_buffer, -1, dims=0)
+        # self.observation_buffer[-1] = neural_observations # , dtype=torch.uint8, device='cuda:0')
         self.observation_buffer[-1] = torch.as_tensor(neural_observations, dtype=torch.uint8, device='cuda:0')
 
     def on_dones(self, dones: np.ndarray):
