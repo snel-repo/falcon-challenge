@@ -104,7 +104,8 @@ class NDT2Decoder(BCIDecoder):
         self.observe(neural_observations)
         decoder_in = rearrange(self.observation_buffer[-self.set_steps:], 't b c -> b t c 1')
         out = self.model(decoder_in, self.meta_key)
-        return out
+        return out.cpu().numpy()
+
     
     def observe(self, neural_observations: np.ndarray):
         r"""
