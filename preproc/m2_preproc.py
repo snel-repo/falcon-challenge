@@ -82,7 +82,9 @@ def create_nwb_shell(path: Path, split, suffix='full'):
     session_start_time = datetime.strptime(start_date, '%Y-%m-%d')
     # inject arbitrary hour to distinguish sets
     session_start_time = session_start_time.replace(hour=12 + DATA_RUN_SET[path.stem])
-    hash = '_'.join(path.stem.split('_')[2:])
+    # hash = '_'.join(path.stem.split('_')[2:]) # includes date and run, remap run
+    session_hash = start_date + '_' + f'Run{DATA_RUN_SET[path.stem]}'
+    # breakpoint()
     subject = pynwb.file.Subject(
         subject_id=f'MonkeyN-{split}-{suffix}',
         description='MonkeyN, Chestek Lab, number indicates experimental set from day',
@@ -90,21 +92,23 @@ def create_nwb_shell(path: Path, split, suffix='full'):
         sex='M',
         age='P8Y',
     )
+    file_id = f'MonkeyN_{session_start_time.strftime("%m-%d-%H:%M")}_{split}'
+    # file_id = f'MonkeyN_{session_start_time.strftime("%m-%d-%H:%M")}_run{DATA_RUN_SET[path.stem]}_{split}'
     f = NWBFile(
         session_description='M2 data',
-        identifier=f'MonkeyN_{start_date}_{split}',
+        identifier=file_id,
         subject=subject,
-        session_start_time=datetime.strptime(start_date, '%Y-%m-%d'),
-        experimenter='Samuel R. Nason and Matthew J. Mender',
+        session_start_time=session_start_time,
+        experimenter='Samuel R. Nason-Tomaszewski and Matthew J. Mender',
         lab='Chestek Lab',
-        institution='University of Michicgan',
-        experiment_description='Two finger group movement in NHP',
-        session_id=hash
+        institution='University of Michigan',
+        experiment_description='Two finger group movement in NHP. Behavior provided in 20ms bins, observation interval at trial ends may include a bit of neural data from partial bin.',
+        session_id=session_hash # determines the fn
     )
-    device = f.create_device(name='Blackrock Utah Array', description='96-channel array')
+    device = f.create_device(name='Blackrock Utah Array', description='2x64-channel array, 96 active')
     main_group = f.create_electrode_group(
         name='M1_array',
-        description='Hand area 96-channel array',
+        description='Hand area 2x64-channel array (96 active channels in recording system)',
         location='M1',
         device=device,
     )
@@ -146,6 +150,7 @@ def to_nwb(path: Path, ):
         all_spikes = [[] for _ in range(CHANNEL_EXPECTATION)]
         all_time = []
         start_time = 0
+        # breakpoint()
         for i, trial_data in enumerate(payload):
             time = trial_data['time'].astype(float) / 1000 # To ms
             if not start_time:
@@ -162,7 +167,7 @@ def to_nwb(path: Path, ):
             bhvr = trial_data['fingers']
             EDGE_PAD = 160 # reduce edge ringing, in ms
             y_padded = np.pad(bhvr, ((EDGE_PAD, EDGE_PAD), (0, 0)), mode='edge',)
-            y_padded = smooth(y_padded, 120, 40) # TODO ask Sam what to use instead of this Gaussian
+            y_padded = smooth(y_padded, 120, 40) # Sam says Gaussian is fine
 
             y_resampled_padded = resample_poly(y_padded, math.ceil(FS / BIN_SIZE_MS), 1000)
             bhvr = y_resampled_padded[int(EDGE_PAD / BIN_SIZE_MS):int(-EDGE_PAD / BIN_SIZE_MS)]
@@ -185,11 +190,17 @@ def to_nwb(path: Path, ):
                 obs_intervals=[[i[0], i[-1] + BIN_SIZE_S] for i in all_time]
             )
             # OK...
-        # trial_diffs = [all_time[i+1][0] - all_time[i][-1] for i in range(len(all_time) - 1)]
+        trial_diffs = [all_time[i+1][0] - all_time[i][-1] for i in range(len(all_time) - 1)]
+        trial_diff_raw = [payload[i+1]['time'][0] - payload[i]['time'][-1] for i in range(len(payload) - 1)]
+        print(f"Max diff b/n consecutive trials: {max(trial_diffs):.4f}")
+        print(f"Max diff b/n consecutive trials (raw): {max(trial_diff_raw):.4f}")
+        # Note there's one long drop in `20201019`
+        # if max(trial_diff_raw) > 3:
+            # breakpoint()
         all_time = np.concatenate(all_time, axis=0)
         diff_check = np.diff(all_time).max()
         assert (diff_check > 0), "Expecting time to be monotonically increasing across trials."
-        print(f"Max diff b/n consecutive timebins: {diff_check}")
+        # print(f"Max diff b/n consecutive timebins: {diff_check}")
 
         
         ts = create_multichannel_timeseries(
@@ -221,10 +232,12 @@ def to_nwb(path: Path, ):
         )
         date_str = path.stem.split('_')[2].replace('-', '')
         run = DATA_RUN_SET[path.stem]
+        # new_prefix = f'sub-MonkeyN_{date_str}_{DATA_SPLITS[path.stem]}'
         new_prefix = f'sub-MonkeyNRun{run}_{date_str}_{DATA_SPLITS[path.stem]}'
         write_to_nwb(nwbfile, out_root / DATA_SPLITS[path.stem] / f"{new_prefix}_{suffix}.nwb")
-        print(f"Written {path.stem}_{suffix}.nwb")
-
+        # breakpoint()
+        print(f"Written ", out_root / DATA_SPLITS[path.stem] / f"{new_prefix}_{suffix}.nwb")
+    # breakpoint()
     eval_num = int(len(full_payload) * EVAL_RATIO)
     eval_trials = full_payload[-eval_num:]
     create_and_write(eval_trials, 'eval')
