@@ -57,17 +57,21 @@ DATASET_HELDINOUT_MAP = {
 
     },
     'm2': {
+        'held_in': ['2020-10-19-Run1', '2020-10-19-Run2', '2020-10-20-Run1', '2020-10-20-Run2', '2020-10-27-Run1', '2020-10-27-Run2', '2020-10-28-Run1'],
+        'held_out': ['2020-10-30-Run1', '2020-10-30-Run2', '2020-11-18-Run1', '2020-11-19-Run1', '2020-11-24-Run1', '2020-11-24-Run2'],
     },
 }
 
 HELD_IN_KEYS = {
     FalconTask.h1: ['S0_', 'S1_', 'S2_', 'S3_', 'S4_', 'S5_'],
     FalconTask.m1: ['L_20120924', 'L_20120926', 'L_20120927', 'L_20120928'],
+    FalconTask.m2: ['2020-10-19', '2020-10-20', '2020-10-27', '2020-10-28'],
 }
 
 HELD_OUT_KEYS = {
     FalconTask.h1: ['S6_', 'S7_', 'S8_', 'S9_', 'S10_', 'S11_', 'S12_'],
     FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121022', 'L_20121024'],
+    FalconTask.m2: ['2020-10-30', '2020-11-18', '2020-11-19', '2020-11-24'],
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.

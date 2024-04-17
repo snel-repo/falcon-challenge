@@ -47,7 +47,8 @@ def bin_units(
         if (gaps <= 0).any():
             raise ValueError("bin_end_timestamps must be monotonically increasing.")
         if not np.allclose(gaps, bin_size_s):
-            print(f"Warning: Input timestamps not spaced like requested {bin_size_s}. Outputting proximal bin spikes.")
+            not_close = (~np.isclose(gaps, bin_size_s)).sum()
+            print(f"Warning: Input has {not_close} timestamps not spaced like requested {bin_size_s}. Outputting proximal bin spikes.")
             # Adjust bin_end_timestamps to include bins at the end of discontinuities
             new_bin_ends = [bin_end_timestamps[0]]
             bin_mask = [True] # bool, True if bin ending at this timepoint should be included post mask (not padding)
