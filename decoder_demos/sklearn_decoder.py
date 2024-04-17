@@ -29,20 +29,24 @@ def prepare_train_test(
         targets: np.ndarray,
         blacklist: Optional[np.ndarray]=None,
         history: int=0,
+        mask_still_times: bool=True
         ):
     signal = apply_exponential_filter(binned_spikes)
 
-    # Remove timepoints where nothing is happening in the kinematics
-    still_times = np.all(np.abs(targets) < 0.001, axis=1)
-    if blacklist is not None:
-        blacklist = still_times | blacklist
+    # Remove timepoints where nothing is happening in the kinematics (relevant esp for H1)
+    if mask_still_times:
+        still_times = np.all(np.abs(targets) < 0.001, axis=1)
+        if blacklist is not None:
+            blacklist = still_times | blacklist
+        else:
+            blacklist = still_times
     else:
-        blacklist = still_times
+        if blacklist is None:
+            blacklist = np.zeros(targets.shape[0], dtype=bool)
 
     train_x, test_x = np.split(signal, [int(TRAIN_TEST[0] * signal.shape[0])])
     train_y, test_y = np.split(targets, [int(TRAIN_TEST[0] * targets.shape[0])])
     train_blacklist, test_blacklist = np.split(blacklist, [int(TRAIN_TEST[0] * blacklist.shape[0])])
-
     x_mean, x_std = np.nanmean(train_x, axis=0), np.nanstd(train_x, axis=0)
     x_std[x_std == 0] = 1
     y_mean, y_std = np.nanmean(train_y[~train_blacklist], axis=0), np.nanstd(train_y[~train_blacklist], axis=0)
@@ -162,7 +166,7 @@ def fit_sklearn_decoder(
         x_std,
         y_mean,
         y_std
-    ) = prepare_train_test(all_neural_data, all_covariates, ~all_eval_mask, history=history)
+    ) = prepare_train_test(all_neural_data, all_covariates, ~all_eval_mask, history=history, mask_still_times=task_config.task == FalconTask.h1)
     score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
     print(f"CV Fit score: {score:.2f}")
     (

@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 from typing import Union
 from pathlib import Path
+import datetime
 from dataclasses import dataclass, field
 
 from hydra.core.config_store import ConfigStore
@@ -83,7 +84,15 @@ class FalconConfig:
                 return handle.split('_')[-2].split('-')[-1]
             return handle.split('_')[1]
         elif self.task == FalconTask.m2:
-            raise NotImplementedError("M2 not implemented.")
+            if 'behavior+ecephys' in handle: # public sub-MonkeyN-held-in-calib_ses-2020-10-19-Run1_behavior+ecephys.nwb
+                return handle.split('_')[-2][4:] # -> 2020-10-19-Run1
+            # sub-MonkeyNRun1_20201019_held_in_eval.nwb 
+            run_str = handle.split('_')[0][-4:]
+            date_str = handle.split('_')[1]
+            date = datetime.datetime.strptime(date_str, '%Y%m%d')
+            date_str_fmt = date.strftime('%Y-%m-%d')
+            return f'{date_str_fmt}-{run_str}'
+            
 
 cs = ConfigStore.instance()
 cs.store(name="falcon_config", node=FalconConfig)

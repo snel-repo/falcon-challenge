@@ -17,6 +17,7 @@ from falcon_challenge.dataloaders import load_nwb
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Data hash map, what participant submits, keys of comparison dict
 DATASET_HELDINOUT_MAP = {
     'h1': {
         'held_in': [
@@ -93,17 +94,18 @@ DATASET_HELDINOUT_MAP = {
     },
 }
 
+# Used to label test server data file names to look for
 HELD_IN_KEYS = {
     FalconTask.h1: ['S0_', 'S1_', 'S2_', 'S3_', 'S4_', 'S5_'],
     FalconTask.m1: ['L_20120924', 'L_20120926', 'L_20120927', 'L_20120928'],
-    FalconTask.m2: DATASET_HELDINOUT_MAP['m2']['held_in'],
+    FalconTask.m2: ['20201019', '20201020', '20201027', '20201028'],
     FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_in'],
 }
 
 HELD_OUT_KEYS = {
     FalconTask.h1: ['S6_', 'S7_', 'S8_', 'S9_', 'S10_', 'S11_', 'S12_'],
     FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121022', 'L_20121024'],
-    FalconTask.m2: DATASET_HELDINOUT_MAP['m2']['held_out'],
+    FalconTask.m2: ['20201030', '20201118', '20201119', '20201124'],
     FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_out'],
 }
 
