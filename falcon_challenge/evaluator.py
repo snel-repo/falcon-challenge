@@ -1,6 +1,8 @@
 from typing import List
+from functools import partial
 import os
 import pickle
+import torch
 import re
 from collections import defaultdict
 import logging
@@ -8,6 +10,8 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from sklearn.metrics import r2_score
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset, DataLoader
 from edit_distance import SequenceMatcher
 
 from falcon_challenge.config import FalconTask, FalconConfig
@@ -109,6 +113,12 @@ HELD_OUT_KEYS = {
     FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_out'],
 }
 
+RECOMMENDED_BATCH_SIZES = {
+    FalconTask.h1: 8,
+    FalconTask.m1: 4,
+    FalconTask.h2: 1,
+}
+
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
 # Should be set to true for remote evaluation.
 # USE_PKLS = False
@@ -178,6 +188,7 @@ def evaluate(
             dataset_pred = user_submission[datasplit][dataset]
             dataset_tgt = split_annotations[dataset]['data']
             dataset_mask = split_annotations[dataset]['mask']
+            dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
                 pred_dict['held_in'].append(dataset_pred)
                 tgt_dict['held_in'].append(dataset_tgt)
@@ -192,7 +203,10 @@ def evaluate(
             if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
                 raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
             pred = np.concatenate(pred_dict[in_or_out])
-            tgt = np.concatenate(tgt_dict[in_or_out])
+            if 'h2' in datasplit:
+                tgt = [y for x in tgt_dict[in_or_out] for y in x]
+            else:
+                tgt = np.concatenate(tgt_dict[in_or_out])
             mask = np.concatenate(mask_dict[in_or_out])
             eval_fn = FalconEvaluator.compute_metrics_edit_distance if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression
             try:
@@ -206,6 +220,59 @@ def evaluate(
     print(f"Returning result from phase: {phase_codename}: {result}")
     # Out struct according to https://evalai.readthedocs.io/en/latest/evaluation_scripts.html
     return {"result": result, 'submission_result': result[0]}
+
+class EvalDataset(Dataset):
+    r"""
+        Simple class to help with batched evaluation.
+        data: List of numpy arrays, one per datafile
+        datafiles: str names, for cuing models which dataset is being evaluated
+        trial_mode: serve trialized data (padded) or just parallelize among datafiles
+    """
+    def __init__(self, 
+                 data: List[np.ndarray], 
+                 trial_change: List[np.ndarray], 
+                 targets: List[np.ndarray], 
+                 eval_mask: List[np.ndarray], 
+                 datafiles: List[str],
+                 trial_mode=False):
+        self.data = data
+        self.trial_change = trial_change
+        self.targets = targets
+        self.eval_mask = eval_mask
+        self.datafiles = datafiles
+        assert not trial_mode, "Trial mode not implemented."
+
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return (
+            self.data[idx], 
+            self.targets[idx], 
+            self.trial_change[idx], 
+            self.eval_mask[idx], 
+            idx # needed to index for datafiles which are not natively loaded for pytorch dataloader
+        )
+    
+    def get_datafile(self, idx):
+        return self.datafiles[idx]
+
+def simple_collater(batch, task):
+    r"""
+        Collates a batch of data, targets, trial_change, eval_mask, and datafile_idx.
+        data: List of numpy arrays, one per datafile
+        datafiles: str names, for cuing models which dataset is being evaluated
+    """
+    data, targets, trial_change, eval_mask, datafile_idx = zip(*batch)
+    data = pad_sequence([torch.tensor(d) for d in data], batch_first=False).numpy()
+    if task == FalconTask.h2:
+        targets = pad_sequence([torch.tensor(t) for t in targets[0]], batch_first=True).numpy()
+    else:
+        targets = pad_sequence([torch.tensor(t) for t in targets], batch_first=False).numpy()
+    trial_change = pad_sequence([torch.tensor(t) for t in trial_change], batch_first=False).numpy()
+    eval_mask = pad_sequence([torch.tensor(t) for t in eval_mask], batch_first=False).numpy() # Serves as a mask for padding as well
+    datafile_idx = np.array(datafile_idx)
+    return data, targets, trial_change, eval_mask, datafile_idx
 
 class FalconEvaluator:
 
@@ -243,43 +310,96 @@ class FalconEvaluator:
     def predict_files(self, decoder: BCIDecoder, eval_files: List):
         # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective
         # TODO this does not return uniquely identifiable data if eval_files is partial, e.g. if we only has set 2 of a day with 2 sets, we'll happily just provide partial predictions.
-        all_preds = defaultdict(list)
-        all_targets = defaultdict(list)
-        all_eval_mask = defaultdict(list)
-
-        for datafile in tqdm(sorted(eval_files)):
+        # Pre-loop before starting batch loads
+        file_neural_data = []
+        file_trial_change = []
+        file_targets = []
+        file_eval_mask = []
+        datafiles = list(sorted(eval_files))
+        for datafile in datafiles:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
-            decoder.reset(dataset=datafile)
+            file_neural_data.append(neural_data)
+            file_trial_change.append(trial_change)
+            file_targets.append(decoding_targets)
+            file_eval_mask.append(eval_mask)
+    
+        dataset = EvalDataset(
+            data=file_neural_data,
+            trial_change=file_trial_change,
+            targets=file_targets,
+            eval_mask=file_eval_mask,
+            datafiles=datafiles,
+        )
+        
+        all_preds = defaultdict(list)
+        all_targets = defaultdict(list)
+        all_eval_mask = defaultdict(list)
+        
+        num_workers = 8
+        simple_collater_partial = partial(simple_collater, task=self.dataset)
+        dataloader = DataLoader(
+            dataset, shuffle=False,
+            batch_size=decoder.batch_size,
+            num_workers=num_workers,
+            persistent_workers=num_workers > 0,
+            collate_fn=simple_collater_partial,
+        )
+        # from time import time
+        # for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
+        for neural_data, decoding_targets, trial_change, eval_mask, datafile_idx in tqdm(dataloader):
+            neural_data: np.ndarray
+            decoding_targets: np.ndarray
+            trial_change: np.ndarray
+            eval_mask: np.ndarray
+            datafile_idx: np.ndarray
+            decoder.reset(dataset_tags=[dataset.datafiles[idx] for idx in datafile_idx])
             trial_preds = []
+            # loop_times = []
             for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
+                neural_observations: np.ndarray
+                trial_delta_obs: np.ndarray
+                step_mask: np.ndarray
                 if self.dataset == FalconTask.h2:
-                    if trial_delta_obs:
-                        trial_preds.append(decoder.on_trial_end())
-                    if step_mask:
+                    assert neural_data.shape[1] == 1, "H2 expects batch size 1."
+                    if step_mask[0]:
                         decoder.predict(neural_observations)
+                    if trial_delta_obs[0]:
+                        trial_preds.append(decoder.on_done(trial_delta_obs))
                 else:
-                    if trial_delta_obs:
-                        decoder.on_trial_end()
-                    if step_mask:
-                        trial_preds.append(decoder.predict(neural_observations))
-                    else:
-                        decoder.observe(neural_observations)
-                        trial_preds.append(np.full(self.cfg.out_dim, np.nan))
+                    # loop_start = time()
+                    decoder.on_done(trial_delta_obs)
+                    trial_preds.append(decoder.predict(neural_observations))
+                    
+                    # if step_mask.any():
+                    #     trial_preds.append(decoder.predict(neural_observations))
+                    # else:
+                    #     decoder.observe(neural_observations)
+                    #     trial_preds.append(np.full((decoder.batch_size, self.cfg.out_dim), np.nan))
+                # loop_times.append(time() - loop_start)
+            # loop_times = np.array(loop_times)
+            # print(f"Loop {len(loop_times)}: {loop_times.mean()} +/- {loop_times.std()}")
+            
             if self.dataset == FalconTask.h2:
-                trial_preds.append(decoder.on_trial_end())
-                all_preds[self.cfg.hash_dataset(datafile)].append(trial_preds)
+                datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[0]))
+                all_preds[datafile_hash].append(trial_preds)
+                all_targets[datafile_hash].append(decoding_targets)
+                all_eval_mask[datafile_hash].append(eval_mask)
             else:
-                all_preds[self.cfg.hash_dataset(datafile)].append(np.stack(trial_preds))
-            all_targets[self.cfg.hash_dataset(datafile)].append(decoding_targets)
-            all_eval_mask[self.cfg.hash_dataset(datafile)].append(eval_mask)
+                trial_preds = np.stack(trial_preds) # -> T x B x H
+                for idx in range(len(datafile_idx)):
+                    datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[idx]))
+                    all_preds[datafile_hash].append(trial_preds[:, idx])
+                    all_targets[datafile_hash].append(decoding_targets[:, idx])
+                    all_eval_mask[datafile_hash].append(eval_mask[:, idx])
         for k in all_preds:
             if self.dataset == FalconTask.h2:
                 all_preds[k] = [x for y in all_preds[k] for x in y]
+                all_targets[k] = [x for y in all_targets[k] for x in y]
             else:
                 all_preds[k] = np.concatenate(all_preds[k])
-            all_targets[k] = np.concatenate(all_targets[k])
+                all_targets[k] = np.concatenate(all_targets[k])
             all_eval_mask[k] = np.concatenate(all_eval_mask[k])
         return all_preds, all_targets, all_eval_mask
 
@@ -306,6 +426,8 @@ class FalconEvaluator:
         if phase == 'minival' and (held_out_only or specific_keys):
             logger.warning("Ignoring held_out_only and specific_keys for minival phase.")
             held_out_only = False
+        if decoder.batch_size > RECOMMENDED_BATCH_SIZES[self.dataset]:
+            raise ValueError(f"Decoder batch size {decoder.batch_size} is larger than limit {RECOMMENDED_BATCH_SIZES[self.dataset]} for {self.dataset}")
         
         np.random.seed(0)
         # ! TODO ideally seed other libraries as well...? Is that our responsibility?
@@ -329,7 +451,6 @@ class FalconEvaluator:
                 raise NotImplementedError("not sure what metrics to compute for specific keys yet.")
             elif held_out_only:
                 eval_files_held_in = []
-
             all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files_held_out)
             if eval_files_held_in:
                 all_preds_held_in, all_targets_held_in, all_eval_mask_held_in = self.predict_files(decoder, eval_files_held_in)
@@ -339,7 +460,6 @@ class FalconEvaluator:
 
         else:
             all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files)
-        
         # Indirect remote setup to satisfy EvalAI interface. Save metrics / comparison to file.
         if USE_PKLS:
             inner_pred = {**all_preds}
@@ -392,10 +512,6 @@ class FalconEvaluator:
 
     @staticmethod
     def compute_metrics_edit_distance(preds, targets, eval_mask):
-        k = list(preds.keys())[0]  # TODO: This is a hack. We should be able to handle multiple keys.
-        preds = preds[k]
-        targets = targets[k]
-
         if len(preds) != len(targets):
             raise ValueError(f"Targets and predictions have different lengths: {len(targets)} vs {len(preds)}.")
         
@@ -407,6 +523,7 @@ class FalconEvaluator:
         char_distances = []
         word_distances = []
         for pred, target in zip(preds, targets):
+            target = "".join([chr(c) for c in target if c != 0])
             matcher = SequenceMatcher([c for c in pred], [c for c in target])
             char_distances.append(matcher.distance())
             char_counts.append(len(target))

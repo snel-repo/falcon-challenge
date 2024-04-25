@@ -76,7 +76,7 @@ class FalconConfig:
                     # return piece
             raise ValueError(f"Could not find session in {handle}.")
         elif self.task == FalconTask.h2:
-            return handle.split('_')[-1].split('-')[-1]
+            return handle.split('_')[1]
         elif self.task == FalconTask.m1: # return date
             # sub-MonkeyL-held-in-minival_ses-20120924_behavior+ecephys.nwb
             # or L_20120924_held_in_eval.nwb
