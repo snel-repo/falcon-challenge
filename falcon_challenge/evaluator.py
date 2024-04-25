@@ -1,4 +1,5 @@
 from typing import List
+from functools import partial
 import os
 import pickle
 import torch
@@ -109,6 +110,7 @@ HELD_OUT_KEYS = {
 RECOMMENDED_BATCH_SIZES = {
     FalconTask.h1: 8,
     FalconTask.m1: 4,
+    FalconTask.h2: 1,
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
@@ -195,7 +197,10 @@ def evaluate(
             if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
                 raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
             pred = np.concatenate(pred_dict[in_or_out])
-            tgt = np.concatenate(tgt_dict[in_or_out])
+            if 'h2' in datasplit:
+                tgt = [y for x in tgt_dict[in_or_out] for y in x]
+            else:
+                tgt = np.concatenate(tgt_dict[in_or_out])
             mask = np.concatenate(mask_dict[in_or_out])
             eval_fn = FalconEvaluator.compute_metrics_edit_distance if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression
             try:
@@ -246,7 +251,7 @@ class EvalDataset(Dataset):
     def get_datafile(self, idx):
         return self.datafiles[idx]
 
-def simple_collater(batch):
+def simple_collater(batch, task):
     r"""
         Collates a batch of data, targets, trial_change, eval_mask, and datafile_idx.
         data: List of numpy arrays, one per datafile
@@ -254,7 +259,10 @@ def simple_collater(batch):
     """
     data, targets, trial_change, eval_mask, datafile_idx = zip(*batch)
     data = pad_sequence([torch.tensor(d) for d in data], batch_first=False).numpy()
-    targets = pad_sequence([torch.tensor(t) for t in targets], batch_first=False).numpy()
+    if task == FalconTask.h2:
+        targets = pad_sequence([torch.tensor(t) for t in targets[0]], batch_first=True).numpy()
+    else:
+        targets = pad_sequence([torch.tensor(t) for t in targets], batch_first=False).numpy()
     trial_change = pad_sequence([torch.tensor(t) for t in trial_change], batch_first=False).numpy()
     eval_mask = pad_sequence([torch.tensor(t) for t in eval_mask], batch_first=False).numpy() # Serves as a mask for padding as well
     datafile_idx = np.array(datafile_idx)
@@ -324,12 +332,13 @@ class FalconEvaluator:
         all_eval_mask = defaultdict(list)
         
         num_workers = 8
+        simple_collater_partial = partial(simple_collater, task=self.dataset)
         dataloader = DataLoader(
             dataset, shuffle=False,
             batch_size=decoder.batch_size,
             num_workers=num_workers,
             persistent_workers=num_workers > 0,
-            collate_fn=simple_collater,
+            collate_fn=simple_collater_partial,
         )
         # from time import time
         # for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
@@ -346,13 +355,12 @@ class FalconEvaluator:
                 neural_observations: np.ndarray
                 trial_delta_obs: np.ndarray
                 step_mask: np.ndarray
-                
                 if self.dataset == FalconTask.h2:
-                    assert neural_data.shape[0] == 1, "H2 expects batch size 1."
-                    if trial_delta_obs:
-                        trial_preds.append(decoder.on_done(trial_delta_obs))
-                    if step_mask:
+                    assert neural_data.shape[1] == 1, "H2 expects batch size 1."
+                    if step_mask[0]:
                         decoder.predict(neural_observations)
+                    if trial_delta_obs[0]:
+                        trial_preds.append(decoder.on_done(trial_delta_obs))
                 else:
                     # loop_start = time()
                     decoder.on_done(trial_delta_obs)
@@ -368,24 +376,24 @@ class FalconEvaluator:
             # print(f"Loop {len(loop_times)}: {loop_times.mean()} +/- {loop_times.std()}")
             
             if self.dataset == FalconTask.h2:
-                trial_preds.append(decoder.on_done()) # ? JY -> CF: Not sure why we need an additional on_done here? Which trials have further terminated?
-                datafile = dataset.get_datafile(datafile_idx[0])
-                all_preds[self.cfg.hash_dataset(datafile)].append(trial_preds)
+                datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[0]))
+                all_preds[datafile_hash].append(trial_preds)
+                all_targets[datafile_hash].append(decoding_targets)
+                all_eval_mask[datafile_hash].append(eval_mask)
             else:
                 trial_preds = np.stack(trial_preds) # -> T x B x H
                 for idx in range(len(datafile_idx)):
-                    datafile = dataset.get_datafile(datafile_idx[idx])
-                    all_preds[self.cfg.hash_dataset(datafile)].append(trial_preds[:, idx])
-            for idx in range(len(datafile_idx)):
-                datafile = dataset.get_datafile(datafile_idx[idx])
-                all_targets[self.cfg.hash_dataset(datafile)].append(decoding_targets[:, idx])
-                all_eval_mask[self.cfg.hash_dataset(datafile)].append(eval_mask[:, idx])
+                    datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[idx]))
+                    all_preds[datafile_hash].append(trial_preds[:, idx])
+                    all_targets[datafile_hash].append(decoding_targets[:, idx])
+                    all_eval_mask[datafile_hash].append(eval_mask[:, idx])
         for k in all_preds:
             if self.dataset == FalconTask.h2:
                 all_preds[k] = [x for y in all_preds[k] for x in y]
+                all_targets[k] = [x for y in all_targets[k] for x in y]
             else:
                 all_preds[k] = np.concatenate(all_preds[k])
-            all_targets[k] = np.concatenate(all_targets[k])
+                all_targets[k] = np.concatenate(all_targets[k])
             all_eval_mask[k] = np.concatenate(all_eval_mask[k])
         return all_preds, all_targets, all_eval_mask
 
@@ -498,10 +506,6 @@ class FalconEvaluator:
 
     @staticmethod
     def compute_metrics_edit_distance(preds, targets, eval_mask):
-        k = list(preds.keys())[0]  # TODO: This is a hack. We should be able to handle multiple keys.
-        preds = preds[k]
-        targets = targets[k]
-
         if len(preds) != len(targets):
             raise ValueError(f"Targets and predictions have different lengths: {len(targets)} vs {len(preds)}.")
         
@@ -513,6 +517,7 @@ class FalconEvaluator:
         char_distances = []
         word_distances = []
         for pred, target in zip(preds, targets):
+            target = "".join([chr(c) for c in target if c != 0])
             matcher = SequenceMatcher([c for c in pred], [c for c in target])
             char_distances.append(matcher.distance())
             char_counts.append(len(target))
