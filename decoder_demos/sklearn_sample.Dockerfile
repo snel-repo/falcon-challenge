@@ -38,6 +38,7 @@ ADD ./preproc/filtering.py filtering.py
 ENV SPLIT "h1"
 # ENV PHASE "minival"
 ENV PHASE "test"
+ENV BATCH_SIZE 8
 
 # Make sure this matches the mounted data volume path. Generally leave as is.
 ENV EVAL_DATA_PATH "/dataset/evaluation_data"
@@ -49,4 +50,4 @@ RUN pwd
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash
 CMD ["/bin/bash", "-c", \
-    "python decode.py --evaluation $EVALUATION_LOC --model-path data/decoder.pkl --split $SPLIT --phase $PHASE"]
+    "python decode.py --evaluation $EVALUATION_LOC --model-path data/decoder.pkl --split $SPLIT --phase $PHASE --batch-size $BATCH_SIZE"]
