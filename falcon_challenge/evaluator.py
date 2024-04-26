@@ -213,7 +213,7 @@ def evaluate(
             try:
                 metrics = eval_fn(pred, tgt, mask)
             except Exception as e:
-                raise ValueError(f"Failed to compute metrics for {datasplit} {in_or_out}: {e}")
+                raise ValueError(f"Failed to compute metrics for {datasplit} {in_or_out}: {e}. Lengths submitted: {[len(piece) for piece in pred_dict[in_or_out]]}")
             for k in metrics:
                 split_result[f'{HELDIN_OR_OUT_MAP[in_or_out]} {k}'] = metrics[k]
         result.append({f'{phase_codename}_split_{datasplit}': split_result})

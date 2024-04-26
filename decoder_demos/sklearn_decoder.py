@@ -322,8 +322,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train sklearn decoder')
 
     parser.add_argument('--task', type=str, choices=['h1', 'm1', 'm2'], help='Task for training')
-    parser.add_argument('--training_dir', '-t', type=str, help='Root directory for training files')
-    parser.add_argument('--calibration_dir', '-c', type=str, help='Root directory for calibration files')
+    parser.add_argument('--training_dir', '-t', type=str, help='Root directory for training files', required=True)
+    parser.add_argument('--calibration_dir', '-c', type=str, help='Root directory for calibration files', required=True)
     parser.add_argument('--mode', '-m', type=str, choices=['all', 'last', 'per-day'], help='Mode for training')
     parser.add_argument('--history', type=int, default=0, help='History for decoder')
 
