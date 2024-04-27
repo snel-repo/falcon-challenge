@@ -117,7 +117,7 @@ RECOMMENDED_BATCH_SIZES = {
     FalconTask.h1: 8,
     FalconTask.m1: 4,
     FalconTask.h2: 1,
-    FalconTask.m2: 1, # TODO up
+    FalconTask.m2: 6,
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.

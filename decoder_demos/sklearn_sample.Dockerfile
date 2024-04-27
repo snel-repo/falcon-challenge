@@ -25,7 +25,8 @@ ENV EVALUATION_LOC remote
 
 # Add ckpt
 # Note that Docker cannot easily import across symlinks, make sure data is not symlinked
-ADD ./local_data/sklearn_FalconTask.h1.pkl data/decoder.pkl
+# ADD ./local_data/sklearn_FalconTask.h1.pkl data/decoder.pkl
+ADD ./local_data/sklearn_FalconTask.m2.pkl data/decoder.pkl
 
 # Add source code/configs (e.g. can also be cloned)
 ADD ./decoder_demos/ decoder_demos/
@@ -36,9 +37,10 @@ ADD ./decoder_demos/sklearn_sample.py decode.py
 ADD ./preproc/filtering.py filtering.py
 
 ENV SPLIT "h1"
+ENV SPLIT "m2"
 # ENV PHASE "minival"
 ENV PHASE "test"
-ENV BATCH_SIZE 8
+ENV BATCH_SIZE 4
 
 # Make sure this matches the mounted data volume path. Generally leave as is.
 ENV EVAL_DATA_PATH "/dataset/evaluation_data"

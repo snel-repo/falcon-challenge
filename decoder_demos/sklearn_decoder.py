@@ -100,9 +100,9 @@ class SKLearnDecoder(BCIDecoder):
             self.observation_buffer = np.zeros((self.history, batch_size, task_config.n_channels))
 
     def reset(self, dataset_tags: List[Path] = [""]):
+        dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
         if isinstance(self.x_mean, dict):
             # TODO retrieve a list of x_means
-            dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
             for dataset_tag in dataset_tags:
                 if dataset_tag not in self.x_mean:
                     raise ValueError(f"Dataset tag {dataset_tag} not found in calibration set {self.x_mean.keys()} - did you calibrate on this dataset?")
@@ -113,7 +113,6 @@ class SKLearnDecoder(BCIDecoder):
             self.local_x_std = self.x_std
         # TODO this one too...
         if isinstance(self.clf, dict):
-            dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
             for dataset_tag in dataset_tags:
                 if dataset_tag not in self.clf:
                     raise ValueError(f"Dataset tag {dataset_tag} not found decoder set {self.clf.keys()}")
@@ -251,13 +250,16 @@ def fit_many_decoders(
     history = 0,
 ):
     all_datafiles = [*calibration_datafiles, *datafiles]
-    day_unique = set([f.stem.split('_')[0] for f in all_datafiles])
+    if task_config.task == FalconTask.m2:
+        day_unique = set([f.stem.split('_')[1] for f in all_datafiles])
+    else:
+        day_unique = set([f.stem.split('_')[0] for f in all_datafiles])
     all_decoders = {}
     x_means = {}
     x_stds = {}
     for day in sorted(day_unique):
         print(f"Training on day {day}")
-        fit_datafiles = [d for d in all_datafiles if day == d.stem.split('_')[0]]
+        fit_datafiles = [d for d in all_datafiles if day in d.stem]
         (
             neural_data,
             covariates,
@@ -277,7 +279,7 @@ def fit_many_decoders(
             x_std,
             y_mean,
             y_std
-        ) = prepare_train_test(neural_data, covariates, ~eval_mask, history=history)
+        ) = prepare_train_test(neural_data, covariates, ~eval_mask, history=history, mask_still_times=task_config.task == FalconTask.h1)
         score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
         for f in fit_datafiles:
             fn = task_config.hash_dataset(f.stem)
