@@ -102,7 +102,6 @@ class SKLearnDecoder(BCIDecoder):
     def reset(self, dataset_tags: List[Path] = [""]):
         dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
         if isinstance(self.x_mean, dict):
-            # TODO retrieve a list of x_means
             for dataset_tag in dataset_tags:
                 if dataset_tag not in self.x_mean:
                     raise ValueError(f"Dataset tag {dataset_tag} not found in calibration set {self.x_mean.keys()} - did you calibrate on this dataset?")
@@ -111,7 +110,7 @@ class SKLearnDecoder(BCIDecoder):
         else:
             self.local_x_mean = self.x_mean
             self.local_x_std = self.x_std
-        # TODO this one too...
+        
         if isinstance(self.clf, dict):
             for dataset_tag in dataset_tags:
                 if dataset_tag not in self.clf:
@@ -231,7 +230,11 @@ def fit_last_session(
     save_path: Path,
     history = 0,
 ):
-    day_unique = set([f.stem.split('_')[0] for f in datafiles])
+    hashes = [task_config.hash_dataset(f.stem) for f in datafiles]
+    if task_config.task == FalconTask.h1:
+        day_unique = set([h.split('_set_')[0] for h in hashes])
+    else:
+        day_unique = set([f.stem.split('_')[1] for f in datafiles])
     last_day = sorted(day_unique)[-1]
     fit_datafiles = [d for d in datafiles if last_day in d.stem]
     return fit_sklearn_decoder(
@@ -250,16 +253,17 @@ def fit_many_decoders(
     history = 0,
 ):
     all_datafiles = [*calibration_datafiles, *datafiles]
-    if task_config.task == FalconTask.m2:
-        day_unique = set([f.stem.split('_')[1] for f in all_datafiles])
+    hashes = [task_config.hash_dataset(f.stem) for f in all_datafiles]
+    if task_config.task == FalconTask.h1:
+        day_unique = set([h.split('_set_')[0] for h in hashes])
     else:
-        day_unique = set([f.stem.split('_')[0] for f in all_datafiles])
+        day_unique = set([f.stem.split('_')[1] for f in all_datafiles])
     all_decoders = {}
     x_means = {}
     x_stds = {}
-    for day in sorted(day_unique):
+    for day in sorted(day_unique): # separate decoder
         print(f"Training on day {day}")
-        fit_datafiles = [d for d in all_datafiles if day in d.stem]
+        fit_datafiles = [d for d in all_datafiles if day in task_config.hash_dataset(d)]
         (
             neural_data,
             covariates,
@@ -281,7 +285,7 @@ def fit_many_decoders(
             y_std
         ) = prepare_train_test(neural_data, covariates, ~eval_mask, history=history, mask_still_times=task_config.task == FalconTask.h1)
         score, decoder = fit_and_eval_decoder(train_x, train_y, test_x, test_y)
-        for f in fit_datafiles:
+        for f in fit_datafiles: # write in mean for this subset of data
             fn = task_config.hash_dataset(f.stem)
             all_decoders[fn] = decoder
             x_means[fn], x_stds[fn] = np.mean(neural_data, axis=0), np.std(neural_data, axis=0)

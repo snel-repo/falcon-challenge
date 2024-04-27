@@ -10,6 +10,35 @@ from hydra.core.config_store import ConfigStore
 from hydra.core.config_search_path import ConfigSearchPath
 from hydra.plugins.search_path_plugin import SearchPathPlugin
 
+H1_NEW_TO_OLD = {
+    '19250101T111740': 'S0_set_1',
+    '19250101T112404': 'S0_set_2',
+    '19250108T110520': 'S1_set_1',
+    '19250108T111022': 'S1_set_2',
+    '19250108T111455': 'S1_set_3',
+    '19250113T120811': 'S2_set_1',
+    '19250113T121303': 'S2_set_2',
+    '19250115T110633': 'S3_set_1',
+    '19250115T111328': 'S3_set_2',
+    '19250119T113543': 'S4_set_1',
+    '19250119T114045': 'S4_set_2',
+    '19250120T115044': 'S5_set_1',
+    '19250120T115537': 'S5_set_2',
+    '19250126T113454': 'S6_set_1',
+    '19250126T114029': 'S6_set_2',
+    '19250127T120333': 'S7_set_1',
+    '19250127T120826': 'S7_set_2',
+    '19250129T112555': 'S8_set_1',
+    '19250129T113059': 'S8_set_2',
+    '19250202T113958': 'S9_set_1',
+    '19250202T114452': 'S9_set_2',
+    '19250203T113515': 'S10_set_1',
+    '19250203T114018': 'S10_set_2',
+    '19250206T112219': 'S11_set_1',
+    '19250206T112712': 'S11_set_2',
+    '19250209T111826': 'S12_set_1',
+    '19250209T112327': 'S12_set_2',
+}
 
 class FalconTask(enum.Enum):
     r"""
@@ -64,6 +93,9 @@ class FalconConfig:
         if isinstance(handle, Path):
             handle = handle.stem
         if self.task == FalconTask.h1:
+            if 'sub-HumanPitt' in handle:
+                date_hash = handle.split('_ses-')[-1]
+                return H1_NEW_TO_OLD[date_hash]
             handle = handle.replace('-', '_')
             handle = '_'.join(handle.split('_')[:-1]) # exclude split annotation
             # print(handle)
