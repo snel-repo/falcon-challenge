@@ -294,10 +294,14 @@ class FalconEvaluator:
             else:
                 data_dir = os.environ.get("EVAL_DATA_PATH") # a local docker eval
         data_dir = Path(data_dir) / dataset.name
+        if not data_dir.exists():
+            raise FileNotFoundError(f"Evaluation data directory {data_dir} not found.")
         if phase == 'test': # TODO wire wherever test is actually stored on remote
             eval_dir = data_dir / f"eval"
         else:
             eval_dir = data_dir / "minival"
+        if not eval_dir.exists():
+            raise FileNotFoundError(f"Evaluation directory {eval_dir} found but requested phase {phase} not found.")
         return sorted(list(eval_dir.glob("*val*.nwb")))
 
     def get_eval_files(self, phase: str = 'minival'):
