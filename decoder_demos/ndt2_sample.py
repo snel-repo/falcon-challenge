@@ -10,7 +10,7 @@ import argparse
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 
-from ndt2_decoder import NDT2Decoder
+from context_general_bci.falcon_decoder import NDT2Decoder
 
 def main():
     parser = argparse.ArgumentParser()

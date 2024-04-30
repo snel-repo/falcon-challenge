@@ -117,7 +117,7 @@ RECOMMENDED_BATCH_SIZES = {
     FalconTask.h1: 8,
     FalconTask.m1: 4,
     FalconTask.h2: 1,
-    FalconTask.m2: 6,
+    FalconTask.m2: 7, # max
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
@@ -362,6 +362,7 @@ class FalconEvaluator:
             decoder.reset(dataset_tags=[dataset.datafiles[idx] for idx in datafile_idx])
             trial_preds = []
             # loop_times = []
+            # breakpoint()
             for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
                 neural_observations: np.ndarray
                 trial_delta_obs: np.ndarray
@@ -373,9 +374,10 @@ class FalconEvaluator:
                     if trial_delta_obs[0]:
                         trial_preds.append(decoder.on_done(trial_delta_obs))
                 else:
-                    # loop_start = time()
                     decoder.on_done(trial_delta_obs)
-                    trial_preds.append(decoder.predict(neural_observations))
+                    step_prediction = decoder.predict(neural_observations)
+                    assert step_prediction.shape[1] == self.cfg.out_dim, f"Prediction shape mismatch: {step_prediction.shape[1]} vs {self.cfg.out_dim}."
+                    trial_preds.append(step_prediction)
                     
                     # if step_mask.any():
                     #     trial_preds.append(decoder.predict(neural_observations))
@@ -432,7 +434,8 @@ class FalconEvaluator:
             logger.warning("Ignoring held_out_only and specific_keys for minival phase.")
             held_out_only = False
         if decoder.batch_size > RECOMMENDED_BATCH_SIZES[self.dataset]:
-            raise ValueError(f"Decoder batch size {decoder.batch_size} is larger than limit {RECOMMENDED_BATCH_SIZES[self.dataset]} for {self.dataset}")
+            logger.warning(f"Decoder batch size {decoder.batch_size} is larger than limit {RECOMMENDED_BATCH_SIZES[self.dataset]} for {self.dataset}, clipping down.")
+            decoder.set_batch_size(RECOMMENDED_BATCH_SIZES[self.dataset])
         
         np.random.seed(0)
         # ! TODO ideally seed other libraries as well...? Is that our responsibility?

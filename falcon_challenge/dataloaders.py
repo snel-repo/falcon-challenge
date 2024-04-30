@@ -156,7 +156,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
             trial_info = nwbfile.trials.to_dataframe().reset_index()
             switch_inds = np.searchsorted(vel_timestamps, trial_info.start_time)
             trial_change[switch_inds] = True
-            return binned_units, vel_data, vel_timestamps, eval_mask
+            return binned_units, vel_data, trial_change, eval_mask
         else:
             raise NotImplementedError(f"Dataset {dataset} not implemented")
             breakpoint()

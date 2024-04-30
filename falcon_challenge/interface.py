@@ -26,14 +26,14 @@ class BCIDecoder:
             When called, dataset_tags will be of length batch_size, with active data hashes as returned from hash_dataset(datafiles).
             
         """
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def predict(self, neural_observations: np.ndarray) -> np.ndarray:
         r"""
             neural_observations: array of shape (batch_size, n_channels), binned spike counts
         """
-        pass
+        raise NotImplementedError
 
     def observe(self, neural_observations: np.ndarray):
         r"""
@@ -45,9 +45,14 @@ class BCIDecoder:
 
     @abc.abstractmethod
     def on_done(self, dones: np.ndarray):
-        # Optional hook available in H2 (handwriting) to allow periodic test-time adaptation
-        # dones will be one for the trials that just ended
-        pass
+        r"""
+            Called on every timestep, with dones[i] == 1 / True if the ith trial in batch has ended.
+            Different trials in batch may end at different times.
+            Optional hook available indicating end of trial 
+            - e.g. useful in H2 (handwriting) to allow periodic test-time adaptation
+            dones will be one for the trials that just ended
+        """
+        raise NotImplementedError
 
     def set_batch_size(self, batch_size: int):
         r"""
