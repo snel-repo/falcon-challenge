@@ -13,6 +13,7 @@ from sklearn.metrics import r2_score
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from edit_distance import SequenceMatcher
+from time import time, sleep
 
 from falcon_challenge.config import FalconTask, FalconConfig
 from falcon_challenge.interface import BCIDecoder
@@ -124,6 +125,8 @@ RECOMMENDED_BATCH_SIZES = {
 # Should be set to true for remote evaluation.
 # USE_PKLS = False
 USE_PKLS = True
+
+BIN_SIZE = 0.02
 
 HELDIN_OR_OUT_MAP = {
     'held_in': "Held In",
@@ -313,13 +316,14 @@ class FalconEvaluator:
         return handles
     
     def predict_files(self, decoder: BCIDecoder, eval_files: List):
-        # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective
+        # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective. also returns lists compute_time and neural_time
         # TODO this does not return uniquely identifiable data if eval_files is partial, e.g. if we only has set 2 of a day with 2 sets, we'll happily just provide partial predictions.
         # Pre-loop before starting batch loads
         file_neural_data = []
         file_trial_change = []
         file_targets = []
         file_eval_mask = []
+        all_neural_times = []
         datafiles = list(sorted(eval_files))
         for datafile in datafiles:
             if not datafile.exists():
@@ -329,6 +333,7 @@ class FalconEvaluator:
             file_trial_change.append(trial_change)
             file_targets.append(decoding_targets)
             file_eval_mask.append(eval_mask)
+            all_neural_times.append(neural_data.shape[0] * BIN_SIZE)
     
         dataset = EvalDataset(
             data=file_neural_data,
@@ -341,6 +346,7 @@ class FalconEvaluator:
         all_preds = defaultdict(list)
         all_targets = defaultdict(list)
         all_eval_mask = defaultdict(list)
+        all_compute_times = []
         
         num_workers = 8
         simple_collater_partial = partial(simple_collater, task=self.dataset)
@@ -370,12 +376,18 @@ class FalconEvaluator:
                 if self.dataset == FalconTask.h2:
                     assert neural_data.shape[1] == 1, "H2 expects batch size 1."
                     if step_mask[0]:
+                        start_time = time.time()
                         decoder.predict(neural_observations)
+                        end_time = time.time()
+                        all_compute_times.append(end_time - start_time)
                     if trial_delta_obs[0]:
                         trial_preds.append(decoder.on_done(trial_delta_obs))
                 else:
                     decoder.on_done(trial_delta_obs)
+                    start_time = time()
                     step_prediction = decoder.predict(neural_observations)
+                    end_time = time()
+                    all_compute_times.append(end_time - start_time)
                     assert step_prediction.shape[1] == self.cfg.out_dim, f"Prediction shape mismatch: {step_prediction.shape[1]} vs {self.cfg.out_dim}."
                     trial_preds.append(step_prediction)
                     
@@ -408,7 +420,7 @@ class FalconEvaluator:
                 all_preds[k] = np.concatenate(all_preds[k])
                 all_targets[k] = np.concatenate(all_targets[k])
             all_eval_mask[k] = np.concatenate(all_eval_mask[k])
-        return all_preds, all_targets, all_eval_mask
+        return all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times
 
     def evaluate_files(self, decoder: BCIDecoder, eval_files: List):
         all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files)
@@ -459,15 +471,15 @@ class FalconEvaluator:
                 raise NotImplementedError("not sure what metrics to compute for specific keys yet.")
             elif held_out_only:
                 eval_files_held_in = []
-            all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files_held_out)
+            all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times = self.predict_files(decoder, eval_files_held_out)
             if eval_files_held_in:
-                all_preds_held_in, all_targets_held_in, all_eval_mask_held_in = self.predict_files(decoder, eval_files_held_in)
+                all_preds_held_in, all_targets_held_in, all_eval_mask_held_in, _, _ = self.predict_files(decoder, eval_files_held_in)
                 all_preds.update(all_preds_held_in)
                 all_targets.update(all_targets_held_in)
                 all_eval_mask.update(all_eval_mask_held_in)
 
         else:
-            all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files)
+            all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times = self.predict_files(decoder, eval_files)
         # Indirect remote setup to satisfy EvalAI interface. Save metrics / comparison to file.
         if USE_PKLS:
             inner_pred = {**all_preds}
@@ -477,7 +489,7 @@ class FalconEvaluator:
                     'mask': all_eval_mask[k],
                 } for k in all_targets
             }
-            inner_pred['normalized_latency'] = 1 # TODO - CW insert timing code
+            inner_pred['normalized_latency'] = np.sum(all_compute_times) / np.sum(all_neural_times)
             pred_payload = {self.dataset.name: inner_pred}
             truth_payload = {self.dataset.name: inner_tgt_spoof}
         else:
@@ -490,13 +502,12 @@ class FalconEvaluator:
             Path(gt_path).parent.mkdir(parents=True, exist_ok=True)
             with open(gt_path, 'wb') as f:
                 pickle.dump(truth_payload, f)
-            import time
 
             if self.eval_remote:
                 print("Sleeping before exiting for remote eval - feel free to interrupt for local eval.", flush=True)
                 # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
                 # Sleep so it's definitely available
-                time.sleep(300) 
+                sleep(300) 
             else:
                 return evaluate(
                     test_annotation_file=gt_path,
