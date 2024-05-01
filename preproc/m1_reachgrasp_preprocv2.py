@@ -43,10 +43,10 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v5/"
+SAVE_PATH = "/snel/share/share/derived/rouse/RTG/NWB_FALCON_v7_unsorted/"
 rouse_base_dir = "/snel/share/share/data/rouse/RTG/"
 MONKEY = "L"
-EXP_DATE = "20120924"
+EXP_DATE = "20120926"
 
 if len(sys.argv) > 2:
     EXP_DATE = sys.argv[1]
@@ -63,7 +63,7 @@ if EXP_DATE in test_dates:
 # emg file
 emg_mat_path = path.join(rouse_base_dir, f"{MONKEY}{EXP_DATE}_AD_Unrect_EMG.mat")
 # spikes file
-spk_mat_path = glob.glob(path.join(rouse_base_dir, f"{MONKEY}_*_{EXP_DATE}-data.mat"))[0]
+spk_mat_path = glob.glob(path.join(rouse_base_dir, 'unsorted_unit', f"{MONKEY}_*_{EXP_DATE}-data.mat"))[0]
 # get file string
 # file_id = f"{monkey}_{exp_date}"
 # load mat data
@@ -114,9 +114,10 @@ fs_cont = float(f_emg['EMGSettings']['samp_rate'][0][0][0][0])
 t_offset = f_emg['EMGSettings']['analog_start_time'][0][0][0][0]
 
 #%%
-channels = np.squeeze(f_spk['SpikeSettings']['channels'][()])
+channels = np.squeeze(f_spk['SpikeSettings']['unique_channel_num'][()])
 all_spike_times = []
-for i in range(1, 97):
+possible_channel_numbers = np.concatenate([x + np.arange(1, 17) for x in [800, 900, 1000, 1100]])
+for i in possible_channel_numbers:
     ch_spk_times = []
     where_chan = np.where(channels == i)[0]
     for j in where_chan:
@@ -137,13 +138,23 @@ for i in range(1, 97):
 array_group_by_chan = f_spk['SpikeSettings']['array_by_channel'][0]
 array_group_by_chan = [chr(array_id) for array_id in array_group_by_chan.tolist()] # this is for each channels that has spikes
 array_group_by_elec = []
-for i in range(1, 97):
-    if i in channels:
-        array_group_by_elec.append(
-            array_group_by_chan[np.where(channels == i)[0][0]]
-        )
-    else:
+for i in possible_channel_numbers:
+    if i > 1100: 
+        array_group_by_elec.append('K')
+    elif i > 1000: 
+        array_group_by_elec.append('J')
+    elif i > 900:
+        array_group_by_elec.append('I')
+    elif i > 800:
+        array_group_by_elec.append('H')
+    else: 
         array_group_by_elec.append(None)
+    # if i in channels:
+    #     array_group_by_elec.append(
+    #         array_group_by_chan[np.where(channels == i)[0][0]]
+    #     )
+    # else:
+    #     array_group_by_elec.append(None)
 
 # elec_id_by_chan = f_spk['SpikeSettings']['unique_channel_num'][0]
 
@@ -354,24 +365,24 @@ def convert_to_NWB(
         description="16-electrode array",
         manufacturer="MicroProbes for Life Sciences",
     )
-    E_elec_group = nwbfile.create_electrode_group(
-        name="E_electrode_group",
-        description="Electrodes in an implanted FMA array labeled E",
-        location="Motor Cortex",
-        device=device,
-    )
-    F_elec_group = nwbfile.create_electrode_group(
-        name="F_electrode_group",
-        description="Electrodes in an implanted FMA array labeled F",
-        location="Motor Cortex",
-        device=device,
-    )
-    G_elec_group = nwbfile.create_electrode_group(
-        name="G_electrode_group",
-        description="Electrodes in an implanted FMA array labeled G",
-        location="Motor Cortex",
-        device=device,
-    )
+    # E_elec_group = nwbfile.create_electrode_group(
+    #     name="E_electrode_group",
+    #     description="Electrodes in an implanted FMA array labeled E",
+    #     location="Motor Cortex",
+    #     device=device,
+    # )
+    # F_elec_group = nwbfile.create_electrode_group(
+    #     name="F_electrode_group",
+    #     description="Electrodes in an implanted FMA array labeled F",
+    #     location="Motor Cortex",
+    #     device=device,
+    # )
+    # G_elec_group = nwbfile.create_electrode_group(
+    #     name="G_electrode_group",
+    #     description="Electrodes in an implanted FMA array labeled G",
+    #     location="Motor Cortex",
+    #     device=device,
+    # )
     H_elec_group = nwbfile.create_electrode_group(
         name="H_electrode_group",
         description="Electrodes in an implanted FMA array labeled H",
@@ -396,12 +407,12 @@ def convert_to_NWB(
         location="Motor Cortex",
         device=device,
     )
-    L_elec_group = nwbfile.create_electrode_group(
-        name="L_electrode_group",
-        description="Electrodes in an implanted FMA array labeled L",
-        location="Motor Cortex",
-        device=device,
-    )
+    # L_elec_group = nwbfile.create_electrode_group(
+    #     name="L_electrode_group",
+    #     description="Electrodes in an implanted FMA array labeled L",
+    #     location="Motor Cortex",
+    #     device=device,
+    # )
     Z_elec_group = nwbfile.create_electrode_group(
         name='Z_electrode_group',
         description="Electrodes not labelled as belonging to any other group",
@@ -410,14 +421,14 @@ def convert_to_NWB(
     )
 
     elec_group_map = {
-        'E': E_elec_group,
-        'F': F_elec_group,
-        'G': G_elec_group,
+        # 'E': E_elec_group,
+        # 'F': F_elec_group,
+        # 'G': G_elec_group,
         'H': H_elec_group,
         'I': I_elec_group,
         'J': J_elec_group,
         'K': K_elec_group,
-        'L': L_elec_group,
+        # 'L': L_elec_group,
         'Z': Z_elec_group,
     }
 
@@ -435,7 +446,7 @@ def convert_to_NWB(
         else:
             array_elec_groups.append(elec_group_map['Z'])
 
-    for elec_id in range(1, 97):
+    for elec_id in range(1, 65):
         # elec_id = orig_elec_ids[i]
         try:
             nwbfile.add_electrode(
@@ -478,7 +489,7 @@ def convert_to_NWB(
         # if valid_spike_times is not None:
         nwbfile.add_unit(
             id=elec_id-1,
-            spike_times=np.squeeze(valid_spike_times),
+            spike_times=np.squeeze(valid_spike_times) if len(valid_spike_times) > 1 else valid_spike_times,
             electrodes=[elec_id-1],
             obs_intervals=[[start_cutoff, stop_cutoff]],
         )
