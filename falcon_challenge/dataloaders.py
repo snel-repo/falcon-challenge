@@ -47,7 +47,8 @@ def bin_units(
         if (gaps <= 0).any():
             raise ValueError("bin_end_timestamps must be monotonically increasing.")
         if not np.allclose(gaps, bin_size_s):
-            print(f"Warning: Input timestamps not spaced like requested {bin_size_s}. Outputting proximal bin spikes.")
+            not_close = (~np.isclose(gaps, bin_size_s)).sum()
+            print(f"Warning: Input has {not_close} timestamps not spaced like requested {bin_size_s}. Outputting proximal bin spikes.")
             # Adjust bin_end_timestamps to include bins at the end of discontinuities
             new_bin_ends = [bin_end_timestamps[0]]
             bin_mask = [True] # bool, True if bin ending at this timepoint should be included post mask (not padding)
@@ -104,7 +105,10 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
                 nwbfile.trials.to_dataframe()
                 .reset_index()
             )
-            return binned_spikes, trial_info.cue.values, np.concatenate([[False], np.diff(time) > 0.02]), eval_mask
+            targets = []
+            for _, row in trial_info.iterrows():
+                targets.append(np.array([ord(c) for c in row.cue], dtype=np.int32))
+            return binned_spikes, targets, np.concatenate([np.diff(time) > 0.021, [True]]), eval_mask
         elif dataset == FalconTask.m1:
             units = nwbfile.units.to_dataframe()
             raw_emg = nwbfile.acquisition['preprocessed_emg']
@@ -152,7 +156,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
             trial_info = nwbfile.trials.to_dataframe().reset_index()
             switch_inds = np.searchsorted(vel_timestamps, trial_info.start_time)
             trial_change[switch_inds] = True
-            return binned_units, vel_data, vel_timestamps, eval_mask
+            return binned_units, vel_data, trial_change, eval_mask
         else:
             raise NotImplementedError(f"Dataset {dataset} not implemented")
             breakpoint()

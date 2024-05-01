@@ -8,7 +8,7 @@ r"""
 """
 NEURAL_TAU_MS = 240. # exponential filter from H1 Lab
 def apply_exponential_filter(
-        x, tau=NEURAL_TAU_MS, bin_size=10, extent: int=1
+        x, tau=NEURAL_TAU_MS, bin_size=20, extent: int=1
     ):
     """
     Apply a **causal** exponential filter to the neural signal.
@@ -22,12 +22,15 @@ def apply_exponential_filter(
     Implementation notes:
     # extent should be 3 for reporting parity, but reference hardcodes a kernel that's equivalent to extent=1
     """
+    assert len(x.shape) == 2, "Still need to implement 3D convolve..."
     t = np.arange(0, extent * tau, bin_size)
     # Exponential filter kernel
     kernel = np.exp(-t / tau)
     kernel /= np.sum(kernel)
+    # if len(x.shape) == 3: # This seems wrong
+        # kernel = kernel[:, np.newaxis]
     # Apply the filter
-    filtered_signal = np.array([signal.convolve(x[:, ch], kernel, mode='full')[:len(x)] for ch in range(x.shape[1])]).T
+    filtered_signal = np.array([signal.convolve(x[..., ch], kernel, mode='full')[:len(x)] for ch in range(x.shape[-1])]).T
     return filtered_signal
 
 

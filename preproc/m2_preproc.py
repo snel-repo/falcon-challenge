@@ -77,38 +77,43 @@ DATA_RUN_SET = {
 }
 # Note that intertrial spikes are not available
 #%%
-def create_nwb_shell(path: Path, split, suffix='full'):
+def create_nwb_shell(path: Path, split, suffix='full', extra_note=""):
     start_date = path.stem.split('_')[2] # YYYY-MM-DD
     session_start_time = datetime.strptime(start_date, '%Y-%m-%d')
     # inject arbitrary hour to distinguish sets
     session_start_time = session_start_time.replace(hour=12 + DATA_RUN_SET[path.stem])
-    hash = '_'.join(path.stem.split('_')[2:])
+    # hash = '_'.join(path.stem.split('_')[2:]) # includes date and run, remap run
+    session_hash = start_date + '_' + f'Run{DATA_RUN_SET[path.stem]}'
+    # breakpoint()
     subject = pynwb.file.Subject(
         subject_id=f'MonkeyN-{split}-{suffix}',
-        description='MonkeyN, Chestek Lab, number indicates experimental set from day',
+        description=f'MonkeyN, Chestek Lab, number indicates experimental set from day.{extra_note}',
         species='Rhesus macaque',
         sex='M',
         age='P8Y',
     )
+    file_id = f'MonkeyN_{session_start_time.strftime("%m-%d-%H:%M")}_{split}'
+    # file_id = f'MonkeyN_{session_start_time.strftime("%m-%d-%H:%M")}_run{DATA_RUN_SET[path.stem]}_{split}'
     f = NWBFile(
         session_description='M2 data',
-        identifier=f'MonkeyN_{start_date}_{split}',
+        identifier=file_id,
         subject=subject,
-        session_start_time=datetime.strptime(start_date, '%Y-%m-%d'),
-        experimenter='Samuel R. Nason and Matthew J. Mender',
+        session_start_time=session_start_time,
+        experimenter='Samuel R. Nason-Tomaszewski and Matthew J. Mender',
         lab='Chestek Lab',
-        institution='University of Michicgan',
-        experiment_description='Two finger group movement in NHP',
-        session_id=hash
+        institution='University of Michigan',
+        experiment_description='Two finger group movement in NHP. Behavior provided in 20ms bins, observation interval at trial ends may include a bit of neural data from partial bin.',
+        session_id=session_hash # determines the fn
     )
-    device = f.create_device(name='Blackrock Utah Array', description='96-channel array')
+    device = f.create_device(name='Blackrock Utah Array', description='2x64-channel array, 96 active')
     main_group = f.create_electrode_group(
         name='M1_array',
-        description='Hand area 96-channel array',
+        description='Hand area 2x64-channel array (96 active channels in recording system)',
         location='M1',
         device=device,
     )
     f.add_trial_column(name="tgt_loc", description="location of target (0-1 AU)")
+    f.add_trial_column(name="trial_num", description="trial number as in experiment")
     for i in range(CHANNEL_EXPECTATION):
         f.add_electrode(
             id=i,
@@ -127,7 +132,8 @@ def filt_single_trial(trial):
         'fingers': trial['FingerAnglesTIMRL'][:, TARGET_FINGERS],
         'spikes': trial['Channel'], # spike time to nearest ms
         'time': trial['ExperimentTime'], # Clock time since start of block. 0 on first step i.e. start of bin.
-        'target': trial['TargetPos'][TARGET_FINGERS]
+        'target': trial['TargetPos'][TARGET_FINGERS],
+        'trial_num': trial['TrialNumber'],
     }
 
 def to_nwb(path: Path, ):
@@ -136,18 +142,21 @@ def to_nwb(path: Path, ):
     full_payload = full_payload[1:]
     full_payload = [i for i in full_payload if not i['BlankTrial']] # 1 if screen was off, no trial run
     full_payload = list(map(filt_single_trial, full_payload))
-
     def create_and_write(
         payload, suffix
     ):
-        nwbfile = create_nwb_shell(path, DATA_SPLITS[path.stem], suffix=suffix)
-        all_bhvr = []
-        all_vel = []
+        extra_note = ""
+        if path.stem == 'Z_Joker_2020-10-19_Run-002' and suffix in ['calib', 'full', 'in_day_oracle']:
+            extra_note = " Dropped trial in this file, see trial dataframe." # Cannot edit description after creation.
+        nwbfile = create_nwb_shell(path, DATA_SPLITS[path.stem], suffix=suffix, extra_note=extra_note)
+        cont_bhvr = []
+        # cont_vel = []
         all_spikes = [[] for _ in range(CHANNEL_EXPECTATION)]
-        all_time = []
+        cont_time = []
         start_time = 0
+        # breakpoint()
         for i, trial_data in enumerate(payload):
-            time = trial_data['time'].astype(float) / 1000 # To ms
+            time = (trial_data['time'].astype(float) / 1000) # To ms
             if not start_time:
                 start_time = time[0]
             time -= start_time
@@ -155,21 +164,23 @@ def to_nwb(path: Path, ):
                 start_time=time[0],
                 stop_time=time[-1],
                 tgt_loc=trial_data['target'],
+                trial_num = trial_data['trial_num']
             )
 
-            # Downsample to 20ms
-            time = time[::math.ceil(FS * BIN_SIZE_MS / 1000)] # This effectively rounds up
             bhvr = trial_data['fingers']
-            EDGE_PAD = 160 # reduce edge ringing, in ms
-            y_padded = np.pad(bhvr, ((EDGE_PAD, EDGE_PAD), (0, 0)), mode='edge',)
-            y_padded = smooth(y_padded, 120, 40) # TODO ask Sam what to use instead of this Gaussian
+            
+            # Per-trial Downsample to 20ms
+            # time = time[::math.ceil(FS * BIN_SIZE_MS / 1000)] # This effectively rounds up
+            # EDGE_PAD = 160 # reduce edge ringing, in ms
+            # y_padded = np.pad(bhvr, ((EDGE_PAD, EDGE_PAD), (0, 0)), mode='edge',)
+            # y_padded = smooth(y_padded, 120, 40) # Sam says Gaussian is fine
 
-            y_resampled_padded = resample_poly(y_padded, math.ceil(FS / BIN_SIZE_MS), 1000)
-            bhvr = y_resampled_padded[int(EDGE_PAD / BIN_SIZE_MS):int(-EDGE_PAD / BIN_SIZE_MS)]
-            all_bhvr.append(bhvr)
-            all_vel.append(np.gradient(bhvr, axis=0))
-            assert np.isclose(np.diff(time), BIN_SIZE_S).all(), "Expecting timestamps to be about 20ms apart"
-            all_time.append(time)
+            # y_resampled_padded = resample_poly(y_padded, math.ceil(FS / BIN_SIZE_MS), 1000)
+            # bhvr = y_resampled_padded[int(EDGE_PAD / BIN_SIZE_MS):int(-EDGE_PAD / BIN_SIZE_MS)]
+            cont_bhvr.append(bhvr)
+            # all_vel.append(np.gradient(bhvr, axis=0))
+            # assert np.isclose(np.diff(time), BIN_SIZE_S).all(), "Expecting timestamps to be about 20ms apart"
+            cont_time.append(time)
 
             for j, spike in enumerate(trial_data['spikes']):
                 spike_data = spike['SpikeTimes']
@@ -182,21 +193,57 @@ def to_nwb(path: Path, ):
                 id=i,
                 spike_times=np.array(spikes) / 1000 - start_time,
                 electrodes=[i],
-                obs_intervals=[[i[0], i[-1] + BIN_SIZE_S] for i in all_time]
+                obs_intervals=[[0., cont_time[-1][-1]]]
+                # obs_intervals=[[i[0], i[-1] + BIN_SIZE_S] for i in all_time]
             )
-            # OK...
         # trial_diffs = [all_time[i+1][0] - all_time[i][-1] for i in range(len(all_time) - 1)]
-        all_time = np.concatenate(all_time, axis=0)
-        diff_check = np.diff(all_time).max()
-        assert (diff_check > 0), "Expecting time to be monotonically increasing across trials."
-        print(f"Max diff b/n consecutive timebins: {diff_check}")
-
+        # trial_diff_raw = [payload[i+1]['time'][0] - payload[i]['time'][-1] for i in range(len(payload) - 1)]
+        # print(f"Max diff b/n consecutive trials: {max(trial_diffs):.4f}")
+        # print(f"Max diff b/n consecutive trials (raw): {max(trial_diff_raw):.4f}")
+        # Note there's one long drop in `20201019`
+        # if max(trial_diff_raw) > 3:
+            # breakpoint()
+        # all_time = np.concatenate(all_time, axis=0)
+        # diff_check = np.diff(all_time).max()
+        # assert (diff_check > 0), "Expecting time to be monotonically increasing across trials."
+        # print(f"Max diff b/n consecutive timebins: {diff_check}")
         
+        # Form continuous behavior and time
+        cat_bhvr = np.concatenate(cont_bhvr, axis=0)
+        cat_time = np.concatenate(cont_time, axis=0).round(3)
+        assert np.diff(cat_time).min() > 0, "Expecting time to be monotonically increasing."
+        interp_time = np.arange(cat_time[0], cat_time[-1], 0.001)
+        cat_mask = np.zeros_like(interp_time, dtype=bool)
+        for interval in cont_time:
+            cat_mask[(interp_time >= interval[0]) & (interp_time <= interval[-1])] = True
+        interp_bhvrs = [np.interp(interp_time, cat_time, y) for y in cat_bhvr.T]
+        interp_bhvr = np.stack(interp_bhvrs, axis=1)
+        # smooth and downsample
+        EDGE_PAD = 160 # reduce edge ringing, in ms
+        downsample_ratio = math.ceil(FS * BIN_SIZE_MS / 1000)
+        def get_reshape(vec: np.ndarray, downsample_ratio: int):
+            if len(vec) % downsample_ratio:
+                vec = vec[:-(len(vec) % downsample_ratio)]
+            vec = vec.reshape(-1, downsample_ratio)
+            return vec
+        downsampled_time = get_reshape(interp_time, downsample_ratio)[:, -1] # Get RHS of bin
+        pad_bhvr = np.pad(interp_bhvr, ((EDGE_PAD, EDGE_PAD), (0, 0)), mode='edge',)
+        smth_bhvr = smooth(pad_bhvr, 120, 40) # Sam says Gaussian is fine
+        resampled_bhvr = resample_poly(smth_bhvr, math.ceil(FS / BIN_SIZE_MS), 1000)
+        downsampled_bhvr = resampled_bhvr[int(EDGE_PAD / BIN_SIZE_MS):int(-EDGE_PAD / BIN_SIZE_MS)]
+        if smth_bhvr.shape[0] % downsample_ratio:
+            downsampled_bhvr = downsampled_bhvr[1:] # Right bias on extra bin from resample
+        downsampled_vel = np.gradient(downsampled_bhvr, axis=0)
+        downsampled_mask = get_reshape(cat_mask, downsample_ratio).mean(axis=1).round().astype(bool)
+        # assert downsampled_mask.all(), "Expecting mask to be all true."
+        if downsampled_bhvr.shape[0] != downsampled_time.shape[0]:
+            breakpoint()
         ts = create_multichannel_timeseries(
             data_name='finger_pos',
             chan_names=KIN_LABELS,
-            data=np.concatenate(all_bhvr, axis=0),
-            timestamps=all_time, # timestamps denote wall-clock sample is drawn - not evenly spaced
+            data=downsampled_bhvr,
+            # data=np.concatenate(downsampled_bhvr, axis=0),
+            timestamps=downsampled_time, # timestamps denote wall-clock sample is drawn - not evenly spaced
             unit='AU'
         )
         nwbfile.add_acquisition(ts)
@@ -204,8 +251,9 @@ def to_nwb(path: Path, ):
         ts = create_multichannel_timeseries(
             data_name='finger_vel',
             chan_names=KIN_LABELS,
-            data=np.concatenate(all_vel, axis=0),
-            timestamps=all_time,
+            data=downsampled_vel,
+            # data=np.concatenate(downsampled_vel, axis=0),
+            timestamps=downsampled_time,
             unit='AU'
         )
         nwbfile.add_acquisition(ts)
@@ -214,8 +262,9 @@ def to_nwb(path: Path, ):
             TimeSeries(
                 name='eval_mask',
                 description='Timesteps to keep covariates (for training, eval).',
-                timestamps=all_time,
-                data=np.ones_like(all_time, dtype=bool),
+                timestamps=downsampled_time,
+                data=downsampled_mask,
+                # data=np.ones_like(downsampled_time, dtype=bool),
                 unit='bool'
             )
         )
@@ -223,8 +272,7 @@ def to_nwb(path: Path, ):
         run = DATA_RUN_SET[path.stem]
         new_prefix = f'sub-MonkeyNRun{run}_{date_str}_{DATA_SPLITS[path.stem]}'
         write_to_nwb(nwbfile, out_root / DATA_SPLITS[path.stem] / f"{new_prefix}_{suffix}.nwb")
-        print(f"Written {path.stem}_{suffix}.nwb")
-
+        print(f"Written ", out_root / DATA_SPLITS[path.stem] / f"{new_prefix}_{suffix}.nwb")
     eval_num = int(len(full_payload) * EVAL_RATIO)
     eval_trials = full_payload[-eval_num:]
     create_and_write(eval_trials, 'eval')
