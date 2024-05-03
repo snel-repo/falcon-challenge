@@ -188,16 +188,24 @@ def evaluate(
         pred_dict = defaultdict(list)
         tgt_dict = defaultdict(list)
         mask_dict = defaultdict(list)
+        if 'h2' not in datasplit:
+            dset_len_dict = defaultdict(lambda: defaultdict(list))
         for dataset in user_submission[datasplit]:
             dataset_pred = user_submission[datasplit][dataset]
             dataset_tgt = split_annotations[dataset]['data']
             dataset_mask = split_annotations[dataset]['mask']
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
+                if 'h2' not in datasplit:
+                    session_id = next(s for s in HELD_IN_KEYS[getattr(FalconTask, datasplit)] if s in dataset)
+                    dset_len_dict['held_in'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_in'].append(dataset_pred)
                 tgt_dict['held_in'].append(dataset_tgt)
                 mask_dict['held_in'].append(dataset_mask)
             elif dataset in DATASET_HELDINOUT_MAP[datasplit]['held_out']:
+                if not 'h2' in datasplit:
+                    session_id = next(s for s in HELD_OUT_KEYS[getattr(FalconTask, datasplit)] if s in dataset)
+                    dset_len_dict['held_out'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_out'].append(dataset_pred)
                 tgt_dict['held_out'].append(dataset_tgt)
                 mask_dict['held_out'].append(dataset_mask)
@@ -211,10 +219,10 @@ def evaluate(
                 tgt = [y for x in tgt_dict[in_or_out] for y in x]
             else:
                 tgt = np.concatenate(tgt_dict[in_or_out])
+                dset_lens = dset_len_dict[in_or_out]
             mask = np.concatenate(mask_dict[in_or_out])
-            eval_fn = FalconEvaluator.compute_metrics_edit_distance if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression
             try:
-                metrics = eval_fn(pred, tgt, mask)
+                metrics = FalconEvaluator.compute_metrics_edit_distance(pred, tgt, mask) if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression(pred, tgt, mask, dset_lens)
             except Exception as e:
                 raise ValueError(f"Failed to compute metrics for {datasplit} {in_or_out}: {e}. Lengths submitted: {[len(piece) for piece in pred_dict[in_or_out]]}")
             for k in metrics:
@@ -519,14 +527,20 @@ class FalconEvaluator:
                 logger.info("{}: {}".format(k, v))
         
     @staticmethod
-    def compute_metrics_regression(preds, targets, eval_mask):
+    def compute_metrics_regression(preds, targets, eval_mask, dset_lens):
+        dset_lens = np.cumsum([sum(dset_lens[key]) for key in sorted(dset_lens.keys())])
+        masked_points = np.cumsum(~eval_mask)
+        dset_lens = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_lens]
+        print(dset_lens)
         # assumes targets are already masked
         preds = preds[eval_mask]
         if not targets.shape[0] == preds.shape[0]:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
+        r2_scores = [r2_score(targets[dset_lens[i]:dset_lens[i+1]], preds[dset_lens[i]:dset_lens[i+1]], 
+                              multioutput='variance_weighted') for i in range(len(dset_lens) - 1)]
         return {
-            "R2": r2_score(targets, preds, multioutput='variance_weighted'),
-            "R2 Std.": 0, # TODO Clay
+            "R2 Mean": np.mean(r2_scores),
+            "R2 Std.": np.std(r2_scores)
         }
 
     @staticmethod
