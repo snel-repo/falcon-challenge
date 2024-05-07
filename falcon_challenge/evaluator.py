@@ -277,9 +277,10 @@ def simple_collater(batch, task):
 
 class FalconEvaluator:
 
-    def __init__(self, eval_remote=False, split='h1'):
+    def __init__(self, eval_remote=False, split='h1', continual=False):
         self.eval_remote = eval_remote
         assert split in ['h1', 'h2', 'm1', 'm2'], "Split must be h1, h2, m1, or m2."
+        self.continual = continual
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
 
@@ -374,7 +375,8 @@ class FalconEvaluator:
                     if trial_delta_obs[0]:
                         trial_preds.append(decoder.on_done(trial_delta_obs))
                 else:
-                    decoder.on_done(trial_delta_obs)
+                    if not self.continual:
+                        decoder.on_done(trial_delta_obs)
                     step_prediction = decoder.predict(neural_observations)
                     assert step_prediction.shape[1] == self.cfg.out_dim, f"Prediction shape mismatch: {step_prediction.shape[1]} vs {self.cfg.out_dim}."
                     trial_preds.append(step_prediction)
