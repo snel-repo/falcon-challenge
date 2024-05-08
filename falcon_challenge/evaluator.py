@@ -533,7 +533,6 @@ class FalconEvaluator:
         dset_lens = np.cumsum([sum(dset_lens[key]) for key in sorted(dset_lens.keys())])
         masked_points = np.cumsum(~eval_mask)
         dset_lens = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_lens]
-        print(dset_lens)
         # assumes targets are already masked
         preds = preds[eval_mask]
         if not targets.shape[0] == preds.shape[0]:
