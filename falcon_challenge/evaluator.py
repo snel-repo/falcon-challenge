@@ -288,9 +288,10 @@ def simple_collater(batch, task):
 
 class FalconEvaluator:
 
-    def __init__(self, eval_remote=False, split='h1'):
+    def __init__(self, eval_remote=False, split='h1', continual=False):
         self.eval_remote = eval_remote
         assert split in ['h1', 'h2', 'm1', 'm2'], "Split must be h1, h2, m1, or m2."
+        self.continual = continual
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
 
@@ -384,14 +385,15 @@ class FalconEvaluator:
                 if self.dataset == FalconTask.h2:
                     assert neural_data.shape[1] == 1, "H2 expects batch size 1."
                     if step_mask[0]:
-                        start_time = time.time()
+                        start_time = time()
                         decoder.predict(neural_observations)
-                        end_time = time.time()
+                        end_time = time()
                         all_compute_times.append(end_time - start_time)
                     if trial_delta_obs[0]:
                         trial_preds.append(decoder.on_done(trial_delta_obs))
                 else:
-                    decoder.on_done(trial_delta_obs)
+                    if not self.continual:
+                        decoder.on_done(trial_delta_obs)
                     start_time = time()
                     step_prediction = decoder.predict(neural_observations)
                     end_time = time()

@@ -88,19 +88,17 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
     """
     if not dataset in [FalconTask.h1, FalconTask.h2, FalconTask.m1, FalconTask.m2]:
         raise ValueError(f"Unknown dataset {dataset}")
-    # print("data file name:", str(fn))
     with NWBHDF5IO(str(fn), 'r') as io:
         nwbfile = io.read()
         if dataset == FalconTask.h1:
             units = nwbfile.units.to_dataframe()
-            # print(units)
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
-            # print(nwbfile.acquisition['OpenLoopKinematicsVelocity'])
-            timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * .02#nwbfile.acquisition['OpenLoopKinematics'].rate
             try:
                 eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
-            except:
-                eval_mask = np.ones(kin.shape[0], dtype=bool)
+                timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
+            except: #for older format oracle data
+                eval_mask = ~nwbfile.acquisition['Blacklist'].data[:].astype(bool)
+                timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * .02
             binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=timestamps)
             return binned_units, kin, np.zeros(kin.shape[0]), eval_mask
         elif dataset == FalconTask.h2: 
