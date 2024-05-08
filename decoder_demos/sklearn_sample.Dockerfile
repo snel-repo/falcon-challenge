@@ -9,7 +9,7 @@
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 # RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
 RUN apt-get update && apt-get install -y git
-RUN git clone -b metrics https://github.com/snel-repo/falcon-challenge.git
+RUN git clone -b baselines https://github.com/snel-repo/falcon-challenge.git
 RUN pip install -e falcon-challenge
 # RUN pwd
 ENV PREDICTION_PATH "/submission/submission.csv"
