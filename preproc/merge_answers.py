@@ -53,3 +53,13 @@ with open('./data/answer_key/minival.pkl', 'wb') as f:
 
 with open('./data/answer_key/eval.pkl', 'wb') as f:
     pickle.dump(eval_annotations, f)
+    
+#%%
+print(minival_annotations['h1'].keys())
+print(minival_annotations['h2'].keys())
+print(minival_annotations['m1'].keys())
+print(minival_annotations['m2'].keys())
+print(eval_annotations['h1'].keys())
+print(eval_annotations['h2'].keys())
+print(eval_annotations['m1'].keys())
+print(eval_annotations['m2'].keys())
