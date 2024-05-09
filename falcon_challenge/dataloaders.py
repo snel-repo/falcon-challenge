@@ -93,8 +93,12 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
         if dataset == FalconTask.h1:
             units = nwbfile.units.to_dataframe()
             kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:]
-            timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
-            eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
+            try:
+                eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
+                timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
+            except: #for older format oracle data
+                eval_mask = ~nwbfile.acquisition['Blacklist'].data[:].astype(bool)
+                timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * .02
             binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=timestamps)
             return binned_units, kin, np.zeros(kin.shape[0]), eval_mask
         elif dataset == FalconTask.h2: 

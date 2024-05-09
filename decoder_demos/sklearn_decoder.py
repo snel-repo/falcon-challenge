@@ -121,6 +121,10 @@ class SKLearnDecoder(BCIDecoder):
         self.raw_history_buffer = np.zeros_like(self.raw_history_buffer)
         self.observation_buffer = np.zeros_like(self.observation_buffer)
 
+    def on_done(self, dones: np.ndarray):
+        # unnecessary for this decoder
+        pass
+    
     def predict(self, neural_observations: np.ndarray):
         r"""
             neural_observations: array of shape (batch, n_channels), binned spike counts
@@ -263,7 +267,8 @@ def fit_many_decoders(
     x_stds = {}
     for day in sorted(day_unique): # separate decoder
         print(f"Training on day {day}")
-        fit_datafiles = [d for d in all_datafiles if day in task_config.hash_dataset(d)]
+        fit_datafiles = [d for d in all_datafiles if day == task_config.hash_dataset(d).split('_set_')[0]]
+
         (
             neural_data,
             covariates,
