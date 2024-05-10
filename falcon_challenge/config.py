@@ -68,7 +68,7 @@ class FalconConfig:
         elif self.task == FalconTask.h2:
             return 192
         elif self.task == FalconTask.m1:
-            return 96
+            return 64
         elif self.task == FalconTask.m2:
             return 96
         raise NotImplementedError(f"Task {self.task} not implemented.")

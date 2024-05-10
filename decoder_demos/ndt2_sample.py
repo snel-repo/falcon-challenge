@@ -37,11 +37,17 @@ def main():
     parser.add_argument(
         '--batch-size', type=int, default=1
     )
+    parser.add_argument(
+        '--continual', action='store_true', default=False
+    )
+    
     args = parser.parse_args()
 
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",
-        split=args.split)
+        split=args.split,
+        continual=args.continual
+    )
 
     task = getattr(FalconTask, args.split)
     config = FalconConfig(task=task)

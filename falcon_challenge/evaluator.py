@@ -13,6 +13,7 @@ from sklearn.metrics import r2_score
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from edit_distance import SequenceMatcher
+from time import time, sleep
 
 from falcon_challenge.config import FalconTask, FalconConfig
 from falcon_challenge.interface import BCIDecoder
@@ -125,6 +126,8 @@ RECOMMENDED_BATCH_SIZES = {
 # USE_PKLS = False
 USE_PKLS = True
 
+BIN_SIZE = 0.02
+
 HELDIN_OR_OUT_MAP = {
     'held_in': "Held In",
     'held_out': "Held Out",
@@ -185,16 +188,24 @@ def evaluate(
         pred_dict = defaultdict(list)
         tgt_dict = defaultdict(list)
         mask_dict = defaultdict(list)
+        if 'h2' not in datasplit:
+            dset_len_dict = defaultdict(lambda: defaultdict(list))
         for dataset in user_submission[datasplit]:
             dataset_pred = user_submission[datasplit][dataset]
             dataset_tgt = split_annotations[dataset]['data']
             dataset_mask = split_annotations[dataset]['mask']
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
+                if 'h2' not in datasplit:
+                    session_id = next(s for s in HELD_IN_KEYS[getattr(FalconTask, datasplit)] if s in dataset)
+                    dset_len_dict['held_in'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_in'].append(dataset_pred)
                 tgt_dict['held_in'].append(dataset_tgt)
                 mask_dict['held_in'].append(dataset_mask)
             elif dataset in DATASET_HELDINOUT_MAP[datasplit]['held_out']:
+                if not 'h2' in datasplit:
+                    session_id = next(s for s in HELD_OUT_KEYS[getattr(FalconTask, datasplit)] if s in dataset)
+                    dset_len_dict['held_out'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_out'].append(dataset_pred)
                 tgt_dict['held_out'].append(dataset_tgt)
                 mask_dict['held_out'].append(dataset_mask)
@@ -208,10 +219,10 @@ def evaluate(
                 tgt = [y for x in tgt_dict[in_or_out] for y in x]
             else:
                 tgt = np.concatenate(tgt_dict[in_or_out])
+                dset_lens = dset_len_dict[in_or_out]
             mask = np.concatenate(mask_dict[in_or_out])
-            eval_fn = FalconEvaluator.compute_metrics_edit_distance if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression
             try:
-                metrics = eval_fn(pred, tgt, mask)
+                metrics = FalconEvaluator.compute_metrics_edit_distance(pred, tgt, mask) if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression(pred, tgt, mask, dset_lens)
             except Exception as e:
                 raise ValueError(f"Failed to compute metrics for {datasplit} {in_or_out}: {e}. Lengths submitted: {[len(piece) for piece in pred_dict[in_or_out]]}")
             for k in metrics:
@@ -277,9 +288,10 @@ def simple_collater(batch, task):
 
 class FalconEvaluator:
 
-    def __init__(self, eval_remote=False, split='h1'):
+    def __init__(self, eval_remote=False, split='h1', continual=False):
         self.eval_remote = eval_remote
         assert split in ['h1', 'h2', 'm1', 'm2'], "Split must be h1, h2, m1, or m2."
+        self.continual = continual
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
 
@@ -313,13 +325,14 @@ class FalconEvaluator:
         return handles
     
     def predict_files(self, decoder: BCIDecoder, eval_files: List):
-        # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective
+        # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective. also returns lists compute_time and neural_time
         # TODO this does not return uniquely identifiable data if eval_files is partial, e.g. if we only has set 2 of a day with 2 sets, we'll happily just provide partial predictions.
         # Pre-loop before starting batch loads
         file_neural_data = []
         file_trial_change = []
         file_targets = []
         file_eval_mask = []
+        all_neural_times = []
         datafiles = list(sorted(eval_files))
         for datafile in datafiles:
             if not datafile.exists():
@@ -329,6 +342,7 @@ class FalconEvaluator:
             file_trial_change.append(trial_change)
             file_targets.append(decoding_targets)
             file_eval_mask.append(eval_mask)
+            all_neural_times.append(neural_data.shape[0] * BIN_SIZE)
     
         dataset = EvalDataset(
             data=file_neural_data,
@@ -341,6 +355,7 @@ class FalconEvaluator:
         all_preds = defaultdict(list)
         all_targets = defaultdict(list)
         all_eval_mask = defaultdict(list)
+        all_compute_times = []
         
         num_workers = 8
         simple_collater_partial = partial(simple_collater, task=self.dataset)
@@ -370,12 +385,19 @@ class FalconEvaluator:
                 if self.dataset == FalconTask.h2:
                     assert neural_data.shape[1] == 1, "H2 expects batch size 1."
                     if step_mask[0]:
+                        start_time = time()
                         decoder.predict(neural_observations)
+                        end_time = time()
+                        all_compute_times.append(end_time - start_time)
                     if trial_delta_obs[0]:
                         trial_preds.append(decoder.on_done(trial_delta_obs))
                 else:
-                    decoder.on_done(trial_delta_obs)
+                    if not self.continual:
+                        decoder.on_done(trial_delta_obs)
+                    start_time = time()
                     step_prediction = decoder.predict(neural_observations)
+                    end_time = time()
+                    all_compute_times.append(end_time - start_time)
                     assert step_prediction.shape[1] == self.cfg.out_dim, f"Prediction shape mismatch: {step_prediction.shape[1]} vs {self.cfg.out_dim}."
                     trial_preds.append(step_prediction)
                     
@@ -408,7 +430,7 @@ class FalconEvaluator:
                 all_preds[k] = np.concatenate(all_preds[k])
                 all_targets[k] = np.concatenate(all_targets[k])
             all_eval_mask[k] = np.concatenate(all_eval_mask[k])
-        return all_preds, all_targets, all_eval_mask
+        return all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times
 
     def evaluate_files(self, decoder: BCIDecoder, eval_files: List):
         all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files)
@@ -459,15 +481,15 @@ class FalconEvaluator:
                 raise NotImplementedError("not sure what metrics to compute for specific keys yet.")
             elif held_out_only:
                 eval_files_held_in = []
-            all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files_held_out)
+            all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times = self.predict_files(decoder, eval_files_held_out)
             if eval_files_held_in:
-                all_preds_held_in, all_targets_held_in, all_eval_mask_held_in = self.predict_files(decoder, eval_files_held_in)
+                all_preds_held_in, all_targets_held_in, all_eval_mask_held_in, _, _ = self.predict_files(decoder, eval_files_held_in)
                 all_preds.update(all_preds_held_in)
                 all_targets.update(all_targets_held_in)
                 all_eval_mask.update(all_eval_mask_held_in)
 
         else:
-            all_preds, all_targets, all_eval_mask = self.predict_files(decoder, eval_files)
+            all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times = self.predict_files(decoder, eval_files)
         # Indirect remote setup to satisfy EvalAI interface. Save metrics / comparison to file.
         if USE_PKLS:
             inner_pred = {**all_preds}
@@ -477,7 +499,7 @@ class FalconEvaluator:
                     'mask': all_eval_mask[k],
                 } for k in all_targets
             }
-            inner_pred['normalized_latency'] = 1 # TODO - CW insert timing code
+            inner_pred['normalized_latency'] = np.sum(all_compute_times) / np.sum(all_neural_times)
             pred_payload = {self.dataset.name: inner_pred}
             truth_payload = {self.dataset.name: inner_tgt_spoof}
         else:
@@ -490,13 +512,12 @@ class FalconEvaluator:
             Path(gt_path).parent.mkdir(parents=True, exist_ok=True)
             with open(gt_path, 'wb') as f:
                 pickle.dump(truth_payload, f)
-            import time
 
             if self.eval_remote:
                 print("Sleeping before exiting for remote eval - feel free to interrupt for local eval.", flush=True)
                 # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
                 # Sleep so it's definitely available
-                time.sleep(300) 
+                sleep(300) 
             else:
                 return evaluate(
                     test_annotation_file=gt_path,
@@ -508,14 +529,19 @@ class FalconEvaluator:
                 logger.info("{}: {}".format(k, v))
         
     @staticmethod
-    def compute_metrics_regression(preds, targets, eval_mask):
+    def compute_metrics_regression(preds, targets, eval_mask, dset_lens):
+        dset_lens = np.cumsum([sum(dset_lens[key]) for key in sorted(dset_lens.keys())])
+        masked_points = np.cumsum(~eval_mask)
+        dset_lens = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_lens]
         # assumes targets are already masked
         preds = preds[eval_mask]
         if not targets.shape[0] == preds.shape[0]:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
+        r2_scores = [r2_score(targets[dset_lens[i]:dset_lens[i+1]], preds[dset_lens[i]:dset_lens[i+1]], 
+                              multioutput='variance_weighted') for i in range(len(dset_lens) - 1)]
         return {
-            "R2": r2_score(targets, preds, multioutput='variance_weighted'),
-            "R2 Std.": 0, # TODO Clay
+            "R2 Mean": np.mean(r2_scores),
+            "R2 Std.": np.std(r2_scores)
         }
 
     @staticmethod
