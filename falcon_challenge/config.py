@@ -117,13 +117,13 @@ class FalconConfig:
             return handle.split('_')[1]
         elif self.task == FalconTask.m2:
             if 'behavior+ecephys' in handle: # public sub-MonkeyN-held-in-calib_ses-2020-10-19-Run1_behavior+ecephys.nwb
-                return handle.split('_')[-2][4:] # -> 2020-10-19-Run1
+                run_str = handle.split('_')[1][-4:]
+                date_str = ''.join(handle.split('_')[1].split('-')[1:4])
             # sub-MonkeyNRun1_20201019_held_in_eval.nwb 
-            run_str = handle.split('_')[0][-4:]
-            date_str = handle.split('_')[1]
-            date = datetime.datetime.strptime(date_str, '%Y%m%d')
-            date_str_fmt = date.strftime('%Y-%m-%d')
-            return f'{date_str_fmt}-{run_str}'
+            else:
+                run_str = handle.split('_')[0][-4:]
+                date_str = handle.split('_')[1][:8]
+            return f'{run_str}_{date_str}'
             
 
 cs = ConfigStore.instance()

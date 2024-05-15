@@ -59,7 +59,7 @@ DATASET_HELDINOUT_MAP = {
     },
     'm1': {
         'held_in': ['20120924', '20120926', '20120927', '20120928'],
-        'held_out': ['20121004', '20121017', '20121022', '20121024'],
+        'held_out': ['20121004', '20121017', '20121024'],
     },
     'h2': {
         'held_in': [
@@ -94,12 +94,20 @@ DATASET_HELDINOUT_MAP = {
         ]
     },
     'm2': {
-        'held_in': ['2020-10-19-Run1', '2020-10-19-Run2', '2020-10-20-Run1', '2020-10-20-Run2', '2020-10-27-Run1', '2020-10-27-Run2', '2020-10-28-Run1'],
-        'held_out': ['2020-10-30-Run1', '2020-10-30-Run2', '2020-11-18-Run1', '2020-11-19-Run1', '2020-11-24-Run1', '2020-11-24-Run2'],
+        'held_in': ['Run1_20201019', 'Run2_20201019', 'Run1_20201020', 'Run2_20201020', 'Run1_20201027', 'Run2_20201027', 'Run1_20201028'],
+        'held_out': ['Run1_20201030', 'Run2_20201030', 'Run1_20201118', 'Run1_20201119', 'Run1_20201124', 'Run2_20201124'],
     },
 }
 
 # Used to label test server data file names to look for
+# These act as a _reduction_ set of the full list of datafiles considered, to specific sessions. Relevant for H1/M2.
+def reduce_key(key):
+    if key.startswith('Run'):
+        return key.split('_')[1]
+    if key.startswith('L_'):
+        return key
+    return key
+
 HELD_IN_KEYS = {
     FalconTask.h1: ['S0_', 'S1_', 'S2_', 'S3_', 'S4_', 'S5_'],
     FalconTask.m1: ['L_20120924', 'L_20120926', 'L_20120927', 'L_20120928'],
@@ -109,7 +117,7 @@ HELD_IN_KEYS = {
 
 HELD_OUT_KEYS = {
     FalconTask.h1: ['S6_', 'S7_', 'S8_', 'S9_', 'S10_', 'S11_', 'S12_'],
-    FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121022', 'L_20121024'],
+    FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121024'],
     FalconTask.m2: ['20201030', '20201118', '20201119', '20201124'],
     FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_out'],
 }
@@ -197,14 +205,14 @@ def evaluate(
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
                 if 'h2' not in datasplit:
-                    session_id = next(s for s in HELD_IN_KEYS[getattr(FalconTask, datasplit)] if s in dataset)
+                    session_id = reduce_key(dataset)
                     dset_len_dict['held_in'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_in'].append(dataset_pred)
                 tgt_dict['held_in'].append(dataset_tgt)
                 mask_dict['held_in'].append(dataset_mask)
             elif dataset in DATASET_HELDINOUT_MAP[datasplit]['held_out']:
                 if not 'h2' in datasplit:
-                    session_id = next(s for s in HELD_OUT_KEYS[getattr(FalconTask, datasplit)] if s in dataset)
+                    session_id = reduce_key(dataset)
                     dset_len_dict['held_out'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_out'].append(dataset_pred)
                 tgt_dict['held_out'].append(dataset_tgt)
