@@ -299,7 +299,7 @@ class FalconEvaluator:
     def __init__(self, eval_remote=False, split='h1'):
         self.eval_remote = eval_remote
         assert split in ['h1', 'h2', 'm1', 'm2'], "Split must be h1, h2, m1, or m2."
-        if split in ['h1', 'h2', 'm1']:
+        if split in ['h1', 'm1', 'm2']:
             self.continual = True
         else:
             self.continual = False
