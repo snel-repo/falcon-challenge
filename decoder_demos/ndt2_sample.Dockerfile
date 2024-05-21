@@ -24,11 +24,18 @@ ENV EVALUATION_LOC remote
 
 # Add ckpt
 # Note that Docker cannot easily import across symlinks, make sure data is not symlinked
-ADD ./local_data/ndt2_h1_sample_nokey.pth data/decoder.pth
-ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
+
+# H1
+# ADD ./local_data/ndt2_h1_sample_nokey.pth data/decoder.pth
+# ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
+
+# M1
+
+# M2
+ADD ./local_data/ndt2_m2_sample_continual.pth data/decoder.pth
+ADD ./local_data/ndt2_zscore_m2.pt data/zscore.pt
 
 # Add runfile
-RUN pwd
 RUN pwd
 ADD ./decoder_demos/ndt2_sample.py decode.py
 ADD ./decoder_demos/ndt2_decoder.py ndt2_decoder.py
