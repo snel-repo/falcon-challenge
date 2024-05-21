@@ -267,8 +267,11 @@ def fit_many_decoders(
     x_stds = {}
     for day in sorted(day_unique): # separate decoder
         print(f"Training on day {day}")
-        fit_datafiles = [d for d in all_datafiles if day == task_config.hash_dataset(d).split('_set_')[0]]
-
+        if task_config.task == FalconTask.h1:
+            fit_datafiles = [d for d in all_datafiles if day == task_config.hash_dataset(d).split('_set_')[0]]
+        else:
+            fit_datafiles = [d for d in all_datafiles if day == d.stem.split('_')[1]]
+        print("fit_datafiles", fit_datafiles)
         (
             neural_data,
             covariates,
