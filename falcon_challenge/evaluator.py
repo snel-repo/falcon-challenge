@@ -213,13 +213,13 @@ def evaluate(
         else:
             all_datasets = user_submission[datasplit]
         for dataset in all_datasets:
-            print('split:',datasplit,'set',dataset)
             dataset_pred = user_submission[datasplit][dataset]
             dataset_tgt = split_annotations[dataset]['data']
             dataset_mask = split_annotations[dataset]['mask']
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
                 if 'h2' not in datasplit:
+                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_in'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_in'].append(dataset_pred)
@@ -227,6 +227,7 @@ def evaluate(
                 mask_dict['held_in'].append(dataset_mask)
             elif dataset in DATASET_HELDINOUT_MAP[datasplit]['held_out']:
                 if not 'h2' in datasplit:
+                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_out'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_out'].append(dataset_pred)
@@ -236,7 +237,7 @@ def evaluate(
                 raise ValueError(f"Dataset {dataset} submitted but not found in held-in or held-out list of split {datasplit}.")
         for in_or_out in pred_dict:
             if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
-                print('ok')#raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
+                raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
             pred = np.concatenate(pred_dict[in_or_out])
             if 'h2' in datasplit:
                 tgt = [y for x in tgt_dict[in_or_out] for y in x]
@@ -445,7 +446,6 @@ class FalconEvaluator:
                 trial_preds = np.stack(trial_preds) # -> T x B x H
                 for idx in range(len(datafile_idx)):
                     datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[idx]))
-                    print("datafile hash:",datafile_hash)
                     all_preds[datafile_hash].append(trial_preds[:, idx])
                     all_targets[datafile_hash].append(decoding_targets[:, idx])
                     all_eval_mask[datafile_hash].append(eval_mask[:, idx])
@@ -501,9 +501,7 @@ class FalconEvaluator:
             
         if phase == 'test':
             eval_files_held_in = [f for f in eval_files if any(k in f.name for k in HELD_IN_KEYS[self.dataset])]
-            print('eval files held in:',eval_files_held_in)
             eval_files_held_out = [f for f in eval_files if any(k in f.name for k in HELD_OUT_KEYS[self.dataset])]
-            print('eval files held out:',eval_files_held_out)
             assert len(eval_files) == len(eval_files_held_in) + len(eval_files_held_out), f"Mismatch in extracted eval #: Eval file state is not consistent with benchmark creation settings. Found {len(eval_files)} files, {len(eval_files_held_in)} held in, {len(eval_files_held_out)} held out."
 
             if specific_keys:
@@ -559,7 +557,6 @@ class FalconEvaluator:
         
     @staticmethod
     def compute_metrics_regression(preds, targets, eval_mask, dset_lens):
-        dset_lens_name = sorted(dset_lens.keys())
         dset_lens = np.cumsum([sum(dset_lens[key]) for key in sorted(dset_lens.keys())])
         masked_points = np.cumsum(~eval_mask)
         dset_lens = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_lens]
@@ -569,7 +566,6 @@ class FalconEvaluator:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
         r2_scores = [r2_score(targets[dset_lens[i]:dset_lens[i+1]], preds[dset_lens[i]:dset_lens[i+1]], 
                               multioutput='variance_weighted') for i in range(len(dset_lens) - 1)]
-        print({dset:score for dset, score in zip(dset_lens_name, r2_scores)})
         return {
             "R2 Mean": np.mean(r2_scores),
             "R2 Std.": np.std(r2_scores)
