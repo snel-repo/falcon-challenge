@@ -1,0 +1,40 @@
+MODEL:
+  DATA_DIM: 176
+  SEQ_LEN: 50
+  ENC_INPUT_DIM: 50
+  IC_ENC_DIM: 100
+  CI_ENC_DIM: 100
+  CON_DIM: 100
+  CO_DIM: 4
+  IC_DIM: 100
+  GEN_DIM: 100
+  FAC_DIM: 50
+  DROPOUT_RATE: 0.05 # PBT
+  CD_RATE: 0.3 # PBT
+  NORMALIZE: True
+TRAIN:
+  DATA:
+    DIR: ''
+    PREFIX: lfads
+    AUGMENT:
+      JITTER_WIDTH: 2
+  PATIENCE: 10000
+  BATCH_SIZE: 1000
+  ADAM_EPSILON: 1.0e-8
+  LR: 
+    INIT: 1.0e-3 # PBT
+    STOP: 1.0e-6
+    DECAY: 1.0
+  L2:
+    INCREASE_EPOCH: 20
+    GEN_SCALE: 1.0e-6 # PBT
+    CON_SCALE: 1.0e-6 # PBT
+  KL:
+    INCREASE_EPOCH: 20
+    IC_WEIGHT: 1.0e-4 # PBT
+    CO_WEIGHT:  1.0e-4 # PBT
+  TUNE_MODE: True
+  OVERWRITE: True
+  PBT_MODE: False
+  USE_TB: False
+  MODEL_DIR: ~/tmp/lfads_tf2/nomad

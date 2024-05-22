@@ -1,0 +1,57 @@
+MODEL: 
+  DATA_DIM: 42
+  SEQ_LEN: 50
+  TYPE: FFN-KL # options: {FFN-KL, GAN}
+  HIDDEN_DIM: 50
+  ALIGN_DATA:  # options: {gen_states, factors, rates}
+    - gen_states
+  DAYK_LFADS_TRAINABLES: # options: any LFADS layers
+    - lowd_readin
+    - generator
+    - rate_linear
+    - decoder.rnn.cell.fac_linear
+  SMART_INIT: False
+  SAMPLE_POSTERIORS: True
+  INIT_READIN_FROM_DAY0: True
+TRAIN:
+  EARLY_STOPPING_COST: 'NLL-KL'
+  ALIGN_LOSS_WEIGHT:
+    - 1.0
+  DATA: 
+    DAY0: ''
+    DAYK: ''
+  PATIENCE: 30
+  BATCH_SIZE: 1000
+  MAX_EPOCHS: 1000
+  MAX_GRAD_NORM: 2000.0
+  GAN:
+    DISC_TRAIN_DELAY: 1
+    BATCH_DISC: True
+    LABEL_SMOOTH: True
+    DISC_LR:
+      INIT: 0.001
+      STOP: 1.0e-5
+      DECAY: 0.95
+      PATIENCE: 6
+  LFADS_LOSS_WEIGHT: 1.0 # can prob apply this for any type of alignment network
+  NLL:
+    INCREASE_EPOCH: 100
+    WEIGHT: 30.
+  LR:
+    INIT: 1.e-3
+    STOP: 1.0e-9
+    DECAY: 0.95
+    PATIENCE: 6
+  KL: 
+    START_EPOCH: 0
+    INCREASE_EPOCH: 30
+    IC_WEIGHT: 1.e-6
+    CO_WEIGHT: 1.e-6
+  L2:
+    READIN_SCALE: 5.e-3
+  LOSS_SCALE: 1.0e+4
+  USE_TB: False
+  MODEL_DIR: /snel/home/asedler/ray_results/pbt_jango_day0/best_model  # overwritten in nomad_tf2_run_alignment.py
+  ALIGN_DIR: /snel/home/asedler/ray_results/align_jango_GAN  # overwritten in nomad_tf2_run_alignment.py
+  OVERWRITE: True
+  
