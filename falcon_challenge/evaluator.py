@@ -203,7 +203,7 @@ def evaluate(
         if 'm2' in datasplit:
             grouped = {}
             for set_name in user_submission[datasplit]:
-                run, date = s.split('_')
+                run, date = set_name.split('_')
                 if date not in grouped:
                     grouped[date] = []
                 grouped[date].append(set_name)
