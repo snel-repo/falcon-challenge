@@ -106,6 +106,8 @@ def reduce_key(key):
         return key.split('_')[1]
     if key.startswith('L_'):
         return key
+    if key.startswith('S'):
+        return key.split('_')[0]    
     return key
 
 HELD_IN_KEYS = {
@@ -198,13 +200,26 @@ def evaluate(
         mask_dict = defaultdict(list)
         if 'h2' not in datasplit:
             dset_len_dict = defaultdict(lambda: defaultdict(list))
-        for dataset in user_submission[datasplit]:
+        if 'm2' in datasplit:
+            grouped = {}
+            for set_name in user_submission[datasplit]:
+                run, date = set_name.split('_')
+                if date not in grouped:
+                    grouped[date] = []
+                grouped[date].append(set_name)
+            for date in grouped:
+                grouped[date].sort()
+            all_datasets = [run for runs in grouped.values() for run in runs]
+        else:
+            all_datasets = user_submission[datasplit]
+        for dataset in all_datasets:
             dataset_pred = user_submission[datasplit][dataset]
             dataset_tgt = split_annotations[dataset]['data']
             dataset_mask = split_annotations[dataset]['mask']
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
                 if 'h2' not in datasplit:
+                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_in'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_in'].append(dataset_pred)
@@ -212,6 +227,7 @@ def evaluate(
                 mask_dict['held_in'].append(dataset_mask)
             elif dataset in DATASET_HELDINOUT_MAP[datasplit]['held_out']:
                 if not 'h2' in datasplit:
+                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_out'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_out'].append(dataset_pred)
