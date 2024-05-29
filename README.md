@@ -1,6 +1,6 @@
 # FALCON Benchmark and Challenge
 
-This package contains core code for submitting decoders to the FALCON challenge. Full github contains additional examples and documentation.
+This package contains core code for submitting decoders to the FALCON challenge. For a more general overview of FALCON, please see the [main website](https://snel-repo.github.io/falcon/).
 
 ## Installation
 Install `falcon_challenge` with:
@@ -15,24 +15,45 @@ See, e.g. https://docs.docker.com/desktop/install/linux-install/.
 ## Getting started
 
 ### Data downloading
-The FALCON datasets are available on DANDI (or through private correspondence, if beta-testing). 
+The FALCON datasets are available on DANDI ([H1](https://dandiarchive.org/dandiset/000954?search=falcon&pos=3), [H2](https://dandiarchive.org/dandiset/000950?search=falcon&pos=4), [M1](https://dandiarchive.org/dandiset/000941?search=falcon&pos=1), [M2](https://dandiarchive.org/dandiset/000953?search=falcon&pos=2)). H1 and H2 are human intractorical brain-computer interface (iBCI) datasets, M1 and M2 are monkey iBCI datasets, and B1 is a songbird iBCI dataset.
 
-NOTE FOR BETA TESTERS:
-- Some of the sample code expects your data directory to be set up in `./data`. Specifically, the following hierarchy is expected:
+Data from each dataset is broken down as follows:
+
+- Held-in 
+    - Data from the first several recording sessions. 
+    - All non-evaluation data is released and split into calibration (large portion) and minival (small portion) sets. 
+    - Held-in calibration data is intended to train decoders from scratch.
+    - Minival data enables validation of held-in decoder generalization.
+- Held-out: 
+    - Data from the latter several recording sessions. 
+    - A small portion of non-evaluation data is released for calibration. 
+    - Held-out calibration data is intentionally small to discourage training decoders from scratch on this data and provides an opportunity for few-shot recalibration.
+
+Some of the sample code expects your data directory to be set up in `./data`. Specifically, the following hierarchy is expected:
 
 `data`
 - `h1`
     - `held_in_calib`
     - `held_out_calib`
-    - `minival`
-    - `eval` (Note this is private data)
+    - `minival` (Copy dandiset minival folder into this folder)
+- `h2`
+    - `held_in_calib`
+    - `held_out_calib`
+    - `minival` (Copy dandiset minival folder into this folder)
 - `m1`
     - `sub-MonkeyL-held-in-calib`
     - `sub-MonkeyL-held-out-calib`
     - `minival` (Copy dandiset minival folder into this folder)
-    - `eval` (Copy the ground truth held in and held out data into this folder)
+- `m2`
+    - `held_in_calib`
+    - `held_out_calib`
+    - `minival` (Copy dandiset minival folder into this folder)
+<!-- - `b1`
+    - `held_in_calib`
+    - `held_out_calib`
+    - `minival` (Copy dandiset minival folder into this folder) -->
 
-H1 should unfold correctly just from unzipping the provided directory. M1 should work by renaming the provided dandiset to `m1` and `minival` folder inside, and then copying the provided eval data into this folder. Each of the lowest level dirs holds the NWB files.
+Each of the lowest level dirs holds the data files (in Neurodata Without Borders (NWB) format). Data from some sessions is distributed across multiple NWB files. Some data from each file is allocated to calibration, minival, and evaluation splits as appropriate. 
 
 ### Code
 This codebase contains starter code for implementing your own method for the FALCON challenge. 
@@ -46,6 +67,8 @@ python decoder_demos/sklearn_decoder.py --training_dir data/h1/held_in_calib/ --
 python decoder_demos/sklearn_sample.py --evaluation local --phase minival --split h1
 ```
 
+Note: During evaluation, data file names are hashed into unique tags. Submitted solutions receive data to decode along with tags indicating the file from which the data originates in the call to their `reset` function. These tags are the keys of the the `DATASET_HELDINOUT_MAP` dictionary in `falcon_challenge/evaluator.py`. Submissions that intend to condition decoding on the data file from which the data comes should make use of these tags. For an example, see `fit_many_decoders` and `reset` in `decoder_demos/sklearn_decoder.py`.
+
 ### Docker Submission
 To interface with our challenge, your code will need to be packaged in a Docker container that is submitted to EvalAI. Try this process by building and running the provided `sklearn_sample.Dockerfile`, to confirm your setup works. Do this with the following commands (once Docker is installed)
 ```bash
@@ -53,6 +76,8 @@ To interface with our challenge, your code will need to be packaged in a Docker 
 docker build -t sk_smoke -f ./decoder_demos/sklearn_sample.Dockerfile .
 bash test_docker_local.sh --docker-name sk_smoke
 ```
+
+For an example Dockerfile with annotations regarding the necessity and function of each line, see `decoder_demos/template.Dockerfile`.
 
 ## EvalAI Submission
 Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands with your own Dockerfile (in place of sk_smoke). This should produce a log of nontrivial metrics (evaluation is run on locally available minival).
