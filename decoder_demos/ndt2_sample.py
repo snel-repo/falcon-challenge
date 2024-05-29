@@ -47,6 +47,7 @@ def main():
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",
         split=args.split,
+        verbose=True
         # continual=args.continual
     )
 

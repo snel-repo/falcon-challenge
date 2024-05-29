@@ -147,6 +147,7 @@ def evaluate(
     test_annotation_file: str, # The annotation file for the phase
     user_submission_file: str, # * JY: This appears to always be /submission/submission.csv on EvalAI. No matter - load it as a pickle.
     phase_codename: str, # e.g. minival or test
+    verbose: bool = False,
     **kwargs
 ):
     r"""
@@ -247,7 +248,7 @@ def evaluate(
                 dset_lens = dset_len_dict[in_or_out]
             mask = np.concatenate(mask_dict[in_or_out])
             try:
-                metrics = FalconEvaluator.compute_metrics_edit_distance(pred, tgt, mask) if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression(pred, tgt, mask, dset_lens)
+                metrics = FalconEvaluator.compute_metrics_edit_distance(pred, tgt, mask) if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression(pred, tgt, mask, dset_lens, verbose=verbose)
             except Exception as e:
                 raise ValueError(f"Failed to compute metrics for {datasplit} {in_or_out}: {e}. Lengths submitted: {[len(piece) for piece in pred_dict[in_or_out]]}")
             for k in metrics:
@@ -554,7 +555,8 @@ class FalconEvaluator:
                 return evaluate(
                     test_annotation_file=gt_path,
                     user_submission_file=prediction_path,
-                    phase_codename=phase
+                    phase_codename=phase,
+                    verbose=self.verbose
                 )
         else:
             for k, v in metrics.items():
@@ -571,16 +573,19 @@ class FalconEvaluator:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
         r2_scores = [r2_score(targets[dset_lens[i]:dset_lens[i+1]], preds[dset_lens[i]:dset_lens[i+1]], 
                               multioutput='variance_weighted') for i in range(len(dset_lens) - 1)]
-        if verbose:
-            dsets = sorted(dset_lens.keys())
-            print([f'{k}: {r2}' for k, r2 in zip(dsets, r2_scores)])
-            preds_dict = {k: preds[dset_lens[i]:dset_lens[i+1]] for i, k in enumerate(dsets)}
-            with open('preds.pkl', 'wb') as f:
-                pickle.dump(preds_dict, f)
-        return {
+        base_metrics = {
             "R2 Mean": np.mean(r2_scores),
             "R2 Std.": np.std(r2_scores)
         }
+        if verbose:
+            dsets = sorted(dset_lens.keys())
+            for k, r2 in zip(dsets, r2_scores):
+                print(f"{k}: {r2}")
+                base_metrics[f"{k} R2"] = r2
+            preds_dict = {k: preds[dset_lens[i]:dset_lens[i+1]] for i, k in enumerate(dsets)}
+            with open('preds.pkl', 'wb') as f:
+                pickle.dump(preds_dict, f)
+        return base_metrics
 
 
     @staticmethod
