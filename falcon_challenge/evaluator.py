@@ -235,6 +235,7 @@ def evaluate(
                 mask_dict['held_out'].append(dataset_mask)
             else:
                 raise ValueError(f"Dataset {dataset} submitted but not found in held-in or held-out list of split {datasplit}.")
+            
         for in_or_out in pred_dict:
             if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
                 raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
@@ -312,13 +313,17 @@ def simple_collater(batch, task):
 
 class FalconEvaluator:
 
-    def __init__(self, eval_remote=False, split='h1'):
+    def __init__(self, eval_remote=False, split='h1', verbose=False):
+        r"""
+            verbose: Print out dataset specific metrics for movement tasks.
+        """
         self.eval_remote = eval_remote
         assert split in ['h1', 'h2', 'm1', 'm2'], "Split must be h1, h2, m1, or m2."
         if split in ['h1', 'm1', 'm2']:
             self.continual = True
         else:
             self.continual = False
+        self.verbose = verbose
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
 
@@ -554,9 +559,9 @@ class FalconEvaluator:
         else:
             for k, v in metrics.items():
                 logger.info("{}: {}".format(k, v))
-        
+
     @staticmethod
-    def compute_metrics_regression(preds, targets, eval_mask, dset_lens):
+    def compute_metrics_regression(preds, targets, eval_mask, dset_lens, verbose=False): # Verbose drop-in
         dset_lens = np.cumsum([sum(dset_lens[key]) for key in sorted(dset_lens.keys())])
         masked_points = np.cumsum(~eval_mask)
         dset_lens = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_lens]
@@ -566,10 +571,17 @@ class FalconEvaluator:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
         r2_scores = [r2_score(targets[dset_lens[i]:dset_lens[i+1]], preds[dset_lens[i]:dset_lens[i+1]], 
                               multioutput='variance_weighted') for i in range(len(dset_lens) - 1)]
+        if verbose:
+            dsets = sorted(dset_lens.keys())
+            print([f'{k}: {r2}' for k, r2 in zip(dsets, r2_scores)])
+            preds_dict = {k: preds[dset_lens[i]:dset_lens[i+1]] for i, k in enumerate(dsets)}
+            with open('preds.pkl', 'wb') as f:
+                pickle.dump(preds_dict, f)
         return {
             "R2 Mean": np.mean(r2_scores),
             "R2 Std.": np.std(r2_scores)
         }
+
 
     @staticmethod
     def compute_metrics_edit_distance(preds, targets, eval_mask):
@@ -609,7 +621,7 @@ class FalconEvaluator:
             all_eval_mask: array of shape (n_timesteps, k_dim). True if we should evaluate this timestep.
         """
         if self.dataset in [FalconTask.h1, FalconTask.m1, FalconTask.m2]:
-            metrics = self.compute_metrics_regression(all_preds, all_targets, all_eval_mask)
+            metrics = self.compute_metrics_regression(all_preds, all_targets, all_eval_mask, verbose=self.verbose)
         elif self.dataset in [FalconTask.h2]:
             metrics = self.compute_metrics_edit_distance(all_preds, all_targets, all_eval_mask)
         else:
