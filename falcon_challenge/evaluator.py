@@ -247,6 +247,7 @@ def evaluate(
                 tgt = np.concatenate(tgt_dict[in_or_out])
                 dset_lens = dset_len_dict[in_or_out]
             mask = np.concatenate(mask_dict[in_or_out])
+            
             try:
                 metrics = FalconEvaluator.compute_metrics_edit_distance(pred, tgt, mask) if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression(pred, tgt, mask, dset_lens, verbose=verbose)
             except Exception as e:
@@ -564,25 +565,25 @@ class FalconEvaluator:
 
     @staticmethod
     def compute_metrics_regression(preds, targets, eval_mask, dset_lens, verbose=False): # Verbose drop-in
-        dset_lens = np.cumsum([sum(dset_lens[key]) for key in sorted(dset_lens.keys())])
+        dsets = sorted(dset_lens.keys())
+        dset_bounds = np.cumsum([sum(dset_lens[key]) for key in dsets])
         masked_points = np.cumsum(~eval_mask)
-        dset_lens = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_lens]
+        dset_bounds = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_bounds]
         # assumes targets are already masked
         preds = preds[eval_mask]
         if not targets.shape[0] == preds.shape[0]:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
-        r2_scores = [r2_score(targets[dset_lens[i]:dset_lens[i+1]], preds[dset_lens[i]:dset_lens[i+1]], 
-                              multioutput='variance_weighted') for i in range(len(dset_lens) - 1)]
+        r2_scores = [r2_score(targets[dset_bounds[i]:dset_bounds[i+1]], preds[dset_bounds[i]:dset_bounds[i+1]], 
+                              multioutput='variance_weighted') for i in range(len(dset_bounds) - 1)]
         base_metrics = {
             "R2 Mean": np.mean(r2_scores),
             "R2 Std.": np.std(r2_scores)
         }
         if verbose:
-            dsets = sorted(dset_lens.keys())
             for k, r2 in zip(dsets, r2_scores):
                 print(f"{k}: {r2}")
                 base_metrics[f"{k} R2"] = r2
-            preds_dict = {k: preds[dset_lens[i]:dset_lens[i+1]] for i, k in enumerate(dsets)}
+            preds_dict = {k: preds[dset_bounds[i]:dset_bounds[i+1]] for i, k in enumerate(dsets)}
             with open('preds.pkl', 'wb') as f:
                 pickle.dump(preds_dict, f)
         return base_metrics
