@@ -47,13 +47,14 @@ def main():
     evaluator = FalconEvaluator(
         eval_remote=args.evaluation == "remote",
         split=args.split,
+        verbose=True
         # continual=args.continual
     )
 
     task = getattr(FalconTask, args.split)
     config = FalconConfig(task=task)
     max_bins = 50 if task in [FalconTask.m1, FalconTask.m2] else 200 # h1
-
+    
     decoder = NDT2Decoder(
         task_config=config,
         model_ckpt_path=args.model_path,
