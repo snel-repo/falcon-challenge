@@ -325,6 +325,7 @@ class FalconEvaluator:
             self.continual = True
         else:
             self.continual = False
+        # self.continual = False
         self.verbose = verbose
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
@@ -584,7 +585,7 @@ class FalconEvaluator:
                 print(f"{k}: {r2}")
                 base_metrics[f"{k} R2"] = r2
             preds_dict = {k: preds[dset_bounds[i]:dset_bounds[i+1]] for i, k in enumerate(dsets)}
-            with open('preds.pkl', 'wb') as f:
+            with open(f'preds_{dsets}.pkl', 'wb') as f:
                 pickle.dump(preds_dict, f)
         return base_metrics
 

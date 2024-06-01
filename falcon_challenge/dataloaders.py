@@ -100,7 +100,10 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
                 eval_mask = ~nwbfile.acquisition['Blacklist'].data[:].astype(bool)
                 timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * .02
             binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=timestamps)
-            return binned_units, kin, np.zeros(kin.shape[0]), eval_mask
+            trial_num = nwbfile.acquisition["TrialNum"].data[:]
+            trial_change = np.concatenate([[False], np.diff(trial_num) > 0])
+            # trial_change = np.zeros(kin.shape[0])
+            return binned_units, kin, trial_change, eval_mask
         elif dataset == FalconTask.h2: 
             binned_spikes = nwbfile.acquisition['binned_spikes'].data[()]
             time = nwbfile.acquisition['binned_spikes'].timestamps[()]
