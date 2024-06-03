@@ -114,7 +114,8 @@ class SKLearnDecoder(BCIDecoder):
         if isinstance(self.clf, dict):
             for dataset_tag in dataset_tags:
                 if dataset_tag not in self.clf:
-                    raise ValueError(f"Dataset tag {dataset_tag} not found decoder set {self.clf.keys()}")
+                    pass
+                    # raise ValueError(f"Dataset tag {dataset_tag} not found decoder set {self.clf.keys()}")
             self.local_clf = [self.clf[dataset_tag] for dataset_tag in dataset_tags]
         else:
             self.local_clf = self.clf

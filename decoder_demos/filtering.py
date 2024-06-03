@@ -1,7 +1,7 @@
 import scipy.signal as signal
 import numpy as np
-import torch
-import torch.nn.functional as F
+# import torch
+# import torch.nn.functional as F
 
 r"""
     H1 filtering
@@ -15,7 +15,7 @@ def apply_exponential_filter(
 
     :param x: NumPy array of shape (time, channels)
     :param tau: Decay rate (time constant) of the exponential filter
-    :param bin_size: Bin size in ms (default is 10ms)
+    :param bin_size: Bin size in ms (default is 20ms)
     :return: Filtered signal
     :param extent: Number of time constants to extend the filter kernel
 

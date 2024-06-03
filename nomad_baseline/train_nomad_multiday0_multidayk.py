@@ -1,5 +1,5 @@
 #%% 
-import pickle, os, sys, json, h5py
+import pickle, os, sys, json, h5py, glob
 from yacs.config import CfgNode as CN
 import numpy as np 
 import pandas as pd
@@ -32,20 +32,21 @@ from align_tf2.tuples import AlignInput, SingleModelOutput, AlignmentOutput
 from align_tf2.defaults import DEFAULT_CONFIG_DIR, get_cfg_defaults
 
 #%%
+DAY0_SESS = 'S2'
+DAY0_PATHS = glob.glob(f'/snel/home/bkarpo2/bin/falcon-challenge/data/h1/held-in-calib/*{DAY0_SESS}*.nwb')
+DAY0_LFADS = '/snel/share/runs/falcon/H1_S2_combined_day0'
 
-DAY0_PATH = '/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-in-calib/sub-MonkeyN-held-in-calib_ses-2020-10-19-Run2_behavior+ecephys.nwb'
-DAY0_LFADS = '/snel/share/runs/falcon/M2_2020-10-19-Run2_coinspkrem/'
-
-DAYK_PATH = '/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-out-calib/sub-MonkeyN-held-out-calib_ses-2020-11-18-Run1_behavior+ecephys.nwb'
+DAYK_SESS = 'S12'
+DAYK_PATHS = glob.glob(f'/snel/home/bkarpo2/bin/falcon-challenge/data/h1/held-out-calib/*{DAYK_SESS}*.nwb')
 CONFIG_PATH = '/home/bkarpo2/bin/stability-benchmark/nomad_baseline/config/nomad_config.yaml'
 
-TRACK = 'M2'
-RUN_FLAG = 'S2s1_to_S9s1'
+TRACK = 'H1'
+RUN_FLAG = 'test'
 
 CHOP_LEN = 1000
 OLAP_LEN = 200
 VALID_RATIO = 0.2
-NORM_SMOOTH_MS = 20
+NORM_SM_MS = 20
 
 if len(sys.argv) > 1 and not IPYTHON:
     # load the tune configuration passed as an argument
@@ -114,20 +115,29 @@ elif TRACK == 'M2':
     ds0.bin_width = 20
     ds0.trial_info['index_pos'] = [tgt[0] for tgt in ds0.trial_info.tgt_loc.values]
 
-    ds_spk = NWBDataset(
-        DAYK_PATH, 
-        skip_fields=skip_fields)
-    ds_spk.resample(20)
+    dsKs = []
+    for DAYK_PATH in DAYK_PATHS:
+        ds_spk = NWBDataset(
+            DAYK_PATH, 
+            skip_fields=skip_fields)
+        ds_spk.resample(20)
 
-    dsK = NWBDataset(DAYK_PATH)
-    dsK.data = dsK.data.dropna()
-    dsK.data.index = dsK.data.index.round('20ms')
-    dsK.data.spikes = ds_spk.data.spikes
-    dsK.bin_width = 20
-    dsK.trial_info['index_pos'] = [tgt[0] for tgt in dsK.trial_info.tgt_loc.values]
+        dsK = NWBDataset(DAYK_PATH)
+        dsK.data = dsK.data.dropna()
+        dsK.data.index = dsK.data.index.round('20ms')
+        dsK.data.spikes = ds_spk.data.spikes
+        dsK.bin_width = 20
+        dsK.trial_info['index_pos'] = [tgt[0] for tgt in dsK.trial_info.tgt_loc.values]
+        dsKs.append(dsK)
 else: 
-    ds0 = H1Dataset(DAY0_PATH)
-    dsK = H1Dataset(DAYK_PATH)
+    ds0s = []
+    for DAY0_PATH in DAY0_PATHS:
+        ds0 = H1Dataset(DAY0_PATH)
+        ds0s.append(ds0)
+    dsKs = []
+    for DAYK_PATH in DAYK_PATHS:
+        dsK = H1Dataset(DAYK_PATH)
+        dsKs.append(dsK)
 
 # %%
 
@@ -135,9 +145,15 @@ NEEDS_TO_TRAIN = not os.path.exists(os.path.join(run_path, 'align_ckpts'))
 
 #%% 
 if NEEDS_TO_TRAIN:
-    if NORM_SMOOTH_MS > 0:
-        dsK.smooth_spk(NORM_SMOOTH_MS, name='smooth')
-        ss = dsK.data.spikes_smooth.values
+    if NORM_SM_MS > 0:
+        all_ss = []
+        for ds in dsKs:
+            ds.smooth_spk(NORM_SM_MS, name='smooth')
+            ss = ds.data.spikes_smooth.values
+            all_ss.append(ss)
+        ss = np.concatenate(all_ss, axis=0)
+        # dsK.smooth_spk(NORM_SMOOTH_MS, name='smooth')
+        # ss = dsK.data.spikes_smooth.values
         # ss = model_ni.dataset.data['spikes'].values
         ch_mean = np.nanmean(ss, axis=0)
         ch_std = np.nanstd(ss, axis=0)
@@ -185,8 +201,23 @@ if NEEDS_TO_TRAIN:
         window=CHOP_LEN, 
         overlap=OLAP_LEN,
         chop_fields_map={'spikes': 'data'})
-    day0_datadict = day0_lfi.chop(ds0.data)
-    dayk_datadict = dayk_lfi.chop(dsK.data)
+
+    day0_data = []
+    for ds0 in ds0s:
+        day0_datadict = day0_lfi.chop(ds0.data)
+        day0_data.append(day0_datadict['data'])
+
+    day0_datadict = {}
+    day0_datadict['data'] = np.concatenate(day0_data, axis=0)
+
+    dayk_data = []
+    for dsK in dsKs:
+        dayk_datadict = dayk_lfi.chop(dsK.data)
+        dayk_data.append(dayk_datadict['data'])
+    
+    # create a concatenated datadict 
+    dayk_datadict = {}
+    dayk_datadict['data'] = np.concatenate(dayk_data, axis=0)
 
     for datadict in [day0_datadict, dayk_datadict]:
         # drop any chops with NaNs in them 
@@ -232,113 +263,124 @@ align_model = AlignLFADS(align_dir=run_path)
 #%% day0 output - data is way too long so just get the acausally sampled outputs 
 
 print('Merging Day 0 LFADS Output...') 
-# load lfi object 
-with open(os.path.join(DAY0_LFADS, 'input_data', 'interface.pkl'), 'rb') as f:
-    lfi = pickle.load(f)
 
-# update merging map 
-lfi.merge_fields_map = {
-    'rates': 'lfads_rates',
-    'factors': 'lfads_factors',
-    'gen_states': 'lfads_gen_states'
-}
+for ii, ds0 in enumerate(ds0s):
+    # load lfi object 
+    with open(os.path.join(DAY0_LFADS, 'input_data', f'{DAY0_SESS}_set_{ii+1}_calib_interface.pkl'), 'rb') as f:
+        lfi = pickle.load(f)
 
-# merge back to dataframe 
-ds0.data = lfi.load_and_merge(
-    os.path.join(DAY0_LFADS, 'pbt_run', 'model_output', 'posterior_samples.h5'),
-    ds0.data,
-    smooth_pwr=2
-)
+    # update merging map 
+    lfi.merge_fields_map = {
+        'rates': 'lfads_rates',
+        'factors': 'lfads_factors',
+        'gen_states': 'lfads_gen_states'
+    }
 
-#%% dayk unaligned output 
-
-unalign_out = get_causal_model_output(
-    model = align_model.lfads_day0,
-    binsize = dsK.bin_size,
-    input_data = dsK.data.spikes.values,
-    out_fields = ['rates', 'factors', 'gen_states'],
-    output_dim = {'rates': align_model.lfads_dayk.cfg.MODEL.DATA_DIM, 
-                'factors': align_model.lfads_dayk.cfg.MODEL.FAC_DIM, 
-                'gen_states': align_model.lfads_dayk.cfg.MODEL.GEN_DIM}
-)
-
-for k in unalign_out:
-    dsK = merge_data(dsK, unalign_out[k], 'unaligned_lfads_{}'.format(k))
-
-#%% 
-align_out = get_causal_model_output(
-    model = align_model.lfads_dayk,
-    binsize = dsK.bin_size,
-    input_data = dsK.data.spikes.values,
-    out_fields = ['rates', 'factors', 'gen_states'],
-    output_dim = {'rates': align_model.lfads_dayk.cfg.MODEL.DATA_DIM, 
-                'factors': align_model.lfads_dayk.cfg.MODEL.FAC_DIM, 
-                'gen_states': align_model.lfads_dayk.cfg.MODEL.GEN_DIM}
+    # merge back to dataframe 
+    ds0.data = lfi.load_and_merge(
+        os.path.join(DAY0_LFADS, 'pbt_run', 'model_output', f'{DAY0_SESS}_set_{ii+1}_calib_posterior_samples.h5'),
+        ds0.data,
+        smooth_pwr=2
     )
 
-for k in align_out:
-    dsK = merge_data(dsK, align_out[k], 'aligned_lfads_{}'.format(k))
+    ds0.data = ds0.data.dropna()
 
+#%% dayk unaligned output 
+for dsK in dsKs:
+    unalign_out = get_causal_model_output(
+        model = align_model.lfads_day0,
+        binsize = dsK.bin_size,
+        input_data = dsK.data.spikes.values,
+        out_fields = ['rates', 'factors', 'gen_states'],
+        output_dim = {'rates': align_model.lfads_dayk.cfg.MODEL.DATA_DIM, 
+                    'factors': align_model.lfads_dayk.cfg.MODEL.FAC_DIM, 
+                    'gen_states': align_model.lfads_dayk.cfg.MODEL.GEN_DIM}
+    )
 
-dsK.data = dsK.data.dropna()
-ds0.data = ds0.data.dropna()
+    for k in unalign_out:
+        dsK = merge_data(dsK, unalign_out[k], 'unaligned_lfads_{}'.format(k))
+
+#%% 
+
+for dsK in dsKs:
+    align_out = get_causal_model_output(
+        model = align_model.lfads_dayk,
+        binsize = dsK.bin_size,
+        input_data = dsK.data.spikes.values,
+        out_fields = ['rates', 'factors', 'gen_states'],
+        output_dim = {'rates': align_model.lfads_dayk.cfg.MODEL.DATA_DIM, 
+                    'factors': align_model.lfads_dayk.cfg.MODEL.FAC_DIM, 
+                    'gen_states': align_model.lfads_dayk.cfg.MODEL.GEN_DIM}
+        )
+
+    for k in align_out:
+        dsK = merge_data(dsK, align_out[k], 'aligned_lfads_{}'.format(k))
+
+    dsK.data = dsK.data.dropna()
 
 
 # %% train decoder on Day 0 LFADS gen states  
 
-N_HIST = 4
+N_HIST = 12
 VAL_RATIO = 0.2
-eval_mask = ds0.data.eval_mask.values.squeeze().astype('bool')
-X = generate_lagged_matrix(ds0.data.lfads_gen_states.values[eval_mask, :], N_HIST)
-y = ds0.data[decoding_field].values[eval_mask, :][N_HIST:, :]
 
-n_train = int(X.shape[0] * (1 - VAL_RATIO))
+all_X_train = []
+all_X_valid = []
+all_y_train = []
+all_y_valid = []
+
+for ds0 in ds0s:
+    eval_mask = ds0.data.eval_mask.values.squeeze().astype('bool')
+    X = generate_lagged_matrix(ds0.data.lfads_gen_states.values[eval_mask, :], N_HIST)
+    y = ds0.data[decoding_field].values[eval_mask, :][N_HIST:, :]
+
+    n_train = int(X.shape[0] * (1 - VAL_RATIO))
+
+    all_X_train.append(X[:n_train, :])
+    all_X_valid.append(X[n_train:, :])
+    all_y_train.append(y[:n_train, :])
+    all_y_valid.append(y[n_train:, :])
+
 
 r2, decoder, y_pred = fit_and_eval_decoder(
-    X[:n_train, :], 
-    y[:n_train, :], 
-    X[n_train:, :], 
-    y[n_train:, :], 
+    np.vstack(all_X_train), 
+    np.vstack(all_y_train), 
+    np.vstack(all_X_valid), 
+    np.vstack(all_y_valid), 
     grid_search=True, 
-    param_grid=np.logspace(2, 3, 20),
+    param_grid=np.logspace(2, 4, 20),
     return_preds=True)
 
 print(f'Day 0 R2: {r2}')
 
-#%%
-with open('test_nomad_decoder.pkl', 'wb') as f: 
-    pickle.dump({'decoder': decoder, 'history': N_HIST}, f)
+with open(os.path.join(run_path, 'decoder.pkl'), 'wb') as f:
+    pickle.dump({
+        'history': N_HIST,
+        'decoder': decoder
+    }, f)
 
 # %% evaluate on unaligned gen states and aligned gen states 
 
-eval_mask_K = dsK.data.eval_mask.values.squeeze().astype('bool')
-unalignX = generate_lagged_matrix(dsK.data.unaligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
-alignX = generate_lagged_matrix(dsK.data.aligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
-y_K = dsK.data[decoding_field].values[eval_mask_K, :][N_HIST:, :]
+all_unalign = []
+all_align = []
+for dsK in dsKs:
+    eval_mask_K = dsK.data.eval_mask.values.squeeze().astype('bool')
+    unalignX = generate_lagged_matrix(dsK.data.unaligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
+    alignX = generate_lagged_matrix(dsK.data.aligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
+    y_K = dsK.data[decoding_field].values[eval_mask_K, :][N_HIST:, :]
 
-unalign_preds = decoder.predict(unalignX)
-align_preds = decoder.predict(alignX)
+    unalign_preds = decoder.predict(unalignX)
+    align_preds = decoder.predict(alignX)
 
-unalign_r2 = r2_score(y_K, unalign_preds, multioutput='variance_weighted')
-align_r2 = r2_score(y_K, align_preds, multioutput='variance_weighted')
+    unalign_r2 = r2_score(y_K, unalign_preds, multioutput='variance_weighted')
+    align_r2 = r2_score(y_K, align_preds, multioutput='variance_weighted')
 
-print(f'Unaligned R2: {unalign_r2}')
-print(f'Aligned R2: {align_r2}')
+    print(f'Unaligned R2: {unalign_r2}')
+    print(f'Aligned R2: {align_r2}')
 
-# #%%
-# eval_mask_K = dsK.data.eval_mask.values.squeeze().astype('bool')
-# unalignX = generate_lagged_matrix(dsK.data.unaligned_lfads_gen_states.values, N_HIST)
-# alignX = generate_lagged_matrix(dsK.data.aligned_lfads_gen_states.values, N_HIST)
-# y_K = dsK.data[decoding_field].values[eval_mask_K, :][N_HIST:, :]
+    all_unalign.append(unalign_r2)
+    all_align.append(align_r2)
 
-# unalign_preds = decoder.predict(unalignX)
-# align_preds = decoder.predict(alignX)
-
-# unalign_r2 = r2_score(y_K, unalign_preds[eval_mask_K[N_HIST:], :], multioutput='variance_weighted')
-# align_r2 = r2_score(y_K, align_preds[eval_mask_K[N_HIST:], :], multioutput='variance_weighted')
-
-# print(f'Unaligned R2: {unalign_r2}')
-# print(f'Aligned R2: {align_r2}')
 
 # %%
 # Save to align_out.json
@@ -352,8 +394,8 @@ results_out = {
     'nll': train_out['nll'].values[-1],
     'val_nll': train_out['val_nll'].values[-1],
     'day0_r2': r2,
-    'unalign_dayk_r2': unalign_r2,
-    'align_dayk_r2': align_r2
+    'unalign_dayk_r2': all_unalign,
+    'align_dayk_r2': all_align
 }
 results_path = os.path.join(run_path, 'align_out.json')
 with open(results_path, 'w') as f:

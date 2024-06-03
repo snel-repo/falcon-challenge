@@ -12,24 +12,34 @@ from tune_tf2.pbt.utils import plot_pbt_hps, plot_pbt_log
 
 np.random.seed(731)
 #%%
-ds_str = '2020-10-19-Run2'
 
-DATA_PATH = f'/snel/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-in-calib/sub-MonkeyN-held-in-calib_ses-{ds_str}_behavior+ecephys.nwb'
+# ds_str = '20120928'
+# DATA_PATH = f'/home/bkarpo2/bin/falcon-challenge/data/m1/sub-MonkeyL-held-in-calib/sub-MonkeyL-held-in-calib_ses-{ds_str}_behavior+ecephys.nwb'
+# BASE_PATH = '/snel/share/runs/falcon'
+# TRACK = 'M1'
+# RUN_FLAG = f'sub-MonkeyL-held-in-calib_ses-{ds_str}_behavior+ecephys'
+# INTERFACE_KEY = ''
+# IS_COMBO_MODEL = False
+# CAUSAL_INF = False
+
+# ds_str = '2020-10-19-Run2'
+# DATA_PATH = f'/snel/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-in-calib/sub-MonkeyN-held-in-calib_ses-{ds_str}_behavior+ecephys.nwb'
+# BASE_PATH = '/snel/share/runs/falcon'
+# TRACK = 'M2'
+# RUN_FLAG = f'{ds_str}_coinspkrem'
+# INTERFACE_KEY = ''
+# IS_COMBO_MODEL = False
+# CAUSAL_INF = False
+
+SESSION_NUMBER = 2
+SET_NUMBER = 1
+DATA_PATH = f'/snel/home/bkarpo2/bin/falcon-challenge/data/h1/held-in-calib/S{SESSION_NUMBER}_set_{SET_NUMBER}_calib.nwb'
 BASE_PATH = '/snel/share/runs/falcon'
-TRACK = 'M2'
-RUN_FLAG = f'{ds_str}_coinspkrem'
+TRACK = 'H1'
+RUN_FLAG = f'S{SESSION_NUMBER}_set{SET_NUMBER}'
+# INTERFACE_KEY = f'S{SESSION_NUMBER}_set_{SET_NUMBER}_calib_'
 INTERFACE_KEY = ''
 IS_COMBO_MODEL = False
-
-# SESSION_NUMBER = 1
-# SET_NUMBER = 1
-
-# DATA_PATH = f'/snel/home/bkarpo2/bin/falcon-challenge/data/h1/held_in_calib/S{SESSION_NUMBER}_set_{SET_NUMBER}_calib.nwb'
-# BASE_PATH = '/snel/share/runs/falcon'
-# TRACK = 'H1'
-# RUN_FLAG = f'S{SESSION_NUMBER}_combined_day0_larger_capacity'
-# INTERFACE_KEY = f'S{SESSION_NUMBER}_set_{SET_NUMBER}_calib_'
-# IS_COMBO_MODEL = True
 
 if len(sys.argv) > 2:
     DATA_PATH = sys.argv[1]
@@ -39,11 +49,12 @@ if len(sys.argv) > 2:
 CHOP_LEN = 1000 #ms
 OLAP_LEN = 200 #ms 
 VALID_RATIO = 0.2 
-REMOVE_COIN_SPK = True
+REMOVE_COIN_SPK = False
+CAUSAL_INF = False
 
 run_path = os.path.join(BASE_PATH, f'{TRACK}_{RUN_FLAG}')
 # analysis_path = os.path.join(run_path, f'analysis_set{SET_NUMBER}')
-analysis_path = os.path.join(run_path, 'analysis_path_removal')
+analysis_path = os.path.join(run_path, 'analysis_path')
 
 if not os.path.exists(analysis_path):
     os.makedirs(analysis_path, mode=0o775)
@@ -119,46 +130,62 @@ if REMOVE_COIN_SPK:
     print(f'Removed {rem_spikes} coincident spikes')
 
 #%% 
-
-print('Merging LFADS Output...') 
-# load lfi object 
-with open(os.path.join(run_path, 'input_data', INTERFACE_KEY + 'interface.pkl'), 'rb') as f:
-    lfi = pickle.load(f)
-
-# update merging map 
-lfi.merge_fields_map = {
-    'rates': 'lfads_rates',
-    'factors': 'lfads_factors',
-    'gen_states': 'lfads_gen_states'
-}
-
-if IS_COMBO_MODEL:
+if CAUSAL_INF: 
+    from causal_samp import get_causal_model_output, merge_data
     from lfads_tf2.subclasses.dimreduced.models import DimReducedLFADS
-    from lfads_tf2.tuples import LoadableData
-    chopped_data = lfi.chop(ds.data)['data']
-    dataset_name = 'lfads_' + TRACK + RUN_FLAG[2:] + '.h5'
-    input_tuple = LoadableData(
-        train_data={dataset_name: chopped_data[:150, :, :]},
-        valid_data={dataset_name: chopped_data[150:, :, :]},
-        train_ext_input=None,
-        valid_ext_input=None,
-        train_behavior=None,
-        valid_behavior=None,
-        train_inds={dataset_name: np.arange(150)},
-        valid_inds={dataset_name: np.arange(150, chopped_data.shape[0])},
-    )
     model = DimReducedLFADS(model_dir=os.path.join(run_path, 'pbt_run', 'model_output'))
-    model.sample_and_average(
-        loadable_data=input_tuple, 
-        ps_filename=INTERFACE_KEY+'posterior_samples.h5'
+    lfads_out = get_causal_model_output(
+        model = model,
+        binsize = ds.bin_size,
+        input_data = ds.data.spikes.values,
+        out_fields = ['rates', 'factors', 'gen_states'],
+        output_dim = {'rates': model.cfg.MODEL.DATA_DIM, 
+                    'factors': model.cfg.MODEL.FAC_DIM, 
+                    'gen_states': model.cfg.MODEL.GEN_DIM}
     )
 
-# merge back to dataframe 
-ds.data = lfi.load_and_merge(
-    os.path.join(run_path, 'pbt_run', 'model_output', INTERFACE_KEY+'posterior_samples.h5'),
-    ds.data,
-    smooth_pwr=2
-)
+    for k in lfads_out:
+        ds = merge_data(ds, lfads_out[k], 'lfads_{}'.format(k))
+else: 
+    print('Merging LFADS Output...') 
+    # load lfi object 
+    with open(os.path.join(run_path, 'input_data', INTERFACE_KEY + 'interface.pkl'), 'rb') as f:
+        lfi = pickle.load(f)
+
+    # update merging map 
+    lfi.merge_fields_map = {
+        'rates': 'lfads_rates',
+        'factors': 'lfads_factors',
+        'gen_states': 'lfads_gen_states'
+    }
+
+    if IS_COMBO_MODEL:
+        from lfads_tf2.subclasses.dimreduced.models import DimReducedLFADS
+        from lfads_tf2.tuples import LoadableData
+        chopped_data = lfi.chop(ds.data)['data']
+        dataset_name = 'lfads_' + TRACK + RUN_FLAG[2:] + '.h5'
+        input_tuple = LoadableData(
+            train_data={dataset_name: chopped_data[:150, :, :]},
+            valid_data={dataset_name: chopped_data[150:, :, :]},
+            train_ext_input=None,
+            valid_ext_input=None,
+            train_behavior=None,
+            valid_behavior=None,
+            train_inds={dataset_name: np.arange(150)},
+            valid_inds={dataset_name: np.arange(150, chopped_data.shape[0])},
+        )
+        model = DimReducedLFADS(model_dir=os.path.join(run_path, 'pbt_run', 'model_output'))
+        model.sample_and_average(
+            loadable_data=input_tuple, 
+            ps_filename=INTERFACE_KEY+'posterior_samples.h5'
+        )
+
+    # merge back to dataframe 
+    ds.data = lfi.load_and_merge(
+        os.path.join(run_path, 'pbt_run', 'model_output', INTERFACE_KEY+'posterior_samples.h5'),
+        ds.data,
+        smooth_pwr=2
+    )
 
 #%% plot loss curves 
 pbt_exp_dir = os.path.join(run_path, 'pbt_run')
@@ -249,7 +276,7 @@ else:
 
 # %% decoding 
 
-N_HIST = 3
+N_HIST = 8
 VAL_RATIO = 0.2
 ds.data = ds.data.dropna()
 eval_mask = ds.data.eval_mask.values.squeeze().astype('bool')
@@ -267,7 +294,11 @@ r2, decoder, y_pred = fit_and_eval_decoder(
     X[n_train:, :], 
     y[n_train:, :], 
     grid_search=True, 
+    param_grid=np.logspace(2, 3, 20),
     return_preds=True)
+
+with open(os.path.join(run_path, 'decoder.pkl'), 'wb') as f: 
+    pickle.dump({'decoder': decoder, 'history': N_HIST}, f)
 
 # %% decoding_plot 
 

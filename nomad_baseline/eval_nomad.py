@@ -36,8 +36,9 @@ from align_tf2.defaults import DEFAULT_CONFIG_DIR, get_cfg_defaults
 DAY0_PATH = '/home/bkarpo2/bin/stability-benchmark/data/h1/held_in_calib/S2_set_1_calib.nwb'
 DAY0_LFADS = '/snel/share/runs/falcon/H1_S2_set1/'
 
-DAYK_PATH = '/home/bkarpo2/bin/stability-benchmark/data/h1/held_out_calib/S9_set_1_calib.nwb'
-ALIGN_PATH = '/snel/share/runs/falcon/240419_initial_alignment_H1/tuneAlign_0_TRAIN.BATCH_SIZE=1059,TRAIN.KL.CO_WEIGHT=5.8717e-05,TRAIN.KL.IC_WEIGHT=0.00017666,TRAIN.KL.INCREASE_EPOCH=19,TRAIN.LR._2024-04-19_11-51-12odcb2y8a'
+DAYK_PATH = '/home/bkarpo2/bin/stability-benchmark/data/h1/held_out_calib/S9_set_2_calib.nwb'
+# ALIGN_PATH = '/snel/share/runs/falcon/240531_nomad_h1_multi0_multik/tuneAlign_38_TRAIN.BATCH_SIZE=914,TRAIN.KL.CO_WEIGHT=0.00027197,TRAIN.KL.IC_WEIGHT=0.0009324,TRAIN.KL.INCREASE_EPOCH=81,TRAIN.LR.I_2024-05-31_21-05-32qjjo1lk7'
+ALIGN_PATH = '/snel/share/runs/falcon/240510_H1_NoMAD_multidayK/tuneAlign_17_TRAIN.BATCH_SIZE=973,TRAIN.KL.CO_WEIGHT=0.0002188,TRAIN.KL.IC_WEIGHT=1.022e-05,TRAIN.KL.INCREASE_EPOCH=100,TRAIN.LR.I_2024-05-10_14-05-02yc5r87l3'
 
 TRACK = 'H1'
 
@@ -142,45 +143,66 @@ for k in align_out:
 dsK.data = dsK.data.dropna()
 ds0.data = ds0.data.dropna()
 
-# %% train decoder on Day 0 LFADS gen states  
+#%% history sweep 
 
-N_HIST = 4
-VAL_RATIO = 0.2
-eval_mask = ds0.data.eval_mask.values.squeeze().astype('bool')
-X = generate_lagged_matrix(ds0.data.lfads_gen_states.values[eval_mask, :], N_HIST)
-y = ds0.data[decoding_field].values[eval_mask, :][N_HIST:, :]
-# y = (y - np.nanmean(y, axis=0)) / np.nanstd(y, axis=0)
+history = np.arange(0, 15)
+day0_r2 = []
+dayk_align_r2 = []
+dayk_unalign_r2 = []
 
-n_train = int(X.shape[0] * (1 - VAL_RATIO))
+for N_HIST in history:
+    # train decoder on Day 0 LFADS gen states  
+    print(N_HIST)
+    # N_HIST = 4
+    VAL_RATIO = 0.2
+    eval_mask = ds0.data.eval_mask.values.squeeze().astype('bool')
+    X = generate_lagged_matrix(ds0.data.lfads_gen_states.values[eval_mask, :], N_HIST)
+    y = ds0.data[decoding_field].values[eval_mask, :][N_HIST:, :]
+    # y = (y - np.nanmean(y, axis=0)) / np.nanstd(y, axis=0)
 
-r2, decoder, y_pred = fit_and_eval_decoder(
-    X[:n_train, :], 
-    y[:n_train, :], 
-    X[n_train:, :], 
-    y[n_train:, :], 
-    grid_search=True, 
-    param_grid=np.logspace(2, 3, 20),
-    cv=10,
-    return_preds=True)
+    n_train = int(X.shape[0] * (1 - VAL_RATIO))
 
-print(f'Day 0 R2: {r2}')
+    r2, decoder, y_pred = fit_and_eval_decoder(
+        X[:n_train, :], 
+        y[:n_train, :], 
+        X[n_train:, :], 
+        y[n_train:, :], 
+        grid_search=True, 
+        param_grid=np.logspace(2, 3, 20),
+        # cv=10,
+        return_preds=True)
 
-# %% evaluate on unaligned gen states and aligned gen states 
+    print(f'Day 0 R2: {r2}')
+    day0_r2.append(r2)
 
-eval_mask_K = dsK.data.eval_mask.values.squeeze().astype('bool')
-unalignX = generate_lagged_matrix(dsK.data.unaligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
-alignX = generate_lagged_matrix(dsK.data.aligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
-y_K = dsK.data[decoding_field].values[eval_mask_K, :][N_HIST:, :]
-# y_K = (y_K - np.nanmean(y_K, axis=0)) / np.nanstd(y_K, axis=0)
+    # evaluate on unaligned gen states and aligned gen states 
 
-unalign_preds = decoder.predict(unalignX)
-align_preds = decoder.predict(alignX)
+    eval_mask_K = dsK.data.eval_mask.values.squeeze().astype('bool')
+    unalignX = generate_lagged_matrix(dsK.data.unaligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
+    alignX = generate_lagged_matrix(dsK.data.aligned_lfads_gen_states.values[eval_mask_K, :], N_HIST)
+    y_K = dsK.data[decoding_field].values[eval_mask_K, :][N_HIST:, :]
+    # y_K = (y_K - np.nanmean(y_K, axis=0)) / np.nanstd(y_K, axis=0)
 
-unalign_r2 = r2_score(y_K, unalign_preds, multioutput='variance_weighted')
-align_r2 = r2_score(y_K, align_preds, multioutput='variance_weighted')
+    unalign_preds = decoder.predict(unalignX)
+    align_preds = decoder.predict(alignX)
 
-print(f'Unaligned R2: {unalign_r2}')
-print(f'Aligned R2: {align_r2}')
+    unalign_r2 = r2_score(y_K, unalign_preds, multioutput='variance_weighted')
+    align_r2 = r2_score(y_K, align_preds, multioutput='variance_weighted')
+    dayk_align_r2.append(align_r2)
+    dayk_unalign_r2.append(unalign_r2)
+
+    print(f'Unaligned R2: {unalign_r2}')
+    print(f'Aligned R2: {align_r2}')
+
+plt.figure(facecolor='w')
+plt.plot(history, day0_r2, 'o-', label='Day 0', color='k')
+plt.plot(history, dayk_unalign_r2, 'o-', label='Unaligned', color='b')
+plt.plot(history, dayk_align_r2, 'o-', label='Aligned', color='g')
+plt.grid(alpha=0.3)
+plt.legend()
+plt.ylabel('R2')
+plt.xlabel('# Bins WF History')
+plt.savefig('h1_history_sweep.pdf')
 
 # %%
 

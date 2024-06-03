@@ -11,9 +11,10 @@ from pynwb import NWBHDF5IO
 #%% 
 
 base_path = '/snel/home/bkarpo2/bin/falcon-challenge/data'
-track = 'h2'
-held_in_files = glob.glob(os.path.join(base_path, track, '*held-in-calib*', '*.nwb'))
-held_out_files = glob.glob(os.path.join(base_path, track, '*held-out-calib*', '*.nwb'))
+track = 'b1'
+if track != 'b1': 
+    held_in_files = glob.glob(os.path.join(base_path, track, '*held-in-calib*', '*.nwb'))
+    held_out_files = glob.glob(os.path.join(base_path, track, '*held-out-calib*', '*.nwb'))
 
 #%% 
 if track == 'm1':
@@ -44,6 +45,21 @@ elif track == 'h1':
             format_held_out_dates.append(datetime.strptime(nwbfile.session_start_time.strftime('%Y-%m-%d'), '%Y-%m-%d'))
     format_held_in_dates = sorted(format_held_in_dates)
     format_held_out_dates = sorted(format_held_out_dates)
+elif track == 'b1': 
+    format_held_in_dates = [
+        datetime(2021,6,26),
+        datetime(2021,6,27),
+        datetime(2021,6,28),
+        datetime(2021,6,29),
+        datetime(2021,6,30),
+    ]
+    format_held_out_dates = [
+        datetime(2021,7,1),
+        datetime(2021,7,4),
+        datetime(2021,7,5),
+    ]
+    
+
 #%% 
 # Some corresponding y values
 held_in_y = np.zeros(len(format_held_in_dates))

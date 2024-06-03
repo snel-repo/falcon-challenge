@@ -11,7 +11,7 @@ from falcon_challenge.dataloaders import bin_units
 
 #%%
 base_path = '/snel/home/bkarpo2/bin/falcon-challenge/data'
-track = 'm2'
+track = 'h1'
 held_in_files = glob.glob(os.path.join(base_path, track, '*held-in-calib*', '*.nwb'))
 held_out_files = glob.glob(os.path.join(base_path, track, '*held-out-calib*', '*.nwb'))
 

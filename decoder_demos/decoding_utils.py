@@ -70,6 +70,7 @@ def fit_and_eval_decoder(
     eval_rates: np.ndarray,
     eval_behavior: np.ndarray,
     grid_search: bool=True,
+    param_grid: np.ndarray=np.logspace(-5, 5, 20),
     return_preds: bool=False
 ):
     """Fits ridge regression on train data passed
@@ -104,7 +105,7 @@ def fit_and_eval_decoder(
         "fit_and_eval_decoder: NaNs found in rate predictions within required trial times"
 
     if grid_search:
-        decoder = GridSearchCV(Ridge(), {"alpha": np.logspace(-5, 5, 20)})
+        decoder = GridSearchCV(Ridge(), {"alpha": param_grid})
     else:
         decoder = Ridge(alpha=1e-2)
     decoder.fit(train_rates, train_behavior)

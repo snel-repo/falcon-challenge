@@ -4,7 +4,7 @@ from os import path
 from ray import tune
 
 # ========= CONFIGURE THE ALIGNMENT RUN ==========
-EXPERIMENT_NAME = '240516_M2_singlefile_NoMAD_coinspkrem'
+EXPERIMENT_NAME = '240527_M2_singlefile_NoMAD_coinspkrem_redo'
 NUM_SAMPLES = 30 # number of samples to take from the search space
 RESOURCES_PER_TRIAL = {'cpu': 2, 'gpu': 0.5} # resources to allocate to each process
 RUN_SCRIPT = 'train_nomad.py' # script to use from `run_scripts`

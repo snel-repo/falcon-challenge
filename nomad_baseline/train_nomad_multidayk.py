@@ -23,7 +23,7 @@ if len(sys.argv) <= 1 or IPYTHON:
     restrict_gpu_usage(gpu_ix=9)
 
 from lfads_tf2.utils import load_posterior_averages, unflatten 
-sys.path.insert(0, '/home/bkarpo2/bin/stability-benchmark/align_tf2')
+sys.path.insert(0, '/home/bkarpo2/bin/falcon-challenge/align_tf2')
 for p in sys.path: 
     if 'nomad_dev' in p: 
         sys.path.remove(p)
@@ -33,16 +33,16 @@ from align_tf2.defaults import DEFAULT_CONFIG_DIR, get_cfg_defaults
 
 #%%
 
-DAY0_PATH = '/snel/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-in-calib/sub-MonkeyN-held-in-calib_ses-2020-10-19-Run2_behavior+ecephys.nwb'
-DAY0_LFADS = '/snel/share/runs/falcon/M2_1019_Run2'
+DAY0_PATH = '/snel/home/bkarpo2/bin/falcon-challenge/data/000954/sub-HumanPitt-held-in-calib/sub-HumanPitt-held-in-calib_ses-19250113T120811.nwb'
+DAY0_LFADS = '/snel/share/runs/falcon/H1_S2_set1/'
 
-DAYK_SESS = '2020-10-30'
-DAYK_PATHS = glob.glob(os.path.join(f'/snel/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-out-calib/*{DAYK_SESS}*.nwb'))
+DAYK_SESS = '19250126'
+DAYK_BASE_PATH = '/snel/home/bkarpo2/bin/falcon-challenge/data/h1/held-out-calib'
 # DAYK_PATH = '/home/bkarpo2/bin/stability-benchmark/data/h1/held_out_calib/S9_set_1_calib.nwb'
 CONFIG_PATH = '/home/bkarpo2/bin/stability-benchmark/nomad_baseline/config/nomad_config.yaml'
 
-TRACK = 'M2'
-RUN_FLAG = 'test'
+TRACK = 'H1'
+RUN_FLAG = 'test_new_data'
 
 CHOP_LEN = 1000
 OLAP_LEN = 200
@@ -55,6 +55,8 @@ if len(sys.argv) > 1 and not IPYTHON:
         tune_config = json.load(f)
     # Overwrite the above local variables (e.g. VALID_RATIO)
     locals().update(tune_config)
+
+DAYK_PATHS = glob.glob(os.path.join(DAYK_BASE_PATH, f'*{DAYK_SESS}*.nwb'))
 
 if len(sys.argv) > 1 and not IPYTHON:
     # Store the model at the tune logdir
@@ -119,11 +121,11 @@ elif TRACK == 'M2':
     dsKs = []
     for DAYK_PATH in DAYK_PATHS:
         ds_spk = NWBDataset(
-            DAY0_PATH, 
+            DAYK_PATH, 
             skip_fields=skip_fields)
         ds_spk.resample(20)
 
-        dsK = NWBDataset(DAY0_PATH)
+        dsK = NWBDataset(DAYK_PATH)
         dsK.data = dsK.data.dropna()
         dsK.data.index = dsK.data.index.round('20ms')
         dsK.data.spikes = ds_spk.data.spikes
@@ -371,3 +373,4 @@ results_path = os.path.join(run_path, 'align_out.json')
 with open(results_path, 'w') as f:
     json.dump(results_out, f, sort_keys=True, indent=4)
 print('Saved results to ' + results_path)
+# %%

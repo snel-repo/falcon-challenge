@@ -5,12 +5,18 @@ import matplotlib.pyplot as plt
 
 #%% 
 
-RUN_PATH = '/snel/share/runs/falcon/240516_M2_singlefile_NoMAD_coinspkrem'
-IS_MUTLIK = False
+RUN_PATH = '/snel/share/runs/falcon/240602_fresh_h1_multik_new_sweep'
+IS_MUTLIK = True
+IS_MUTLI0 = False
 if IS_MUTLIK: 
     dayk_key = 'DAYK_SESS'
 else:
     dayk_key = 'DAYK_PATH'
+
+if IS_MUTLI0: 
+    day0_key = 'DAY0_SESS'
+else:
+    day0_key = 'DAY0_PATH'
 
 workers = glob.glob(os.path.join(RUN_PATH, 'tuneAlign*'))
 
@@ -39,7 +45,7 @@ for wkr in workers:
     hps = list(params['CFG_UPDATES'].keys())
     hp_vals.append(list(params['CFG_UPDATES'].values()))
     dayks.append(params[dayk_key].split('/')[-1])
-    day0s.append(params['DAY0_PATH'].split('/')[-1])
+    day0s.append(params[day0_key].split('/')[-1])
     perf_vals.append([
         np.mean(align[key]) for key in perf_keys
     ])
@@ -82,10 +88,12 @@ plt.ylim([0, 1])
 # square axes 
 plt.gca().set_aspect('equal', adjustable='box')
 
+
 # %%
 # get max performance for each pair of days 
 import numpy as np 
 max_perfs = np.full((len(set(day0s)),len(set(dayks))), np.nan)
+max_inds = np.full((len(set(day0s)),len(set(dayks)), 2), np.nan)
 d0_ids = np.full((len(set(day0s)),len(set(dayks))), np.nan)
 dk_ids = np.full((len(set(day0s)),len(set(dayks))), np.nan)
 
@@ -95,15 +103,16 @@ for i, d0 in enumerate(set(day0s)):
         inds = [i for i in range(len(perf_vals)) if day0s[i] == d0 and dayks[i] == dk]
         max_perf = max(perf)
         max_ind = inds[np.argmax(perf)]
-        # d0_id = d0.split('-')[-1].split('_')[0]
-        # dk_id = dk.split('-')[-1].split('_')[0]
+        d0_id = d0.split('-')[-1].split('_')[0]
+        dk_id = dk.split('-')[-1].split('_')[0]
 
-        d0_id = re.search(r'\d{4}-\d{2}-\d{2}', d0).group().replace('-', '')
-        dk_id = re.search(r'\d{4}-\d{2}-\d{2}', dk).group().replace('-', '')
+        # d0_id = re.search(r'\d{4}-\d{2}-\d{2}', d0).group().replace('-', '')
+        # dk_id = re.search(r'\d{4}-\d{2}-\d{2}', dk).group().replace('-', '')
 
         print(f'{d0_id} - {dk_id}: {max_perf}')
         # print(hp_vals[max_ind])
         max_perfs[i][j] = max_perf
+        max_inds[i][j] = max_ind
         if IS_MUTLIK:
             d0_ids[i][j] = int(d0_id[1:])
             dk_ids[i][j] = int(dk_id[1:])
@@ -124,7 +133,7 @@ plt.gca().set_xticks(range(0, len(set(dayks))))
 plt.gca().set_xticklabels(dk_ids[0,:][x_sort_inds])
 plt.gca().set_yticks(range(0, len(set(day0s))))
 plt.gca().set_yticklabels(d0_ids[:,0][y_sort_inds])
-plt.title('M1')
+# plt.title('M1')
 # add value in each square 
 for i in range(len(set(day0s))):
     for j in range(len(set(dayks))):

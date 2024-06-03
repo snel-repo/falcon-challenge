@@ -4,10 +4,10 @@ from os import path
 from ray import tune
 
 # ========= CONFIGURE THE ALIGNMENT RUN ==========
-EXPERIMENT_NAME = '240602_fresh_m2_multik_new_sweep'
-NUM_SAMPLES = 25 # number of samples to take from the search space
+EXPERIMENT_NAME = '240531_nomad_h1_multi0_multik'
+NUM_SAMPLES = 30 # number of samples to take from the search space
 RESOURCES_PER_TRIAL = {'cpu': 2, 'gpu': 0.5} # resources to allocate to each process
-RUN_SCRIPT = 'train_nomad_multidayk.py' # script to use from `run_scripts`
+RUN_SCRIPT = 'train_nomad_multiday0_multidayk.py' # script to use from `run_scripts`
 CONFIG_FILE = '/home/bkarpo2/bin/falcon-challenge/nomad_baseline/config/nomad_config.yaml'
 run_scripts_dir = path.dirname(path.abspath(__file__))
 LOCAL_DIR = '/snel/share/runs/falcon'
@@ -17,12 +17,11 @@ np.random.seed(seed=731) # get consistent HP values for each run
 
 #%%
 config = {
-    'DAY0_PATH': '/snel/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-in-calib/sub-MonkeyN-held-in-calib_ses-2020-10-19-Run2_behavior+ecephys.nwb',
-    'DAY0_LFADS': '/snel/share/runs/falcon/M2_2020-10-19-Run2_coinspkrem/',
-    'DAYK_BASE_PATH': '/snel/home/bkarpo2/bin/falcon-challenge/data/m2/sub-MonkeyN-held-out-calib',
-    'DAYK_SESS': tune.grid_search(['2020-10-30', '2020-11-18', '2020-11-19', '2020-11-24']),
-    'RUN_FLAG': 'day0_grid_fresh',
-    'TRACK': 'M2',
+    'DAY0_SESS': 'S2',
+    'DAY0_LFADS': '/snel/share/runs/falcon/H1_S2_combined_day0',
+    'DAYK_SESS': tune.grid_search(['S6', 'S7', 'S8', 'S9', 'S10', 'S11', 'S12']),
+    'RUN_FLAG': 'day0_grid',
+    'TRACK': 'H1',
     'CONFIG_PATH': CONFIG_FILE,
     'CFG_UPDATES': {
         'TRAIN.BATCH_SIZE': tune.randint(300, 1100),

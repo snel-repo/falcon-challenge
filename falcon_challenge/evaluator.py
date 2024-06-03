@@ -557,6 +557,7 @@ class FalconEvaluator:
         
     @staticmethod
     def compute_metrics_regression(preds, targets, eval_mask, dset_lens):
+        dsets = sorted(dset_lens.keys())
         dset_lens = np.cumsum([sum(dset_lens[key]) for key in sorted(dset_lens.keys())])
         masked_points = np.cumsum(~eval_mask)
         dset_lens = [0] + [dset_len - masked_points[dset_len - 1] for dset_len in dset_lens]
@@ -566,6 +567,10 @@ class FalconEvaluator:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
         r2_scores = [r2_score(targets[dset_lens[i]:dset_lens[i+1]], preds[dset_lens[i]:dset_lens[i+1]], 
                               multioutput='variance_weighted') for i in range(len(dset_lens) - 1)]
+        print([f'{k}: {r2}' for k, r2 in zip(dsets, r2_scores)])
+        preds_dict = {k: preds[dset_lens[i]:dset_lens[i+1]] for i, k in enumerate(dsets)}
+        # with open(f'preds{len(dsets)}.pkl', 'wb') as f:
+        #     pickle.dump(preds_dict, f)
         return {
             "R2 Mean": np.mean(r2_scores),
             "R2 Std.": np.std(r2_scores)
