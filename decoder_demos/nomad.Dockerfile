@@ -11,6 +11,8 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-py37_4.12.0-Linux-x86_64
 RUN bash Miniconda3-py37_4.12.0-Linux-x86_64.sh -b -p /miniconda
 ENV PATH=$PATH:/miniconda/condabin:/miniconda/bin
 RUN conda init
+RUN conda install -c nvidia cudatoolkit=11.2
+RUN conda install -c conda-forge cudnn=8.1
 
 # this block stays the same
 RUN /bin/bash -c "python -m pip install falcon_challenge --upgrade"
@@ -34,10 +36,6 @@ ENV EVALUATION_LOC "local"
 # Add files from local context into Docker image
 ADD ./nomad_baseline/submissions.yaml submissions.yaml
 ADD ./nomad_baseline/submittable_models .
-# ADD ./nomad_baseline/paths.txt paths.txt
-# COPY ./decoder_demos/add_files.sh .
-# # RUN chmod +x add_files.sh && ./add_files.sh
-# COPY ././././snel/share/runs/falcon/M1_20120924_shorter_pbt/decoder.pkl .
 
 # Add runfile
 RUN pwd
@@ -52,5 +50,5 @@ ENV EVAL_DATA_PATH "/dataset/evaluation_data"
 
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash
-# CMD ["/bin/bash", "-c", \
-#     "python decode.py --evaluation $EVALUATION_LOC --split $SPLIT --phase $PHASE --docker true"]
+CMD ["/bin/bash", "-c", \
+    "python decode.py --evaluation $EVALUATION_LOC --split $SPLIT --phase $PHASE --docker true"]
