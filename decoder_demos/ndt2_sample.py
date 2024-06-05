@@ -53,7 +53,7 @@ def main():
 
     task = getattr(FalconTask, args.split)
     config = FalconConfig(task=task)
-    max_bins = 50 if task in [FalconTask.m1, FalconTask.m2] else 200 # h1
+    max_bins = 50 if task in [FalconTask.m1, FalconTask.m2] else 200 # These are recommended defaults
     
     decoder = NDT2Decoder(
         task_config=config,
