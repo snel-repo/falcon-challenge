@@ -61,6 +61,7 @@ def detect_tx(data, fs, thresholds, refractory_th=1):
         channel_data = np.abs(data[i, :])
         crossings = (channel_data > thresholds[i]).astype(int)
         spike_times = np.where(crossings)[0]
+        
         # Enforce refractory period (e.g., 1 ms)
         refractory_samples = int(refractory_th / 1000 * fs)
         valid_spike_idx = [spike_times[0]]
@@ -113,7 +114,7 @@ def extract_threshold_crossings(traces: np.array, channels: np.array, fs,
     if filt:
         target_traces = bandpass_filter(target_traces, lowcut, highcut, fs)
 
-    thresholds = th_cross * np.std(np.abs(target_traces), axis=1)  # Adjust thresholding logic based on your data
+    thresholds = th_cross * np.std(np.abs(target_traces), axis=1)  
     tx_matrix = detect_tx(target_traces, fs, thresholds, refractory_th=refractory_th)
 
     if clean_raster:

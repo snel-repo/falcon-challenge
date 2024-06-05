@@ -24,9 +24,10 @@ from scipy import signal
 logger = logging.getLogger(__name__)
 
 
-def falcon_spectrogram(x, fs, n_window=512, step_ms=1, f_min=250, f_max=8000, cut_off=0.0001):
+def compute_falcon_spectrogram(x, fs, n_window=512, step_ms=1, f_min=250, f_max=8000, cut_off=0.0001):
     """
     Computes a spectrogram from an audio waveform according for the FALCON benchmark.
+    To be consistent with the FALCON challenge, DO NOT MODIFY DEFAULTS.
 
     Args:
         x (np.ndarray): Input audio signal.
@@ -69,7 +70,7 @@ def convert_datestr_to_datetime(collect_date):
     return date_time
     
 
-def convert_to_NWB(
+def convert_to_NWB_b1(
     bird,
     date,
     spike_matrix,
@@ -103,7 +104,7 @@ def convert_to_NWB(
         experimenter = "Dr. Pablo Tostado-Marcos and Dr. Ezequiel Arneodo",
     )
 
-    subject = Subject(subject_id=f'Finch_{bird}_{split_label}', species='Zebra finch', sex='M', age='P90D/')
+    subject = Subject(subject_id=f'Finch_{bird}_{split_label}', species='Taeniopygia guttata', sex='M', age='P90D/')
     nwbfile.subject = subject
     
     # -------- TRIAL INFO -------- #
@@ -117,7 +118,7 @@ def convert_to_NWB(
     
     for ix in range(n_trials): 
         # Compute spectrogram
-        spec_t, spec_f, sxx = falcon_spectrogram(vocal_epochs[ix], fs_audio)
+        spec_t, spec_f, sxx = compute_falcon_spectrogram(vocal_epochs[ix], fs_audio)
         sxx_eval_mask = np.tile([(spec_t >= 0.1) & (spec_t < 0.8)], (len(spec_f), 1)) # Eval mask [frequencies x timesteps]
         nwbfile.add_trial(
             start_time = spike_times[ix][0],
@@ -192,7 +193,7 @@ def convert_to_NWB(
     return nwbfile
     
 
-def load_nwb(nwb_filepath):
+def load_nwb_b1(nwb_filepath):
 
     with NWBHDF5IO(nwb_filepath, "r") as io:
         nwbfile = io.read()
