@@ -2,7 +2,7 @@
 
 FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 RUN /bin/bash -c "python3 -m pip install falcon_challenge --upgrade"
-ADD ./falcon_challenge falcon_challenge
+# ADD ./falcon_challenge falcon_challenge
 ENV PREDICTION_PATH "/submission/submission.csv"
 ENV PREDICTION_PATH_LOCAL "/tmp/submission.pkl"
 ENV GT_PATH = "/tmp/ground_truth.pkl"
@@ -26,18 +26,18 @@ ENV EVALUATION_LOC remote
 # Note that Docker cannot easily import across symlinks, make sure data is not symlinked
 
 # H1
-# ADD ./local_data/ndt2_h1_sample.pth data/decoder.pth
-# ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
-# ENV SPLIT "h1"
-# ENV CONFIG_STEM falcon/h1/h1_100
+ADD ./local_data/ndt2_h1_sample.pth data/decoder.pth
+ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
+ENV SPLIT "h1"
+ENV CONFIG_STEM falcon/h1/h1_100
 
 # M1
-ADD ./local_data/ndt2_m1_sample_continual.pth data/decoder.pth
-ADD ./local_data/ndt2_zscore_m1.pt data/zscore.pt
-ENV SPLIT "m1"
-ENV CONFIG_STEM falcon/m1/m1_100
+# ADD ./local_data/ndt2_m1_sample_continual.pth data/decoder.pth
+# ADD ./local_data/ndt2_zscore_m1.pt data/zscore.pt
+# ENV SPLIT "m1"
+# ENV CONFIG_STEM falcon/m1/m1_100
 
-# # M2
+# M2
 # ADD ./local_data/ndt2_m2_sample_continual.pth data/decoder.pth
 # ADD ./local_data/ndt2_zscore_m2.pt data/zscore.pt
 # ENV SPLIT "m2"
