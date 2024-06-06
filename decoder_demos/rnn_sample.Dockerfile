@@ -26,28 +26,26 @@ ENV EVALUATION_LOC remote
 # Note that Docker cannot easily import across symlinks, make sure data is not symlinked
 
 # H1
-# ADD ./local_data/ndt2_h1_oracle.pth data/decoder.pth
-ADD ./local_data/ndt2_h1_fss.pth data/decoder.pth
+ADD ./local_data/h1_single_oracle_rnn_y1n2qdsi.ckpt data/decoder.pth
 ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
 ENV SPLIT "h1"
-ENV CONFIG_STEM falcon/h1/h1_100
+ENV CONFIG_STEM falcon/h1/h1_rnn_oracle
+ENV STATIC_KEY S5
 
 # M1
-# ADD ./local_data/ndt2_m1_oracle.pth data/decoder.pth
-# ADD ./local_data/ndt2_m1_fss.pth data/decoder.pth
+# ADD ./local_data/m2_single_oracle_rnn_m3ezdb44.ckpt data/decoder.pth
 # ADD ./local_data/ndt2_zscore_m1.pt data/zscore.pt
 # ENV SPLIT "m1"
-# ENV CONFIG_STEM falcon/m1/m1_100
+# ENV CONFIG_STEM falcon/m1/m1_rnn_oracle_chop
+# ENV STATIC_KEY 20120926
 
 # M2
-# ADD ./local_data/ndt2_m2_oracle.pth data/decoder.pth
-# ADD ./local_data/ndt2_m2_fss.pth data/decoder.pth
+
+# ADD ./local_data/m1_single_oracle_rnn_s3880opv.ckpt data/decoder.pth
 # ADD ./local_data/ndt2_zscore_m2.pt data/zscore.pt
 # ENV SPLIT "m2"
-# ENV CONFIG_STEM falcon/m2/m2_100
-
-
-
+# ENV CONFIG_STEM falcon/m2/m2_rnn_oracle_chop
+# ENV STATIC_KEY 2020-10-28
 
 # Add runfile
 RUN pwd
@@ -63,4 +61,4 @@ ENV EVAL_DATA_PATH "/dataset/evaluation_data"
 # CMD specifies a default command to run when the container is launched.
 # It can be overridden with any cmd e.g. sudo docker run -it my_image /bin/bash
 CMD ["/bin/bash", "-c", \
-    "python decode.py --evaluation $EVALUATION_LOC --model-path data/decoder.pth --config-stem $CONFIG_STEM --zscore-path data/zscore.pt --split $SPLIT --batch-size $BATCH_SIZE --phase $PHASE"]
+    "python decode.py --evaluation $EVALUATION_LOC --model-path data/decoder.pth --config-stem $CONFIG_STEM --zscore-path data/zscore.pt --split $SPLIT --batch-size $BATCH_SIZE --phase $PHASE --force-static-key $STATIC_KEY"]
