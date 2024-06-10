@@ -82,7 +82,7 @@ For an example Dockerfile with annotations regarding the necessity and function 
 ## EvalAI Submission
 Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands with your own Dockerfile (in place of sk_smoke). This should produce a log of nontrivial metrics (evaluation is run on locally available minival).
 
-To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab](https://eval.ai/web/challenges/challenge-page/2264/submission). This will instruct you to first install EvalAI, then add your token, and finally push the submission. It should look something like:
+To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab]((https://eval.ai/web/challenges/challenge-page/2319/submission)). This will instruct you to first install EvalAI, then add your token, and finally push the submission. It should look something like:
 `
 evalai push mysubmission:latest --phase <phase-name> (dev or test)
 `
