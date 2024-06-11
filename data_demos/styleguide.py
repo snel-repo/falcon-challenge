@@ -10,4 +10,5 @@ def set_style():
         'axes.titlesize': 24,
         'xtick.labelsize': 24,
         'ytick.labelsize': 24,
+        'pdf.use14corefonts': True
     })

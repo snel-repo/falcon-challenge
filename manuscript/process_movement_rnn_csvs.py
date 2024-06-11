@@ -144,7 +144,7 @@ elif track == 'm2':
         string = 'Held In' if i in ['20201019', '20201020', '20201027', '20201028'] else 'Held Out'
         static_performance.append(static_row[f'{string} {i} R2'].values)
 # %%
-with open(f'/snel/home/bkarpo2/bin/falcon-challenge/manuscript/results/{track}_rnn_results.pkl', 'wb') as f:
+with open(f'/snel/home/bkarpo2/bin/falcon-challenge/manuscript/results/{track}_rnn_results2.pkl', 'wb') as f:
     pickle.dump({
         'oracle_performance': oracle_performance,
         'static_performance': static_performance,

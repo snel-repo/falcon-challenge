@@ -10,20 +10,24 @@ from pynwb import NWBHDF5IO
 from falcon_challenge.dataloaders import bin_units
 
 #%%
-base_path = '/snel/home/bkarpo2/bin/falcon-challenge/data'
-track = 'h1'
+# base_path = '/snel/home/bkarpo2/bin/falcon-challenge/data'
+# track = 'h1'
+base_path = '/snel/share/share/data/gilja/FALCON_nwb_b1'
+track = ''
 held_in_files = glob.glob(os.path.join(base_path, track, '*held-in-calib*', '*.nwb'))
 held_out_files = glob.glob(os.path.join(base_path, track, '*held-out-calib*', '*.nwb'))
 
+track = 'b1'
 #%%
 
-if track == 'm1' or track == 'h2':
+if track == 'm1' or track == 'h2' or track == 'b1':
     heldin_time_s = []
     heldout_time_s = []
 elif track == 'h1' or track == 'm2':
     heldin_time_s = {}
     heldout_time_s = {}
 
+#%% 
 for files, time_s in zip([held_in_files, held_out_files], [heldin_time_s, heldout_time_s]):
     for f in files:
         with NWBHDF5IO(f, 'r') as io:
@@ -38,6 +42,8 @@ for files, time_s in zip([held_in_files, held_out_files], [heldin_time_s, heldou
                     time_s[code] += h1_spikes.shape[0] * 0.02
                 else:
                     time_s[code] = h1_spikes.shape[0] * 0.02
+            elif track == 'b1': 
+                time_s.append(nwbfile.acquisition['tx'].timestamps[()][-1])
             elif track == 'h2': 
                 h2_spikes = nwbfile.acquisition['binned_spikes'].data[()]
                 time_s.append(h2_spikes.shape[0] * 0.02)

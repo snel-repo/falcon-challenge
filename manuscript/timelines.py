@@ -50,12 +50,10 @@ elif track == 'b1':
         datetime(2021,6,26),
         datetime(2021,6,27),
         datetime(2021,6,28),
-        datetime(2021,6,29),
-        datetime(2021,6,30),
     ]
     format_held_out_dates = [
+        datetime(2021,6,30),
         datetime(2021,7,1),
-        datetime(2021,7,4),
         datetime(2021,7,5),
     ]
     

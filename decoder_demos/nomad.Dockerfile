@@ -31,7 +31,7 @@ RUN cd lfads_tf2 && \
     pip install protobuf==3.20.0
 ADD ./align_tf2 align_tf2
 
-ENV EVALUATION_LOC "local"
+ENV EVALUATION_LOC "remote"
 
 # Add files from local context into Docker image
 ADD ./nomad_baseline/submissions.yaml submissions.yaml
@@ -42,8 +42,8 @@ RUN pwd
 ADD ./decoder_demos/nomad_sample.py decode.py
 ADD ./decoder_demos/nomad_decoder.py nomad_decoder.py
 
-ENV SPLIT "m2"
-ENV PHASE "minival"
+ENV SPLIT "m1"
+ENV PHASE "test"
 
 # Make sure this matches the mounted data volume path. Generally leave as is.
 ENV EVAL_DATA_PATH "/dataset/evaluation_data"

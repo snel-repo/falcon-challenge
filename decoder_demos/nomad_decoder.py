@@ -1,9 +1,15 @@
-import yaml, pickle, sys
+import yaml, pickle, sys, time, os
 import numpy as np
 
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.interface import BCIDecoder
 from falcon_challenge.evaluator import DATASET_HELDINOUT_MAP
+
+# make sure tf is running in graph mode 
+import tensorflow as tf
+tf.config.run_functions_eagerly(False)
+# run on CPU to speed up inference 
+tf.config.set_visible_devices([], 'GPU')
 
 from lfads_tf2.subclasses.dimreduced.models import DimReducedLFADS
 from lfads_tf2.tuples import LFADSInput
@@ -15,7 +21,6 @@ for p in sys.path:
 from align_tf2.models import AlignLFADS
 
 from decoder_demos.decoding_utils import generate_lagged_matrix
-from decoder_demos.filtering import apply_exponential_filter
 
 class NoMAD_Decoder(BCIDecoder):
     def __init__(self, task_config: FalconConfig, submission_dict: str):
@@ -45,9 +50,10 @@ class NoMAD_Decoder(BCIDecoder):
 
         self.seq_len = self.model.cfg.MODEL.SEQ_LEN
         self.model.cfg['MODEL']['SAMPLE_POSTERIORS'] = False 
-        self.ext_input = np.zeros((1, self.seq_len, self.model.cfg.MODEL.EXT_INPUT_DIM), dtype=np.float32)
-        self.dataset_name = np.full(shape=[1], fill_value='')
-        self.behavior = np.zeros((1, self.seq_len, 0), dtype=np.float32)
+        self.model.cfg['TRAIN']['EAGER_MODE'] = False
+        self.ext_input = tf.zeros((1, self.seq_len, self.model.cfg.MODEL.EXT_INPUT_DIM), dtype=np.float32)
+        self.dataset_name = tf.fill(1, '')
+        self.behavior = tf.zeros((1, self.seq_len, 0), dtype=np.float32)
 
         # in any case, unpickle the decoder
         with open(decoder_path, 'rb') as f:
@@ -55,28 +61,24 @@ class NoMAD_Decoder(BCIDecoder):
         self.decoder = decoder_info['decoder']
         self.history = decoder_info['history']
 
-        # initialize decoding history buffer 
-        self.decoding_buffer = np.zeros((self.history + 1, self.model.cfg.MODEL.GEN_DIM))
-        # initialize lfads sequence length buffer 
-        self.lfads_input_buffer = np.zeros((self.seq_len, self._task_config.n_channels))
+        self.lfads_input_buffer = np.zeros((self.seq_len, self._task_config.n_channels), dtype=np.float32)
 
     def predict(self, neural_observations: np.ndarray):
-        if neural_observations.dtype != 'float32': 
-            neural_observations = neural_observations.astype('float32')
-
         self.lfads_input_buffer[0:-1, :] = self.lfads_input_buffer[1:]
         self.lfads_input_buffer[-1, :] = neural_observations
+        
         # model inference 
         lfads_input = LFADSInput(enc_input=self.lfads_input_buffer[np.newaxis, :, :],
                                 ext_input=self.ext_input,
                                 dataset_name=self.dataset_name,
                                 behavior=self.behavior)
+
         lfads_output = self.model.graph_call(lfads_input)
         gen_states = lfads_output.gen_states.numpy()
         # add lfads output to decoding buffer 
-        self.decoding_buffer = gen_states[0, -(self.history + 1):, :]
+        decoding_buffer = gen_states[0, -(self.history + 1):, :]
         # apply decoder 
-        lagged_input = generate_lagged_matrix(self.decoding_buffer, self.history)
+        lagged_input = generate_lagged_matrix(decoding_buffer, self.history)
         decoder_output = self.decoder.predict(lagged_input)
         # return prediction for that timestep 
         return decoder_output

@@ -12,14 +12,15 @@ from falcon_challenge.evaluator import DATASET_HELDINOUT_MAP
 
 #%%
 
+track = 'm1'
 held_in_results = {
-    'ndt2': [0.744922239130974, 0.761236731408813, 0.7881243671158603, 0.8072260619126261],
+    'ndt2': [0.730817033816231, 0.7583759337723137, 0.7833997945509098, 0.7995086846823815],
     'nomad': [0.6205157241114031, 0.6484411273242108, 0.6348675663252332, 0.6589362043429672],
     'cyclegan': [0.58704366546381, 0.6063171981294609, 0.605259984986606, 0.6355977543036897],
     'static_wf': [0.37100878131669796, 0.4686046508083223, 0.539264382674297, 0.46664828970361366]
 }
 held_out_results = {
-    'ndt2': [0.6355582331426868, 0.6578559607337571, 0.49440192306033404],
+    'ndt2': [0.662237555276985, 0.5927781718186229, 0.5000034742167314],
     'nomad': [0.5094512937850105, 0.5234957917131661, 0.44585368613994564],
     'cyclegan': [0.4795853623709667, 0.4033784511259925, 0.39898314642588134],
     'static_wf': [0.39259487067679766, 0.3762496700649608, 0.2612390566332373]
@@ -103,7 +104,7 @@ muscle_inds = [muscles.index(m) for m in muscles_to_plot]
 
 preds = {}
 
-preds_ndt2 = '/home/bkarpo2/bin/falcon-challenge/manuscript/results/preds_m1_ndt2.pkl'
+preds_ndt2 = '/home/bkarpo2/bin/falcon-challenge/manuscript/results/preds_m1_held_out_ndt2.pkl'
 with open(preds_ndt2, 'rb') as f: 
     preds['ndt2'] = pickle.load(f)
 
@@ -317,3 +318,4 @@ plt.grid()
 plt.legend()
 plt.ylabel('R2')
 plt.xlabel('Muscle Index')
+# %%

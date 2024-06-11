@@ -124,7 +124,7 @@ def rasterplot(spike_arr, bin_size_s=0.02, ax=None, spike_alpha=0.3, lw=0.2, s=1
             c='k',
             marker='|',
             linewidths=lw,
-            alpha=spike_alpha
+            alpha=spike_alpha,
         )
     ax.set_yticks(np.arange(0, spike_arr.shape[1], 20))
     ax.set_ylabel('Channel #')
