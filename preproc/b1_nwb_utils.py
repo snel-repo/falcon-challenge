@@ -99,12 +99,12 @@ def convert_to_NWB_b1(
         session_start_time = convert_datestr_to_datetime(date),
         experiment_description = "Synchronous RA-neural and song data of a Zebra finch implanted with a Neuropixels probe during awake-singing.",
         file_create_date = datetime.now(tzlocal()),
-        lab = "TNEL",
+        lab = "TNEL & Gentner Lab",
         institution = "UC San Diego",
-        experimenter = "Dr. Pablo Tostado-Marcos and Dr. Ezequiel Arneodo",
+        experimenter = "Dr. Pablo Tostado-Marcos & Dr. Ezequiel Arneodo",
     )
 
-    subject = Subject(subject_id=f'Finch_{bird}_{split_label}', species='Taeniopygia guttata', sex='M', age='P90D/')
+    subject = Subject(subject_id=f'Finch_{bird}_{split_label}', species='http://purl.obolibrary.org/obo/NCBITaxon_59729', sex='M', age='P90D/')
     nwbfile.subject = subject
     
     # -------- TRIAL INFO -------- #
@@ -214,7 +214,6 @@ def load_nwb_b1(nwb_filepath):
     n_trials = len(trial_info)
     n_channels = neural_array.shape[-1]
     trial_length = round(trial_info['stop_time'][0]-trial_info['start_time'][0], 1) # Round to 1st decimal point
-    print('Trial length: ', trial_length, ' seconds')
     
     neural_samples_per_trial = neural_array.shape[0] // n_trials # Number of samples per trial
     neural_array = neural_array.reshape(n_trials, neural_samples_per_trial, n_channels) # Trialized spike_matrix
