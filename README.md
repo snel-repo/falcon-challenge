@@ -23,7 +23,7 @@ Data from each dataset is broken down as follows:
     - Data from the first several recording sessions. 
     - All non-evaluation data is released and split into calibration (large portion) and minival (small portion) sets. 
     - Held-in calibration data is intended to train decoders from scratch.
-    - Minival data enables validation of held-in decoder generalization.
+    - Minival data enables validation of held-in decoders and submission debugging.
 - Held-out: 
     - Data from the latter several recording sessions. 
     - A small portion of non-evaluation data is released for calibration. 
@@ -59,7 +59,7 @@ Each of the lowest level dirs holds the data files (in Neurodata Without Borders
 This codebase contains starter code for implementing your own method for the FALCON challenge. 
 - The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
-- In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented!
+- In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented! (Namely, you should have a `_decoder.py` file which conforms to `falcon_challenge.inferface` as well as a `_sample.py` file that indicates how your decoder class should be called.)
 
 For example, you can prepare and evaluate a linear decoder by running:
 ```bash
