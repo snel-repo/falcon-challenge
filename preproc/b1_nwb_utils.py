@@ -214,7 +214,6 @@ def load_nwb_b1(nwb_filepath):
     n_trials = len(trial_info)
     n_channels = neural_array.shape[-1]
     trial_length = round(trial_info['stop_time'][0]-trial_info['start_time'][0], 1) # Round to 1st decimal point
-    print('Trial length: ', trial_length, ' seconds')
     
     neural_samples_per_trial = neural_array.shape[0] // n_trials # Number of samples per trial
     neural_array = neural_array.reshape(n_trials, neural_samples_per_trial, n_channels) # Trialized spike_matrix
