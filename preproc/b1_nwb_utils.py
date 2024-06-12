@@ -99,12 +99,12 @@ def convert_to_NWB_b1(
         session_start_time = convert_datestr_to_datetime(date),
         experiment_description = "Synchronous RA-neural and song data of a Zebra finch implanted with a Neuropixels probe during awake-singing.",
         file_create_date = datetime.now(tzlocal()),
-        lab = "TNEL",
+        lab = "TNEL & Gentner Lab",
         institution = "UC San Diego",
-        experimenter = "Dr. Pablo Tostado-Marcos and Dr. Ezequiel Arneodo",
+        experimenter = "Dr. Pablo Tostado-Marcos & Dr. Ezequiel Arneodo",
     )
 
-    subject = Subject(subject_id=f'Finch_{bird}_{split_label}', species='Taeniopygia guttata', sex='M', age='P90D/')
+    subject = Subject(subject_id=f'Finch_{bird}_{split_label}', species='http://purl.obolibrary.org/obo/NCBITaxon_59729', sex='M', age='P90D/')
     nwbfile.subject = subject
     
     # -------- TRIAL INFO -------- #
