@@ -325,7 +325,6 @@ class FalconEvaluator:
             self.continual = True
         else:
             self.continual = False
-        # self.continual = False
         self.verbose = verbose
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
