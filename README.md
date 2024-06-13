@@ -15,7 +15,7 @@ See, e.g. https://docs.docker.com/desktop/install/linux-install/.
 ## Getting started
 
 ### Data downloading
-The FALCON datasets are available on DANDI ([H1](https://dandiarchive.org/dandiset/000954?search=falcon&pos=3), [H2](https://dandiarchive.org/dandiset/000950?search=falcon&pos=4), [M1](https://dandiarchive.org/dandiset/000941?search=falcon&pos=1), [M2](https://dandiarchive.org/dandiset/000953?search=falcon&pos=2)). H1 and H2 are human intractorical brain-computer interface (iBCI) datasets, M1 and M2 are monkey iBCI datasets, and B1 is a songbird iBCI dataset.
+The FALCON datasets are available on DANDI ([H1](https://dandiarchive.org/dandiset/000954?search=falcon&pos=3), [H2](https://dandiarchive.org/dandiset/000950?search=falcon&pos=4), [M1](https://dandiarchive.org/dandiset/000941?search=falcon&pos=1), [M2](https://dandiarchive.org/dandiset/000953?search=falcon&pos=2), [B1](https://dandiarchive.org/dandiset/001046)). H1 and H2 are human intractorical brain-computer interface (iBCI) datasets, M1 and M2 are monkey iBCI datasets, and B1 is a songbird iBCI dataset.
 
 Data from each dataset is broken down as follows:
 
@@ -23,7 +23,7 @@ Data from each dataset is broken down as follows:
     - Data from the first several recording sessions. 
     - All non-evaluation data is released and split into calibration (large portion) and minival (small portion) sets. 
     - Held-in calibration data is intended to train decoders from scratch.
-    - Minival data enables validation of held-in decoder generalization.
+    - Minival data enables validation of held-in decoders and submission debugging.
 - Held-out: 
     - Data from the latter several recording sessions. 
     - A small portion of non-evaluation data is released for calibration. 
@@ -59,7 +59,7 @@ Each of the lowest level dirs holds the data files (in Neurodata Without Borders
 This codebase contains starter code for implementing your own method for the FALCON challenge. 
 - The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
-- In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented!
+- In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented! (Namely, you should have a `_decoder.py` file which conforms to `falcon_challenge.inferface` as well as a `_sample.py` file that indicates how your decoder class should be called.)
 
 For example, you can prepare and evaluate a linear decoder by running:
 ```bash
@@ -82,7 +82,7 @@ For an example Dockerfile with annotations regarding the necessity and function 
 ## EvalAI Submission
 Please ensure that your submission runs locally before running remote evaluation. You can run the previously listed commands with your own Dockerfile (in place of sk_smoke). This should produce a log of nontrivial metrics (evaluation is run on locally available minival).
 
-To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab](https://eval.ai/web/challenges/challenge-page/2264/submission). This will instruct you to first install EvalAI, then add your token, and finally push the submission. It should look something like:
+To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab]((https://eval.ai/web/challenges/challenge-page/2319/submission)). This will instruct you to first install EvalAI, then add your token, and finally push the submission. It should look something like:
 `
 evalai push mysubmission:latest --phase <phase-name> (dev or test)
 `
