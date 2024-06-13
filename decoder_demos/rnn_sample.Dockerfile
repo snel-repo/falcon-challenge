@@ -33,19 +33,19 @@ ENV EVALUATION_LOC remote
 # ENV STATIC_KEY S5
 
 # M1
-# ADD ./local_data/m2_single_oracle_rnn_m3ezdb44.ckpt data/decoder.pth
-# ADD ./local_data/ndt2_zscore_m1.pt data/zscore.pt
-# ENV SPLIT "m1"
-# ENV CONFIG_STEM falcon/m1/m1_rnn_oracle_chop
-# ENV STATIC_KEY 20120926
+ADD ./local_data/m1_single_oracle_rnn_s3880opv.ckpt data/decoder.pth
+ADD ./local_data/ndt2_zscore_m1.pt data/zscore.pt
+ENV SPLIT "m1"
+ENV CONFIG_STEM falcon/m1/m1_rnn_oracle_chop
+ENV STATIC_KEY 20120926
 
 # M2
 
-ADD ./local_data/m1_single_oracle_rnn_s3880opv.ckpt data/decoder.pth
-ADD ./local_data/ndt2_zscore_m2.pt data/zscore.pt
-ENV SPLIT "m2"
-ENV CONFIG_STEM falcon/m2/m2_rnn_oracle_chop
-ENV STATIC_KEY 2020-10-28
+# ADD ./local_data/m2_single_oracle_rnn_m3ezdb44.ckpt data/decoder.pth
+# ADD ./local_data/ndt2_zscore_m2.pt data/zscore.pt
+# ENV SPLIT "m2"
+# ENV CONFIG_STEM falcon/m2/m2_rnn_oracle_chop
+# ENV STATIC_KEY 2020-10-28
 
 # Add runfile
 RUN pwd
