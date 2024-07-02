@@ -316,9 +316,10 @@ def simple_collater(batch, task):
 
 class FalconEvaluator:
 
-    def __init__(self, eval_remote=False, split='h1', verbose=False):
+    def __init__(self, eval_remote=False, split='h1', verbose=False, dataloader_workers=8):
         r"""
             verbose: Print out dataset specific metrics for movement tasks.
+            dataloader_workers: Number of workers to use for dataloading, only meaningful up to # of datasets in a split. Set to 0 to run multiple Evaluators in multiprocessing
         """
         self.eval_remote = eval_remote
         assert split in ['h1', 'h2', 'm1', 'm2'], "Split must be h1, h2, m1, or m2."
@@ -327,6 +328,7 @@ class FalconEvaluator:
         else:
             self.continual = False
         self.verbose = verbose
+        self.num_workers = dataloader_workers
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
 
@@ -392,13 +394,12 @@ class FalconEvaluator:
         all_eval_mask = defaultdict(list)
         all_compute_times = []
         
-        num_workers = 8
         simple_collater_partial = partial(simple_collater, task=self.dataset)
         dataloader = DataLoader(
             dataset, shuffle=False,
             batch_size=decoder.batch_size,
-            num_workers=num_workers,
-            persistent_workers=num_workers > 0,
+            num_workers=self.num_workers,
+            persistent_workers=self.num_workers > 0,
             collate_fn=simple_collater_partial,
         )
         # from time import time
