@@ -86,7 +86,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
         - trial_change: boolean of shape (time,) true if the trial has changed
         - eval_mask: boolean array indicating whether to evaluate each time step, True if should
     """
-    if not dataset in [FalconTask.h1, FalconTask.h2, FalconTask.m1, FalconTask.m2]:
+    if not dataset in [FalconTask.h1, FalconTask.h2, FalconTask.m1, FalconTask.m2, FalconTask.b1]:
         raise ValueError(f"Unknown dataset {dataset}")
     with NWBHDF5IO(str(fn), 'r') as io:
         nwbfile = io.read()
@@ -164,6 +164,23 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
             switch_inds = np.searchsorted(vel_timestamps, trial_info.start_time)
             trial_change[switch_inds] = True
             return binned_units, vel_data, trial_change, eval_mask
+        
+        elif dataset == FalconTask.b1: 
+            neural_array = np.array(nwbfile.get_acquisition('tx').data) # t x channels = (timesteps, 85) @30khz
+            spike_times = np.array(nwbfile.get_acquisition('tx').timestamps) # t = (timespteps) @30khz
+            audio_motifs = np.array(nwbfile.get_acquisition('vocalizations').data) # t = (timesteps) @25khz
+            audio_times = np.array(nwbfile.get_acquisition('vocalizations').timestamps) # t = (timesteps) @25khz
+            # Trial info
+            trial_info = (
+                        nwbfile.trials.to_dataframe()
+                        .reset_index()
+            )
+            spectrogram_targets = np.concatenate([x for x in trial_info['spectrogram_values'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
+            spectrogram_eval_mask = np.concatenate([x for x in trial_info['spectrogram_eval_mask'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
+            trial_change = np.concatenate(trial_info['spectrogram_times'].values) == trial_info['spectrogram_times'].values[0][0] # t = (timesteps) @1Hz
+            
+            return neural_array, spectrogram_targets, trial_change, spectrogram_eval_mask
+    
         else:
             raise NotImplementedError(f"Dataset {dataset} not implemented")
             breakpoint()

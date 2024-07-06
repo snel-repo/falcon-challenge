@@ -17,7 +17,7 @@ def main():
         "--model-path", type=str, required=False, default='./local_data/sklearn_FalconTask.h1.pkl'
     )
     parser.add_argument(
-        '--split', type=str, choices=['h1', 'h2', 'm1', 'm2'], default='h1',
+        '--split', type=str, choices=['h1', 'h2', 'm1', 'm2', 'b1'], default='h1',
     )
     parser.add_argument(
         '--phase', choices=['minival', 'test'], default='minival'

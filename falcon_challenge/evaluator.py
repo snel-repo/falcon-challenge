@@ -97,6 +97,10 @@ DATASET_HELDINOUT_MAP = {
         'held_in': ['Run1_20201019', 'Run2_20201019', 'Run1_20201020', 'Run2_20201020', 'Run1_20201027', 'Run2_20201027', 'Run1_20201028'],
         'held_out': ['Run1_20201030', 'Run2_20201030', 'Run1_20201118', 'Run1_20201119', 'Run1_20201124', 'Run2_20201124'],
     },
+    'b1': {
+        'held_in': ['20210626', '20210627', '20210628'],
+        'held_out': ['20210630', '20210701', '20210705'],
+    },
 }
 
 # Used to label test server data file names to look for
@@ -115,6 +119,7 @@ HELD_IN_KEYS = {
     FalconTask.m1: ['L_20120924', 'L_20120926', 'L_20120927', 'L_20120928'],
     FalconTask.m2: ['20201019', '20201020', '20201027', '20201028'],
     FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_in'],
+    FalconTask.b1: DATASET_HELDINOUT_MAP['b1']['held_in'],
 }
 
 HELD_OUT_KEYS = {
@@ -122,6 +127,7 @@ HELD_OUT_KEYS = {
     FalconTask.m1: ['L_20121004', 'L_20121017', 'L_20121024'],
     FalconTask.m2: ['20201030', '20201118', '20201119', '20201124'],
     FalconTask.h2: DATASET_HELDINOUT_MAP['h2']['held_out'],
+    FalconTask.b1: DATASET_HELDINOUT_MAP['b1']['held_out'],
 }
 
 RECOMMENDED_BATCH_SIZES = {
@@ -129,6 +135,7 @@ RECOMMENDED_BATCH_SIZES = {
     FalconTask.m1: 4,
     FalconTask.h2: 1,
     FalconTask.m2: 7, # max
+    FalconTask.b1: 1, # fixed
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
@@ -320,7 +327,7 @@ class FalconEvaluator:
             verbose: Print out dataset specific metrics for movement tasks.
         """
         self.eval_remote = eval_remote
-        assert split in ['h1', 'h2', 'm1', 'm2'], "Split must be h1, h2, m1, or m2."
+        assert split in ['h1', 'h2', 'm1', 'm2', 'b1'], "Split must be h1, h2, m1, m2 or b1."
         if split in ['h1', 'm1', 'm2']:
             self.continual = True
         else:
@@ -348,6 +355,7 @@ class FalconEvaluator:
             eval_dir = data_dir / "minival"
         if not eval_dir.exists():
             raise FileNotFoundError(f"Evaluation directory {eval_dir} found but requested phase {phase} not found.")
+        print(sorted(list(eval_dir.glob("*val*.nwb"))))
         return sorted(list(eval_dir.glob("*val*.nwb")))
 
     def get_eval_files(self, phase: str = 'minival'):
@@ -362,15 +370,18 @@ class FalconEvaluator:
         # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective. also returns lists compute_time and neural_time
         # TODO this does not return uniquely identifiable data if eval_files is partial, e.g. if we only has set 2 of a day with 2 sets, we'll happily just provide partial predictions.
         # Pre-loop before starting batch loads
+        
         file_neural_data = []
         file_trial_change = []
         file_targets = []
         file_eval_mask = []
         all_neural_times = []
         datafiles = list(sorted(eval_files))
+        
         for datafile in datafiles:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
+        
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
             file_neural_data.append(neural_data)
             file_trial_change.append(trial_change)
@@ -390,6 +401,8 @@ class FalconEvaluator:
         all_targets = defaultdict(list)
         all_eval_mask = defaultdict(list)
         all_compute_times = []
+
+        print('Decoder batch size: ', decoder.batch_size)
         
         num_workers = 8
         simple_collater_partial = partial(simple_collater, task=self.dataset)
@@ -402,17 +415,39 @@ class FalconEvaluator:
         )
         # from time import time
         # for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
+        
         for neural_data, decoding_targets, trial_change, eval_mask, datafile_idx in tqdm(dataloader):
             neural_data: np.ndarray
             decoding_targets: np.ndarray
             trial_change: np.ndarray
             eval_mask: np.ndarray
             datafile_idx: np.ndarray
+            
             decoder.reset(dataset_tags=[dataset.datafiles[idx] for idx in datafile_idx])
+
+            print('!!! Here : ', 
+                  np.array(file_neural_data).shape,
+                  np.array(file_trial_change).shape, 
+                  np.array(file_targets).shape,
+                  np.array(file_eval_mask).shape,
+                  eval_files, 
+                  neural_data.shape,
+                  decoding_targets.shape, 
+                  trial_change.shape,
+                  eval_mask.shape,
+                  datafile_idx, 
+                  dataset.datafiles)
+            
             trial_preds = []
             # loop_times = []
             # breakpoint()
             for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
+
+                print('!!! NOW HERE: ', 
+                  np.array(neural_observations).shape,
+                  np.array(trial_delta_obs).shape, 
+                  np.array(step_mask).shape)
+                
                 neural_observations: np.ndarray
                 trial_delta_obs: np.ndarray
                 step_mask: np.ndarray
@@ -522,7 +557,7 @@ class FalconEvaluator:
                 all_targets.update(all_targets_held_in)
                 all_eval_mask.update(all_eval_mask_held_in)
 
-        else:
+        else:            
             all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times = self.predict_files(decoder, eval_files)
         # Indirect remote setup to satisfy EvalAI interface. Save metrics / comparison to file.
         if USE_PKLS:

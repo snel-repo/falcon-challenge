@@ -48,6 +48,7 @@ class FalconTask(enum.Enum):
     h2 = "falcon_h2_writing"
     m1 = "falcon_m1_finger"
     m2 = "falcon_m2_reach"
+    b1 = "falcon_b1_vocal"
 
 @dataclass
 class FalconConfig:
@@ -71,6 +72,8 @@ class FalconConfig:
             return 64
         elif self.task == FalconTask.m2:
             return 96
+        elif self.task == FalconTask.b1:
+            return 85
         raise NotImplementedError(f"Task {self.task} not implemented.")
 
     @property
@@ -83,6 +86,8 @@ class FalconConfig:
             return 16
         elif self.task == FalconTask.m2:
             return 2
+        elif self.task == FalconTask.b1:
+            return 158 # Spectrogram frequencies
         raise NotImplementedError(f"Task {self.task} not implemented.")
         
     def hash_dataset(self, handle: Union[str, Path]):
@@ -124,6 +129,9 @@ class FalconConfig:
                 run_str = handle.split('_')[0][-4:]
                 date_str = handle.split('_')[1][:8]
             return f'{run_str}_{date_str}'
+        elif self.task == FalconTask.b1:
+        # E.g. sub-Finch-z-r12r13-21-held-in-calib_ses-20210626'
+            return handle.split('-')[-1]
             
 
 cs = ConfigStore.instance()
