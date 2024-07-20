@@ -179,7 +179,6 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
             # Spectrogram
             spectrogram_targets = np.concatenate([x for x in trial_info['spectrogram_values'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
             spectrogram_eval_mask = np.concatenate([x for x in trial_info['spectrogram_eval_mask'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
-            
             # trial_change: Boolean vector containing neural sample when trial changes
             n_trials, n_channels = len(trial_info), neural_array.shape[-1]
             trial_length = round(trial_info['stop_time'][0]-trial_info['start_time'][0], 1) # Round to 1st decimal point

@@ -247,12 +247,8 @@ def evaluate(
         
         for in_or_out in pred_dict:
 
-            # print('DATASPLIT: ', datasplit)
-            # print(f'DEBUG len = {len(pred_dict[in_or_out])}, innout = {in_or_out},  {pred_dict}')
-            # print(f'keys = {user_submission.keys()}, {user_submission}')
-            
-            # if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
-            #     raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
+            if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
+                raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
 
             # B1 computes metrics across sessions independently. Don't concatenate.
             if 'b1' in datasplit:
@@ -649,14 +645,10 @@ class FalconEvaluator:
             if prd.shape != tgt.shape or prd.shape != msk.shape:
                 raise ValueError(f"Targets and predictions have different lengths: {len(tgt)} vs {len(prd)}.")
 
-            print(f'DEBUG preds {prd.shape}, {tgt.shape}, {msk.shape}')
-
             # Reshape to normalize and compute error at the trial level:
             prd = prd.reshape(-1, trial_len, prd.shape[-2], prd.shape[-1])
             tgt = tgt.reshape(-1, trial_len, tgt.shape[-2], tgt.shape[-1])
             msk = msk.reshape(-1, trial_len, msk.shape[-2], msk.shape[-1])
-
-            print(f'DEBUG preds {prd.shape}, {tgt.shape}, {msk.shape}')
             
             samples, frequencies = prd.shape[1], prd.shape[-1]
 
@@ -671,8 +663,6 @@ class FalconEvaluator:
                 error_per_trial.append(mean_squared_error(normalize_signal(original_sxx_masked), normalize_signal(reconstructed_sxx_masked)))
 
             error_per_session.append(np.mean(error_per_trial))
-            
-            print(f'ERRORS of 06.27: {error_per_session}')
         
         base_metrics = {
             "MSE Mean": np.mean(error_per_session),

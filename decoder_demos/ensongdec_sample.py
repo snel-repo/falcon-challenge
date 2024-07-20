@@ -56,9 +56,6 @@ def main():
 
     task = getattr(FalconTask, args.split)
     config = FalconConfig(task=task)
-    # max_bins = 50 if task in [FalconTask.m1, FalconTask.m2] else 200 # These are recommended defaults
-
-    print('PRINTING CONGIG: ', config, config.n_channels)
     
     if args.model_paths:
         model_paths = args.model_paths
