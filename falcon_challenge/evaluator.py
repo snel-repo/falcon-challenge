@@ -661,8 +661,6 @@ class FalconEvaluator:
                 # Calculate spectrogram reconstruction error
                 error_per_trial.append(mean_squared_error(normalize_signal(original_sxx_masked), normalize_signal(reconstructed_sxx_masked)))
 
-            print() 
-            
             error_per_session.append(np.mean(error_per_trial))
         
         base_metrics = {
