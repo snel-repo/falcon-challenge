@@ -1,12 +1,12 @@
 r"""
-    Sample NDT2 decoder for the Falcon Challenge.
+    Sample Ensongdec decoder for the Falcon Challenge.
     
     Oracle commands:
-    python decoder_demos/ndt2_sample.py --evaluation local --model-path '' --config-stem falcon/m1/m1_oracle_chop --zscore-path ./local_data/ndt2_zscore_m1.pt --split m1 --phase test --batch-size 1 --model-paths local_data/m1_single_oracle_ndt2_2mz1bysq.ckpt  local_data/m1_single_oracle_ndt2_awe4ln1c.ckpt  local_data/m1_single_oracle_ndt2_e980ervy.ckpt local_data/m1_single_oracle_ndt2_976acfc7.ckpt  local_data/m1_single_oracle_ndt2_dh2xwzi0.ckpt  local_data/m1_single_oracle_ndt2_hpuopdhc.ckpt  local_data/m1_single_oracle_ndt2_u8rt3ciq.ckpt
-
-
-python ensongdec_sample.py --evaluation "local" --model-path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642.pt' --model_cfg_path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642_metadata.json' --split 'b1' --phase 'minival' --batch-size 
     
+    python ensongdec_sample.py --evaluation "local" --model-path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642.pt' --model_cfg_path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642_metadata.json' --split 'b1' --phase 'minival' --batch-size 1
+    
+    python ensongdec_sample.py --evaluation "local" --model-path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705.pt' --model_cfg_path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705_metadata.json' --split 'b1' --phase 'test' --batch-size 1
+        
 """
 
 import argparse
@@ -39,7 +39,7 @@ def main():
         '--phase', required=False, choices=['minival', 'test'], default='minival'
     )
     parser.add_argument(
-        '--batch-size', type=int, required=False, default=27000 
+        '--batch-size', type=int, required=False, default=1 
     )
     parser.add_argument(
         '--force-static-key', required=False, type=str, default='', help="Specify session to enforce session parameters for, i.e. ignore session label from evaluator."
@@ -57,6 +57,8 @@ def main():
     task = getattr(FalconTask, args.split)
     config = FalconConfig(task=task)
     # max_bins = 50 if task in [FalconTask.m1, FalconTask.m2] else 200 # These are recommended defaults
+
+    print('PRINTING CONGIG: ', config, config.n_channels)
     
     if args.model_paths:
         model_paths = args.model_paths
@@ -68,10 +70,7 @@ def main():
         task_config = config,
         model_ckpt_path = model_paths,
         model_cfg_path = args.model_cfg_path,
-        #zscore_path=args.zscore_path,
-        #max_bins=max_bins,
-        #dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=args.phase)],
-        batch_size = 1, # TODO: allow for different batch sizes
+        batch_size = 1, 
         force_static_key = args.force_static_key
     )
 

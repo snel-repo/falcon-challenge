@@ -9,7 +9,7 @@ import logging
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from edit_distance import SequenceMatcher
@@ -99,7 +99,7 @@ DATASET_HELDINOUT_MAP = {
     },
     'b1': {
         'held_in': ['20210626', '20210627', '20210628'],
-        'held_out': ['20210630', '20210701', '20210705'],
+        'held_out': ['20210630', '20210701', '20210705']
     },
 }
 
@@ -135,7 +135,7 @@ RECOMMENDED_BATCH_SIZES = {
     FalconTask.m1: 4,
     FalconTask.h2: 1,
     FalconTask.m2: 7, # max
-    FalconTask.b1: 1, # fixed
+    FalconTask.b1: 1, 
 }
 
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
@@ -225,6 +225,7 @@ def evaluate(
             dataset_tgt = split_annotations[dataset]['data']
             dataset_mask = split_annotations[dataset]['mask']
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
+            
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
                 if 'h2' not in datasplit:
                     # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
@@ -243,20 +244,35 @@ def evaluate(
                 mask_dict['held_out'].append(dataset_mask)
             else:
                 raise ValueError(f"Dataset {dataset} submitted but not found in held-in or held-out list of split {datasplit}.")
-            
+        
         for in_or_out in pred_dict:
-            if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
-                raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
-            pred = np.concatenate(pred_dict[in_or_out])
-            if 'h2' in datasplit:
-                tgt = [y for x in tgt_dict[in_or_out] for y in x]
+
+            # print('DATASPLIT: ', datasplit)
+            # print(f'DEBUG len = {len(pred_dict[in_or_out])}, innout = {in_or_out},  {pred_dict}')
+            # print(f'keys = {user_submission.keys()}, {user_submission}')
+            
+            # if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
+            #     raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
+
+            # B1 computes metrics across sessions independently. Don't concatenate.
+            if 'b1' in datasplit:
+                pred, tgt, mask = pred_dict[in_or_out], tgt_dict[in_or_out], mask_dict[in_or_out]
             else:
-                tgt = np.concatenate(tgt_dict[in_or_out])
-                dset_lens = dset_len_dict[in_or_out]
-            mask = np.concatenate(mask_dict[in_or_out])
+                pred = np.concatenate(pred_dict[in_or_out])
+                if 'h2' in datasplit:
+                    tgt = [y for x in tgt_dict[in_or_out] for y in x]
+                else:
+                    tgt = np.concatenate(tgt_dict[in_or_out])
+                    dset_lens = dset_len_dict[in_or_out]
+                mask = np.concatenate(mask_dict[in_or_out])
             
             try:
-                metrics = FalconEvaluator.compute_metrics_edit_distance(pred, tgt, mask) if 'h2' in datasplit else FalconEvaluator.compute_metrics_regression(pred, tgt, mask, dset_lens, verbose=verbose)
+                if 'b1' in datasplit:
+                    metrics = FalconEvaluator.compute_metrics_spectrogram_distance(pred, tgt, mask)
+                elif 'h2' in datasplit:
+                    metrics = FalconEvaluator.compute_metrics_edit_distance(pred, tgt, mask)
+                else:
+                    metrics = FalconEvaluator.compute_metrics_regression(pred, tgt, mask, dset_lens, verbose=verbose)
             except Exception as e:
                 raise ValueError(f"Failed to compute metrics for {datasplit} {in_or_out}: {e}. Lengths submitted: {[len(piece) for piece in pred_dict[in_or_out]]}")
             for k in metrics:
@@ -377,16 +393,19 @@ class FalconEvaluator:
         file_eval_mask = []
         all_neural_times = []
         datafiles = list(sorted(eval_files))
-        
+
         for datafile in datafiles:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
         
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
+            
             file_neural_data.append(neural_data)
             file_trial_change.append(trial_change)
             file_targets.append(decoding_targets)
             file_eval_mask.append(eval_mask)
+
+            if self.dataset == FalconTask.b1: BIN_SIZE = 1/30000
             all_neural_times.append(neural_data.shape[0] * BIN_SIZE)
     
         dataset = EvalDataset(
@@ -424,51 +443,55 @@ class FalconEvaluator:
             datafile_idx: np.ndarray
             
             decoder.reset(dataset_tags=[dataset.datafiles[idx] for idx in datafile_idx])
-
-            print('!!! Here : ', 
-                  np.array(file_neural_data).shape,
-                  np.array(file_trial_change).shape, 
-                  np.array(file_targets).shape,
-                  np.array(file_eval_mask).shape,
-                  eval_files, 
-                  neural_data.shape,
-                  decoding_targets.shape, 
-                  trial_change.shape,
-                  eval_mask.shape,
-                  datafile_idx, 
-                  dataset.datafiles)
             
             trial_preds = []
             # loop_times = []
             # breakpoint()
-            for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
 
-                print('!!! NOW HERE: ', 
-                  np.array(neural_observations).shape,
-                  np.array(trial_delta_obs).shape, 
-                  np.array(step_mask).shape)
+            # B1 predicts using a whole-trial worth of neural data and neural_observations and eval_mask have different sampling rates.
+            if self.dataset == FalconTask.b1:
                 
-                neural_observations: np.ndarray
-                trial_delta_obs: np.ndarray
-                step_mask: np.ndarray
-                if self.dataset == FalconTask.h2:
-                    assert neural_data.shape[1] == 1, "H2 expects batch size 1."
-                    if step_mask[0]:
+                trial_neural_observations = []
+                # neural_data and eval_mask have different sampling rates in B1
+                for neural_observations, trial_delta_obs in zip(neural_data, trial_change):
+                    
+                    if not trial_delta_obs[0]:
+                        trial_neural_observations.append(neural_observations) # Samples x 1 x channels
+                    else: 
+                        trial_neural_observations.append(neural_observations)
+                        trial_neural_observations = np.array(trial_neural_observations).transpose(1, 2, 0)
+                        
                         start_time = time()
-                        decoder.predict(neural_observations)
+                        # decoder.predict expects a whole-trial worth of neural data and returns a wholde-trial worth of reconstructed audio.
+                        trial_preds.append(decoder.predict(np.array(trial_neural_observations)))
                         end_time = time()
                         all_compute_times.append(end_time - start_time)
-                    if trial_delta_obs[0]:
-                        trial_preds.append(decoder.on_done(trial_delta_obs))
-                else:
-                    if not self.continual:
-                        decoder.on_done(trial_delta_obs)
-                    start_time = time()
-                    step_prediction = decoder.predict(neural_observations)
-                    end_time = time()
-                    all_compute_times.append(end_time - start_time)
-                    assert step_prediction.shape[1] == self.cfg.out_dim, f"Prediction shape mismatch: {step_prediction.shape[1]} vs {self.cfg.out_dim}."
-                    trial_preds.append(step_prediction)
+                        
+                        trial_neural_observations = []
+            else:
+                for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
+                    
+                    neural_observations: np.ndarray
+                    trial_delta_obs: np.ndarray
+                    step_mask: np.ndarray
+                    if self.dataset == FalconTask.h2:
+                        assert neural_data.shape[1] == 1, "H2 expects batch size 1."
+                        if step_mask[0]:
+                            start_time = time()
+                            decoder.predict(neural_observations)
+                            end_time = time()
+                            all_compute_times.append(end_time - start_time)
+                        if trial_delta_obs[0]:
+                            trial_preds.append(decoder.on_done(trial_delta_obs))
+                    else:
+                        if not self.continual:
+                            decoder.on_done(trial_delta_obs)
+                        start_time = time()
+                        step_prediction = decoder.predict(neural_observations)
+                        end_time = time()
+                        all_compute_times.append(end_time - start_time)
+                        assert step_prediction.shape[1] == self.cfg.out_dim, f"Prediction shape mismatch: {step_prediction.shape[1]} vs {self.cfg.out_dim}."
+                        trial_preds.append(step_prediction)
                     
                     # if step_mask.any():
                     #     trial_preds.append(decoder.predict(neural_observations))
@@ -479,7 +502,13 @@ class FalconEvaluator:
             # loop_times = np.array(loop_times)
             # print(f"Loop {len(loop_times)}: {loop_times.mean()} +/- {loop_times.std()}")
             
-            if self.dataset == FalconTask.h2:
+            if self.dataset == FalconTask.b1:
+                datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[0]))
+                trial_preds = np.concatenate(trial_preds, axis=1).transpose()[:, np.newaxis, :]
+                all_preds[datafile_hash].append(trial_preds)
+                all_targets[datafile_hash].append(decoding_targets)
+                all_eval_mask[datafile_hash].append(eval_mask)
+            elif self.dataset == FalconTask.h2:
                 datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[0]))
                 all_preds[datafile_hash].append(trial_preds)
                 all_targets[datafile_hash].append(decoding_targets)
@@ -564,7 +593,7 @@ class FalconEvaluator:
             inner_pred = {**all_preds}
             inner_tgt_spoof = { # spoof for local mirror of eval ai path, in reality targets are already compiled on eval ai side.
                 k: {
-                    'data': all_targets[k][all_eval_mask[k]] if self.dataset != FalconTask.h2 else all_targets[k],
+                    'data': all_targets[k] if (self.dataset == FalconTask.h2 or self.dataset == FalconTask.b1) else all_targets[k][all_eval_mask[k]],
                     'mask': all_eval_mask[k],
                 } for k in all_targets
             }
@@ -598,6 +627,60 @@ class FalconEvaluator:
             for k, v in metrics.items():
                 logger.info("{}: {}".format(k, v))
 
+    
+    @staticmethod
+    def compute_metrics_spectrogram_distance(preds, targets, eval_mask):
+        '''
+        preds, targets, eval_mask must have shapes [sessions x samples x 1 x frequencies]
+        '''
+        
+        def normalize_signal(x):
+            """"
+            Normalizes signal x between 0 and 1.
+            """
+            return (x-np.min(x))/(np.max(x)-np.min(x))    
+          
+        error_per_session = []
+        trial_len = 880
+        
+        for sess_idx in range(len(preds)):
+            prd, tgt, msk = np.array(preds[sess_idx]), np.array(targets[sess_idx]), np.array(eval_mask[sess_idx])
+            
+            if prd.shape != tgt.shape or prd.shape != msk.shape:
+                raise ValueError(f"Targets and predictions have different lengths: {len(tgt)} vs {len(prd)}.")
+
+            print(f'DEBUG preds {prd.shape}, {tgt.shape}, {msk.shape}')
+
+            # Reshape to normalize and compute error at the trial level:
+            prd = prd.reshape(-1, trial_len, prd.shape[-2], prd.shape[-1])
+            tgt = tgt.reshape(-1, trial_len, tgt.shape[-2], tgt.shape[-1])
+            msk = msk.reshape(-1, trial_len, msk.shape[-2], msk.shape[-1])
+
+            print(f'DEBUG preds {prd.shape}, {tgt.shape}, {msk.shape}')
+            
+            samples, frequencies = prd.shape[1], prd.shape[-1]
+
+            error_per_trial = []
+            for trial in range(len(prd)):
+            
+                sess_sxx_eval_mask = msk[trial].reshape(samples, frequencies)
+                original_sxx_masked = tgt[trial].reshape(samples, frequencies) * sess_sxx_eval_mask
+                reconstructed_sxx_masked = prd[trial].reshape(samples, frequencies) * sess_sxx_eval_mask
+            
+                # Calculate spectrogram reconstruction error
+                error_per_trial.append(mean_squared_error(normalize_signal(original_sxx_masked), normalize_signal(reconstructed_sxx_masked)))
+
+            error_per_session.append(np.mean(error_per_trial))
+            
+            print(f'ERRORS of 06.27: {error_per_session}')
+        
+        base_metrics = {
+            "MSE Mean": np.mean(error_per_session),
+            "MSE Std.": np.std(error_per_session)
+        }
+        
+        return base_metrics
+    
     @staticmethod
     def compute_metrics_regression(preds, targets, eval_mask, dset_lens, verbose=False): # Verbose drop-in
         dsets = sorted(dset_lens.keys())
@@ -665,6 +748,8 @@ class FalconEvaluator:
             metrics = self.compute_metrics_regression(all_preds, all_targets, all_eval_mask, verbose=self.verbose)
         elif self.dataset in [FalconTask.h2]:
             metrics = self.compute_metrics_edit_distance(all_preds, all_targets, all_eval_mask)
+        elif self.dataset in [FalconTask.b1]:
+            metrics = self.compute_metrics_spectrogram_distance(all_preds, all_targets, all_eval_mask)
         else:
             raise ValueError(f"Unknown dataset {self.dataset}")
         return metrics

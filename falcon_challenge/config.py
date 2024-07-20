@@ -5,6 +5,7 @@ from typing import Union
 from pathlib import Path
 import datetime
 from dataclasses import dataclass, field
+import re
 
 from hydra.core.config_store import ConfigStore
 from hydra.core.config_search_path import ConfigSearchPath
@@ -56,7 +57,7 @@ class FalconConfig:
         User is responsible for copying this appropriately,
         since ultimately these values are to help user to inform decoder what outputs are expected.
     """
-    # falcon_h1, falcon_h2_writing, falcon_m1_finger, falcon_m2_reach
+    # falcon_h1, falcon_h2_writing, falcon_m1_finger, falcon_m2_reach, falcon_b1_vocal
     task: FalconTask = FalconTask.h1
     # n_channels: int = 176
     bin_size_ms: int = 20
@@ -130,8 +131,8 @@ class FalconConfig:
                 date_str = handle.split('_')[1][:8]
             return f'{run_str}_{date_str}'
         elif self.task == FalconTask.b1:
-        # E.g. sub-Finch-z-r12r13-21-held-in-calib_ses-20210626'
-            return handle.split('-')[-1]
+        # E.g. z-r12r13-21-held-in-calib_ses-20210626 / z_r12r13_21_20210626_held_in_eval'
+            return [part for part in re.split('[_-]', handle) if '2021' in part][0]
             
 
 cs = ConfigStore.instance()

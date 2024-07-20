@@ -175,10 +175,23 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
                         nwbfile.trials.to_dataframe()
                         .reset_index()
             )
+
+            # Spectrogram
             spectrogram_targets = np.concatenate([x for x in trial_info['spectrogram_values'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
             spectrogram_eval_mask = np.concatenate([x for x in trial_info['spectrogram_eval_mask'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
-            trial_change = np.concatenate(trial_info['spectrogram_times'].values) == trial_info['spectrogram_times'].values[0][0] # t = (timesteps) @1Hz
             
+            # trial_change: Boolean vector containing neural sample when trial changes
+            n_trials, n_channels = len(trial_info), neural_array.shape[-1]
+            trial_length = round(trial_info['stop_time'][0]-trial_info['start_time'][0], 1) # Round to 1st decimal point
+            neural_samples_per_trial = neural_array.shape[0] // n_trials # Number of samples per trial
+            fs_neural = int(neural_samples_per_trial/trial_length)
+
+            first_trial_start = trial_info['start_time'][0] # Some files contain late trials in the recording
+            trial_change = np.zeros(neural_array.shape[0], dtype=bool)
+            trial_change_idxs = trial_info['stop_time'].apply(lambda x: int((x-first_trial_start) * fs_neural))
+            trial_change[trial_change_idxs] = 1
+            # trial_change = np.concatenate(trial_info['spectrogram_times'].values) == trial_info['spectrogram_times'].values[0][0] # t = (timesteps) @1Hz
+
             return neural_array, spectrogram_targets, trial_change, spectrogram_eval_mask
     
         else:
