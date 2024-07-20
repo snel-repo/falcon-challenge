@@ -26,11 +26,11 @@ ENV EVALUATION_LOC remote
 # Note that Docker cannot easily import across symlinks, make sure data is not symlinked
 
 # H1
-# ADD ./local_data/h1_single_oracle_rnn_*.ckpt \data/
-# ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
-# ENV SPLIT "h1"
-# ENV CONFIG_STEM falcon/h1/h1_100
-# ENV ALL_PATHS "data/h1_single_oracle_rnn_39csa51t.ckpt  data/h1_single_oracle_rnn_7r3tsg42.ckpt  data/h1_single_oracle_rnn_ikg7qjfw.ckpt  data/h1_single_oracle_rnn_undb9ibb.ckpt  data/h1_single_oracle_rnn_z09y8rwu.ckpt data/h1_single_oracle_rnn_4o0rwcdk.ckpt  data/h1_single_oracle_rnn_8zh5jglv.ckpt  data/h1_single_oracle_rnn_l4mh9x4l.ckpt  data/h1_single_oracle_rnn_v1qq1woe.ckpt data/h1_single_oracle_rnn_5rdrk3db.ckpt  data/h1_single_oracle_rnn_dk37awax.ckpt  data/h1_single_oracle_rnn_n44ylznx.ckpt  data/h1_single_oracle_rnn_y1n2qdsi.ckpt"
+ADD ./local_data/h1_single_oracle_rnn_*.ckpt \data/
+ADD ./local_data/ndt2_zscore_h1.pt data/zscore.pt
+ENV SPLIT "h1"
+ENV CONFIG_STEM falcon/h1/h1_100
+ENV ALL_PATHS "data/h1_single_oracle_rnn_39csa51t.ckpt  data/h1_single_oracle_rnn_7r3tsg42.ckpt  data/h1_single_oracle_rnn_ikg7qjfw.ckpt  data/h1_single_oracle_rnn_undb9ibb.ckpt  data/h1_single_oracle_rnn_z09y8rwu.ckpt data/h1_single_oracle_rnn_4o0rwcdk.ckpt  data/h1_single_oracle_rnn_8zh5jglv.ckpt  data/h1_single_oracle_rnn_l4mh9x4l.ckpt  data/h1_single_oracle_rnn_v1qq1woe.ckpt data/h1_single_oracle_rnn_5rdrk3db.ckpt  data/h1_single_oracle_rnn_dk37awax.ckpt  data/h1_single_oracle_rnn_n44ylznx.ckpt  data/h1_single_oracle_rnn_y1n2qdsi.ckpt"
 
 # M1
 # ADD ./local_data/m1_single_oracle_rnn_*.ckpt data/
@@ -40,11 +40,11 @@ ENV EVALUATION_LOC remote
 # ENV ALL_PATHS "data/m1_single_oracle_rnn_45neu57a.ckpt  data/m1_single_oracle_rnn_9ea31gav.ckpt  data/m1_single_oracle_rnn_gw1er3az.ckpt  data/m1_single_oracle_rnn_y0s9f8nh.ckpt data/m1_single_oracle_rnn_73gm6s7v.ckpt  data/m1_single_oracle_rnn_aj76s8lj.ckpt  data/m1_single_oracle_rnn_s3880opv.ckpt"
 
 # M2
-ADD ./local_data/m2_single_oracle_rnn_*.ckpt data/
-ADD ./local_data/ndt2_zscore_m2.pt data/zscore.pt
-ENV SPLIT "m2"
-ENV CONFIG_STEM falcon/m2/m2_100
-ENV ALL_PATHS "data/m2_single_oracle_rnn_04yxz3ls.ckpt  data/m2_single_oracle_rnn_8en5p25l.ckpt  data/m2_single_oracle_rnn_k0e7g14s.ckpt  data/m2_single_oracle_rnn_q3kii5uw.ckpt data/m2_single_oracle_rnn_0ojd346m.ckpt  data/m2_single_oracle_rnn_e1xp8g1i.ckpt  data/m2_single_oracle_rnn_m3ezdb44.ckpt  data/m2_single_oracle_rnn_rzlc1bj9.ckpt"
+# ADD ./local_data/m2_single_oracle_rnn_*.ckpt data/
+# ADD ./local_data/ndt2_zscore_m2.pt data/zscore.pt
+# ENV SPLIT "m2"
+# ENV CONFIG_STEM falcon/m2/m2_100
+# ENV ALL_PATHS "data/m2_single_oracle_rnn_04yxz3ls.ckpt  data/m2_single_oracle_rnn_8en5p25l.ckpt  data/m2_single_oracle_rnn_k0e7g14s.ckpt  data/m2_single_oracle_rnn_q3kii5uw.ckpt data/m2_single_oracle_rnn_0ojd346m.ckpt  data/m2_single_oracle_rnn_e1xp8g1i.ckpt  data/m2_single_oracle_rnn_m3ezdb44.ckpt  data/m2_single_oracle_rnn_rzlc1bj9.ckpt"
 
 # Add runfile
 RUN pwd

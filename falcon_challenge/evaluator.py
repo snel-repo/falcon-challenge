@@ -250,16 +250,16 @@ def evaluate(
             if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
                 raise ValueError(f"Missing predictions for {datasplit} {in_or_out}. User submitted: {user_submission[datasplit].keys()}. Expecting more like: {HELDIN_OR_OUT_MAP[datasplit][in_or_out]}.")
 
-            # B1 computes metrics across sessions independently. Don't concatenate.
             if 'b1' in datasplit:
-                pred, tgt, mask = pred_dict[in_or_out], tgt_dict[in_or_out], mask_dict[in_or_out]
+                # B1 computes metrics across sessions independently. Don't concatenate.
+                pred, tgt, mask = pred_dict[in_or_out], tgt_dict[in_or_out], mask_dict[in_or_out]            
+            elif 'h2' in datasplit:
+                pred = pred_dict[in_or_out]
+                tgt = tgt_dict[in_or_out]
+                mask = np.concatenate(mask_dict[in_or_out])
             else:
-                pred = np.concatenate(pred_dict[in_or_out])
-                if 'h2' in datasplit:
-                    tgt = [y for x in tgt_dict[in_or_out] for y in x]
-                else:
-                    tgt = np.concatenate(tgt_dict[in_or_out])
-                    dset_lens = dset_len_dict[in_or_out]
+                tgt = np.concatenate(tgt_dict[in_or_out])
+                dset_lens = dset_len_dict[in_or_out]
                 mask = np.concatenate(mask_dict[in_or_out])
             
             try:
@@ -334,9 +334,10 @@ def simple_collater(batch, task):
 
 class FalconEvaluator:
 
-    def __init__(self, eval_remote=False, split='h1', verbose=False):
+    def __init__(self, eval_remote=False, split='h1', verbose=False, dataloader_workers=8):
         r"""
             verbose: Print out dataset specific metrics for movement tasks.
+            dataloader_workers: Number of workers to use for dataloading, only meaningful up to # of datasets in a split. Set to 0 to run multiple Evaluators in multiprocessing
         """
         self.eval_remote = eval_remote
         assert split in ['h1', 'h2', 'm1', 'm2', 'b1'], "Split must be h1, h2, m1, m2 or b1."
@@ -345,6 +346,7 @@ class FalconEvaluator:
         else:
             self.continual = False
         self.verbose = verbose
+        self.num_workers = dataloader_workers
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
 
@@ -419,13 +421,12 @@ class FalconEvaluator:
 
         print('Decoder batch size: ', decoder.batch_size)
         
-        num_workers = 8
         simple_collater_partial = partial(simple_collater, task=self.dataset)
         dataloader = DataLoader(
             dataset, shuffle=False,
             batch_size=decoder.batch_size,
-            num_workers=num_workers,
-            persistent_workers=num_workers > 0,
+            num_workers=self.num_workers,
+            persistent_workers=self.num_workers > 0,
             collate_fn=simple_collater_partial,
         )
         # from time import time
@@ -517,10 +518,7 @@ class FalconEvaluator:
                     all_targets[datafile_hash].append(decoding_targets[:, idx])
                     all_eval_mask[datafile_hash].append(eval_mask[:, idx])
         for k in all_preds:
-            if self.dataset == FalconTask.h2:
-                all_preds[k] = [x for y in all_preds[k] for x in y]
-                all_targets[k] = [x for y in all_targets[k] for x in y]
-            else:
+            if self.dataset != FalconTask.h2:
                 all_preds[k] = np.concatenate(all_preds[k])
                 all_targets[k] = np.concatenate(all_targets[k])
             all_eval_mask[k] = np.concatenate(all_eval_mask[k])
@@ -703,29 +701,45 @@ class FalconEvaluator:
             raise ValueError(f"Targets and predictions have different lengths: {len(targets)} vs {len(preds)}.")
         
         def _to_words(s):
-            return s.replace(">", " ").replace(r"([~,!?])", r" \1").split(" ")
+            s = s.replace(">", " ")  # Remove space token when computing WER
+            s = re.sub(r"([~,!?])", r" \1", s)
+            s = s.split(" ")
+            return s
         
-        char_counts = []
-        word_counts = []
-        char_distances = []
-        word_distances = []
-        for pred, target in zip(preds, targets):
-            target = "".join([chr(c) for c in target if c != 0])
-            matcher = SequenceMatcher([c for c in pred], [c for c in target])
-            char_distances.append(matcher.distance())
-            char_counts.append(len(target))
+        cers = []
+        wers = []
+        for sess_idx, (sess_preds, sess_tgts) in enumerate(zip(preds, targets)):
+            if len(sess_preds) != len(sess_tgts):
+                raise ValueError(f"Targets and predictions have different lengths: {len(sess_tgts)} vs {len(sess_preds)}.")
+            char_counts = []
+            word_counts = []
+            char_distances = []
+            word_distances = []
 
-            pred = _to_words(pred)
-            target = _to_words(target)
-            matcher = SequenceMatcher(pred, target)
-            word_distances.append(matcher.distance())
-            word_counts.append(len(target))
+            # Batch size == 1
+            sess_preds = sess_preds[0]
+            sess_tgts = sess_tgts[0]
+
+            for pred, target in zip(sess_preds, sess_tgts):
+                target = "".join([chr(c) for c in target if c != 0])
+                matcher = SequenceMatcher([c for c in pred], [c for c in target])
+                char_distances.append(matcher.distance())
+                char_counts.append(len(target))
+
+                pred = _to_words(pred)
+                target = _to_words(target)
+                matcher = SequenceMatcher(pred, target)
+                word_distances.append(matcher.distance())
+                word_counts.append(len(target))
+
+            cers.append(np.sum(char_distances) / np.sum(char_counts))
+            wers.append(np.sum(word_distances) / np.sum(word_counts))
 
         return {
-            "WER": np.sum(word_distances) / np.sum(word_counts),
-            "CER": np.sum(char_distances) / np.sum(char_counts),
-            "WER Std.": np.std(np.array(word_distances) / np.array(word_counts)),
-            "CER Std.": np.std(np.array(char_distances) / np.array(char_counts)),
+            "WER": np.mean(wers),
+            "CER": np.mean(cers),
+            "WER Std.": np.std(wers),
+            "CER Std.": np.std(cers),
         }
 
     def compute_metrics(self, all_preds, all_targets, all_eval_mask=None):

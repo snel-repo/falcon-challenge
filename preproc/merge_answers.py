@@ -34,7 +34,7 @@ def assemble_phase_answer_key(phase='minival', answer_key_dir='./data/answer_key
         for d in dataset_files:
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(d, dataset=task)
             if dataset == 'h2':
-                eval_targets = decoding_targets
+                eval_targets = [decoding_targets]
             else:
                 eval_targets = decoding_targets[eval_mask]
             annotations[dataset][config.hash_dataset(d.stem)] = {

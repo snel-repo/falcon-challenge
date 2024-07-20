@@ -88,6 +88,7 @@ evalai push mysubmission:latest --phase <phase-name> (dev or test)
 `
 (Note that you will not see these instruction unless you have first created a team to submit. The phase should contain a specific challenge identifier. You may need to refresh the page before instructions will appear.)
 
+Please note that all submissions are subject to a 6 hour time limit. 
 
 ### Troubleshooting
 Docker:
