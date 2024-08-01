@@ -357,7 +357,7 @@ class FalconEvaluator:
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
         
-        BIN_SIZE = BIN_SIZES[self.dataset]
+        self.bin_size = BIN_SIZES[self.dataset]
 
     @staticmethod
     def get_eval_handles(is_remote: bool, dataset: FalconTask, phase: str = 'minival'):
@@ -412,7 +412,7 @@ class FalconEvaluator:
             file_targets.append(decoding_targets)
             file_eval_mask.append(eval_mask)
 
-            all_neural_times.append(neural_data.shape[0] * BIN_SIZE)
+            all_neural_times.append(neural_data.shape[0] * self.bin_size)
     
         dataset = EvalDataset(
             data=file_neural_data,
