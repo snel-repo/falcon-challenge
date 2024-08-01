@@ -138,7 +138,7 @@ class EnSongdecDecoder(BCIDecoder):
     @staticmethod
     def compute_falcon_spectrogram(x, fs, n_window=512, step_ms=1, f_min=250, f_max=8000, cut_off=0.0001):
         """
-        Computes a spectrogram from an audio waveform according for the FALCON benchmark.
+        Computes a spectrogram from an audio waveform for the FALCON benchmark.
         To be consistent with the FALCON challenge, DO NOT MODIFY DEFAULTS.
     
         Args:

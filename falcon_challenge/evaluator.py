@@ -138,12 +138,18 @@ RECOMMENDED_BATCH_SIZES = {
     FalconTask.b1: 1, 
 }
 
+BIN_SIZES = {
+    FalconTask.h1: 0.02,
+    FalconTask.m1: 0.02,
+    FalconTask.m2: 0.02,
+    FalconTask.h2: 0.02,
+    FalconTask.b1: 1/30000,
+}
+
 # Development time flag. False allows direct evaluation without payload writing, only usable for local minival.
 # Should be set to true for remote evaluation.
 # USE_PKLS = False
 USE_PKLS = True
-
-BIN_SIZE = 0.02
 
 HELDIN_OR_OUT_MAP = {
     'held_in': "Held In",
@@ -350,6 +356,8 @@ class FalconEvaluator:
         self.num_workers = dataloader_workers
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
+        
+        BIN_SIZE = BIN_SIZES[self.dataset]
 
     @staticmethod
     def get_eval_handles(is_remote: bool, dataset: FalconTask, phase: str = 'minival'):
@@ -404,7 +412,6 @@ class FalconEvaluator:
             file_targets.append(decoding_targets)
             file_eval_mask.append(eval_mask)
 
-            if self.dataset == FalconTask.b1: BIN_SIZE = 1/30000
             all_neural_times.append(neural_data.shape[0] * BIN_SIZE)
     
         dataset = EvalDataset(
@@ -419,8 +426,6 @@ class FalconEvaluator:
         all_targets = defaultdict(list)
         all_eval_mask = defaultdict(list)
         all_compute_times = []
-
-        print('Decoder batch size: ', decoder.batch_size)
         
         simple_collater_partial = partial(simple_collater, task=self.dataset)
         dataloader = DataLoader(

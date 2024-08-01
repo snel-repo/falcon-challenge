@@ -48,7 +48,7 @@ def main():
         "--zscore-path", type=str, default='./local_data/ndt2_zscore_h1.pt'
     )
     parser.add_argument(
-        '--split', type=str, choices=['h1', 'h2', 'm1', 'm2', 'b1'], default='h1',
+        '--split', type=str, choices=['h1', 'h2', 'm1', 'm2'], default='h1',
     )
     parser.add_argument(
         '--phase', choices=['minival', 'test'], default='minival'
