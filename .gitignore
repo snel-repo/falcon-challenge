@@ -7,3 +7,5 @@ __pycache__
 *.pkl
 build/
 # dist/
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
