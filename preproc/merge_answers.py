@@ -24,7 +24,7 @@ r"""
 
 def assemble_phase_answer_key(phase='minival', answer_key_dir='./data/answer_key'):
     annotations = {}
-    for dataset in ['h1', 'h2', 'm1', 'm2']:
+    for dataset in ['h1', 'h2', 'm1', 'm2', 'b1']:
         print(f'Loading {dataset} {phase}')
         annotations[dataset] = {}
         dataset_path = Path(answer_key_dir) / dataset / phase
@@ -33,7 +33,7 @@ def assemble_phase_answer_key(phase='minival', answer_key_dir='./data/answer_key
         config = FalconConfig(task)
         for d in dataset_files:
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(d, dataset=task)
-            if dataset == 'h2':
+            if dataset in ['h2', 'b1']:
                 eval_targets = [decoding_targets]
             else:
                 eval_targets = decoding_targets[eval_mask]

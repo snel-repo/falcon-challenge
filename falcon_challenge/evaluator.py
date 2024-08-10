@@ -220,7 +220,7 @@ def evaluate(
         pred_dict = defaultdict(list)
         tgt_dict = defaultdict(list)
         mask_dict = defaultdict(list)
-        if 'h2' not in datasplit:
+        if 'h2' not in datasplit and 'b1' not in datasplit:
             dset_len_dict = defaultdict(lambda: defaultdict(list))
         if 'm2' in datasplit:
             grouped = {}
