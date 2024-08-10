@@ -23,6 +23,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Data hash map, what participant submits, keys of comparison dict
+DANDI_FOLDER_MAP = {
+    'h1': '000954',
+    'm1': '000941',
+    'h2': '000950',
+    'm2': '000953',
+    'b1': '001046',
+}
+
 DATASET_HELDINOUT_MAP = {
     'h1': {
         'held_in': [
@@ -361,24 +369,29 @@ class FalconEvaluator:
 
     @staticmethod
     def get_eval_handles(is_remote: bool, dataset: FalconTask, phase: str = 'minival'):
-        if is_remote: # i.e. definitely docker
-            data_dir = os.environ.get("EVAL_DATA_PATH")
-        else: # possibly docker or local
-            if os.path.exists(f"./data/{dataset.name}"):
-                logger.info("Using local data directory.")
-                data_dir = "data"
-            else:
-                data_dir = os.environ.get("EVAL_DATA_PATH") # a local docker eval
-        data_dir = Path(data_dir) / dataset.name
+        r"""
+            Data is either stored in the local preparation format or in the DANDI sanitized format.
+            A few if-cases handle the difference.
+        """
+        data_dir = Path(os.environ.get("EVAL_DATA_PATH", "data"))
+        dataset_name = dataset.name
+        if not is_remote: # i.e. definitely docker
+            if not os.path.exists(data_dir / dataset_name) and os.path.exists(data_dir / DANDI_FOLDER_MAP[dataset_name]):
+                dataset_name = DANDI_FOLDER_MAP[dataset_name]
+        data_dir = data_dir / dataset_name
         if not data_dir.exists():
             raise FileNotFoundError(f"Evaluation data directory {data_dir} not found.")
         if phase == 'test': # TODO wire wherever test is actually stored on remote
             eval_dir = data_dir / f"eval"
         else:
             eval_dir = data_dir / "minival"
+        if not eval_dir.exists() and phase == "minival":
+            eval_dir = list(data_dir.glob("*minival"))
+            if len(eval_dir):
+                eval_dir = Path(eval_dir[0])
         if not eval_dir.exists():
             raise FileNotFoundError(f"Evaluation directory {eval_dir} found but requested phase {phase} not found.")
-        print(sorted(list(eval_dir.glob("*val*.nwb"))))
+        print(f'Found: {sorted(list(eval_dir.glob("*val*.nwb")))}')
         return sorted(list(eval_dir.glob("*val*.nwb")))
 
     def get_eval_files(self, phase: str = 'minival'):

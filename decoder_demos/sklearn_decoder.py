@@ -326,6 +326,8 @@ def main(task, training_dir, calibration_dir, history, mode):
         task=FalconTask.__dict__[task],
     )
     save_path = Path(f'local_data/sklearn_{task_config.task}.pkl')
+    # make parent dir 
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     datafiles = list(training_dir.glob('*calib*.nwb'))
     calibration_datafiles = list(calibration_dir.glob('*calib*.nwb'))
     fit_fn(datafiles, calibration_datafiles, task_config, save_path, history=history)

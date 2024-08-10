@@ -15,7 +15,7 @@ See, e.g. https://docs.docker.com/desktop/install/linux-install/.
 ## Getting started
 
 ### Data downloading
-The FALCON datasets are available on DANDI ([H1](https://dandiarchive.org/dandiset/000954?search=falcon&pos=3), [H2](https://dandiarchive.org/dandiset/000950?search=falcon&pos=4), [M1](https://dandiarchive.org/dandiset/000941?search=falcon&pos=1), [M2](https://dandiarchive.org/dandiset/000953?search=falcon&pos=2), [B1](https://dandiarchive.org/dandiset/001046)). H1 and H2 are human intractorical brain-computer interface (iBCI) datasets, M1 and M2 are monkey iBCI datasets, and B1 is a songbird iBCI dataset.
+The FALCON datasets are available on DANDI ([H1](https://dandiarchive.org/dandiset/000954?search=falcon&pos=3), [H2](https://dandiarchive.org/dandiset/000950?search=falcon&pos=4), [M1](https://dandiarchive.org/dandiset/000941?search=falcon&pos=1), [M2](https://dandiarchive.org/dandiset/000953?search=falcon&pos=2), [B1](https://dandiarchive.org/dandiset/001046)). H1 and H2 are human intractorical brain-computer interface (iBCI) datasets, M1 and M2 are monkey iBCI datasets, and B1 is a songbird iBCI dataset. You can download them individually by going to their DANDI pages to find their respective DANDI download commands, or you can run `./download_falcon_datasets.sh` from project root.
 
 Data from each dataset is broken down as follows:
 
@@ -59,12 +59,15 @@ Each of the lowest level dirs holds the data files (in Neurodata Without Borders
 This codebase contains starter code for implementing your own method for the FALCON challenge. 
 - The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
-- In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented! (Namely, you should have a `_decoder.py` file which conforms to `falcon_challenge.inferface` as well as a `_sample.py` file that indicates how your decoder class should be called.)
+- In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented! (Namely, you should have a `_decoder.py` file or class which conforms to `falcon_challenge.inferface` as well as a `_sample.py` file that is the entry point for running your decoder.)
 
 For example, you can prepare and evaluate a linear decoder by running:
 ```bash
-python decoder_demos/sklearn_decoder.py --training_dir data/h1/held_in_calib/ --calibration_dir data/h1/held_out_calib/ --mode all --task h1
-python decoder_demos/sklearn_sample.py --evaluation local --phase minival --split h1
+python decoder_demos/sklearn_decoder.py --training_dir data/000954/sub-HumanPitt-held-in-calib/ --calibration_dir data/000954/sub-HumanPitt-held-out-calib/ --mode all --task h1
+# Should report: CV fit score, 0.26
+
+python decoder_demos/sklearn_sample.py --evaluation local --phase minival --split h1 
+# Should report: Held In Mean of 0.195
 ```
 
 Note: During evaluation, data file names are hashed into unique tags. Submitted solutions receive data to decode along with tags indicating the file from which the data originates in the call to their `reset` function. These tags are the keys of the the `DATASET_HELDINOUT_MAP` dictionary in `falcon_challenge/evaluator.py`. Submissions that intend to condition decoding on the data file from which the data comes should make use of these tags. For an example, see `fit_many_decoders` and `reset` in `decoder_demos/sklearn_decoder.py`.

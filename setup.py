@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='falcon_challenge',
-    version='0.3.14',
+    version='0.4.0',
 
     url='https://github.com/snel-repo/stability-benchmark',
     author='Joel Ye',
