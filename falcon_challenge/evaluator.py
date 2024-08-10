@@ -659,12 +659,17 @@ class FalconEvaluator:
         for sess_idx in range(len(preds)):
             prd, tgt, msk = np.array(preds[sess_idx]), np.array(targets[sess_idx]), np.array(eval_mask[sess_idx])
             
-            if prd.shape != tgt.shape or prd.shape != msk.shape:
+            is_tgt_flattened = prd.shape != tgt.shape
+            if is_tgt_flattened:
+                logger.warning(f"Target may already be flattened. Target shape: {tgt.shape} vs Prediction shape: {prd.shape}.")
+            if prd.shape != msk.shape:
+            # if prd.shape != tgt.shape or prd.shape != msk.shape:
                 raise ValueError(f"Targets and predictions have different lengths: {len(tgt)} vs {len(prd)}.")
 
             # Reshape to normalize and compute error at the trial level:
+            if not is_tgt_flattened:
+                tgt = tgt.reshape(-1, trial_len, tgt.shape[-2], tgt.shape[-1])
             prd = prd.reshape(-1, trial_len, prd.shape[-2], prd.shape[-1])
-            tgt = tgt.reshape(-1, trial_len, tgt.shape[-2], tgt.shape[-1])
             msk = msk.reshape(-1, trial_len, msk.shape[-2], msk.shape[-1])
             
             samples, frequencies = prd.shape[1], prd.shape[-1]
@@ -673,8 +678,11 @@ class FalconEvaluator:
             for trial in range(len(prd)):
             
                 sess_sxx_eval_mask = msk[trial].reshape(samples, frequencies)
-                original_sxx_masked = tgt[trial].reshape(samples, frequencies) * sess_sxx_eval_mask
-                reconstructed_sxx_masked = prd[trial].reshape(samples, frequencies) * sess_sxx_eval_mask
+                if not is_tgt_flattened:
+                    original_sxx_masked = tgt[trial].reshape(samples, frequencies)[sess_sxx_eval_mask]
+                else:
+                    original_sxx_masked = tgt[trial]
+                reconstructed_sxx_masked = prd[trial].reshape(samples, frequencies)[sess_sxx_eval_mask]
             
                 # Calculate spectrogram reconstruction error
                 error_per_trial.append(mean_squared_error(normalize_signal(original_sxx_masked), normalize_signal(reconstructed_sxx_masked)))
