@@ -241,7 +241,7 @@ def evaluate(
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
             
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
-                if 'h2' not in datasplit:
+                if 'h2' not in datasplit and 'b1' not in datasplit:
                     # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_in'][session_id].append(dataset_mask.shape[0])
@@ -249,7 +249,7 @@ def evaluate(
                 tgt_dict['held_in'].append(dataset_tgt)
                 mask_dict['held_in'].append(dataset_mask)
             elif dataset in DATASET_HELDINOUT_MAP[datasplit]['held_out']:
-                if not 'h2' in datasplit:
+                if not 'h2' in datasplit and 'b1' not in datasplit:
                     # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_out'][session_id].append(dataset_mask.shape[0])
