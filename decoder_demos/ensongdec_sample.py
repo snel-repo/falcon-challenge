@@ -1,11 +1,16 @@
 r"""
     Sample Ensongdec decoder for the Falcon Challenge.
     
-    Oracle commands:
+    - Oracle commands -
+
+    MULTI-MODEL:
+
+        python ensongdec_sample.py --evaluation "local" --model-paths '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642.pt' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705.pt' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.28_held_in_calib.nwb_FFNN_20240604_093216.pt' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.30_held_out_oracle.nwb_FFNN_20240604_093453.pt' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.07.01_held_out_oracle.nwb_FFNN_20240604_095827.pt' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.07.05_held_out_oracle.nwb_FFNN_20240604_095944.pt' --model-cfg-paths '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642_metadata.json' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705_metadata.json' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.28_held_in_calib.nwb_FFNN_20240604_093216_metadata.json' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.30_held_out_oracle.nwb_FFNN_20240604_093453_metadata.json' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.07.01_held_out_oracle.nwb_FFNN_20240604_095827_metadata.json' '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.07.05_held_out_oracle.nwb_FFNN_20240604_095944_metadata.json' --split 'b1' --phase 'test' --batch-size 1
     
-    python ensongdec_sample.py --evaluation "local" --model-path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642.pt' --model_cfg_path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642_metadata.json' --split 'b1' --phase 'minival' --batch-size 1
+
+    SINGLE MODEL:
     
-    python ensongdec_sample.py --evaluation "local" --model-path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705.pt' --model_cfg_path '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705_metadata.json' --split 'b1' --phase 'test' --batch-size 1
+    python ensongdec_sample.py --evaluation "local" --model-paths '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705.pt' --model-cfg-paths '/home/jovyan/pablo_tostado/bird_song/enSongDec/ensongdec/models_checkpoints/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705_metadata.json' --split 'b1' --phase 'test' --batch-size 1
         
 """
 
@@ -22,30 +27,20 @@ def main():
         "--evaluation", type=str, required=True, choices=["local", "remote"]
     )
     parser.add_argument(
-        "--model-path", type=str, required=False, default='./local_data/ndt2_h1_sample.pth'
+        "--model-paths", type=str, required=True, nargs='+', default='falcon/model.pt', help="One or more model paths."
     )
     parser.add_argument(
-        "--model_cfg_path", type=str, required=False, default='falcon/h1/h1',
-        help="Name in context-general-bci codebase for config. \
-            Currently, directly referencing e.g. a local yaml is not implemented unclear how to get Hydra to find it in search path."
+        "--model-cfg-paths", type=str, required=True, nargs='+', default='falcon/model_metadata.json',
+        help="One or more model configuration paths."
     )
     parser.add_argument(
-        "--zscore-path", type=str, required=False, default='./local_data/ndt2_zscore_h1.pt'
-    )
-    parser.add_argument(
-        '--split', type=str, required=False, choices=['h1', 'h2', 'm1', 'm2', 'b1'], default='h1',
+        '--split', type=str, required=False, choices=['h1', 'h2', 'm1', 'm2', 'b1'], default='b1',
     )
     parser.add_argument(
         '--phase', required=False, choices=['minival', 'test'], default='minival'
     )
     parser.add_argument(
         '--batch-size', type=int, required=False, default=1 
-    )
-    parser.add_argument(
-        '--force-static-key', required=False, type=str, default='', help="Specify session to enforce session parameters for, i.e. ignore session label from evaluator."
-    )
-    parser.add_argument(
-        '--model-paths', required=False, type=str, nargs='+', default=[] # triggers unified path. WIP.
     )
     args = parser.parse_args()
     
@@ -57,18 +52,17 @@ def main():
     task = getattr(FalconTask, args.split)
     config = FalconConfig(task=task)
     
-    if args.model_paths:
-        model_paths = args.model_paths
-        print(model_paths)
-    else:
-        model_paths = args.model_path
+    model_paths = args.model_paths
+    config_paths = args.model_cfg_paths
+
+    dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=args.phase)]
         
     decoder = EnSongdecDecoder(
         task_config = config,
-        model_ckpt_path = model_paths,
-        model_cfg_path = args.model_cfg_path,
-        batch_size = 1, 
-        force_static_key = args.force_static_key
+        model_ckpt_paths = model_paths,
+        model_cfg_paths = config_paths,
+        dataset_handles = dataset_handles,
+        batch_size = 1
     )
 
     evaluator.evaluate(decoder, phase=args.phase)

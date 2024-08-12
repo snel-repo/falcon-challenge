@@ -29,10 +29,10 @@ class EnSongdecDecoder(BCIDecoder):
     """
     def __init__(self, 
                  task_config: FalconConfig, 
-                 model_ckpt_path: Union[str, List[str]],
-                 model_cfg_path: str,
-                 batch_size: int=1,
-                 force_static_key: str = '' # If true, ignore data attrs and just load the only key fit in the single session model (for oracle single day baselines)
+                 model_ckpt_paths: List[str],
+                 model_cfg_paths: List[str],
+                 dataset_handles: List[str],
+                 batch_size: int=1
                 ):
         r"""
             Loading EnSongdec requires both weights and model config. Weight loading through a checkpoint is standard.
@@ -42,11 +42,42 @@ class EnSongdecDecoder(BCIDecoder):
         self._task_config = task_config
         self.batch_size = batch_size
         
-        self.model_ckpt_path = model_ckpt_path
-        self.model_cfg_path = model_cfg_path
+        # self.model_ckpt_paths = model_ckpt_paths
+        # self.model_cfg_paths = model_cfg_paths
+
+        # --------- CREATE MODEL-DATASET CORRESPONDENCE MAP --------- #
+        assert len(model_ckpt_paths) == len(model_cfg_paths), f'Number of models loaded {len(model_ckpt_paths)} does not match the number of config paths loaded {len(model_cfg_paths)}'
+
+        assert (len(model_ckpt_paths)==1) or (len(model_ckpt_paths)==len(dataset_handles)), f'Number of models loaded must be either a single one or one per dataset found: {len(dataset_handles)}'
+
+        self.model_dataset_map = {}
+        self.model_config_map = {}
         
+        for i in range(len(dataset_handles)):
+
+            # If only one loaded model, it'll be used to evaluate all datasets.
+            if len(model_ckpt_paths) == 1:
+                self.model_dataset_map[dataset_handles[i]] = model_ckpt_paths[0]
+                self.model_config_map[dataset_handles[i]] = model_cfg_paths[0]
+            # Otherwise, each model will be used to evaluate a dataset.    
+            else:
+                self.model_dataset_map[dataset_handles[i]] = model_ckpt_paths[i]
+                self.model_config_map[dataset_handles[i]] = model_cfg_paths[i]
+        
+    def reset(self, dataset_tags: List[Path] = [""]):
+
+        # Batch size is enforced to be 1, so dataset_tags must contain a single file_path.
+        dataset_tag = dataset_tags[0]
+        dataset_key = dataset_tag.stem
+        print(f'Resetting decoder to dataset {dataset_key}')
+
         # --------- LOCATE EXPERIMENT METADATA --------- #
-        with open(self.model_cfg_path, 'rb') as file:
+
+        model_ckpt_path = self.model_dataset_map[dataset_key]
+        model_cfg_path = self.model_config_map[dataset_key]
+        
+        with open(model_cfg_path, 'rb') as file:
+            print(f'Loading metadata from config file: {model_cfg_path}')
             experiment_metadata = json.load(file)
 
         model_layers = experiment_metadata['layers']
@@ -57,14 +88,8 @@ class EnSongdecDecoder(BCIDecoder):
         self.neural_history_ms = experiment_metadata["neural_history_ms"] 
         
         #--------- LOAD MODEL & OPTIMIZER STATE DICT --------- #
-        print('Loading model: ', model_ckpt_path)
+        print(f'Loading model: {model_ckpt_path}')
         self.ffnn_model, self.optimizer = load_model('', model_ckpt_path, model_layers, learning_rate)
-        
-    def reset(self, dataset_tags: List[Path] = [""]):
-
-        # Batch size is enforced to be 1, so dataset_tags must contain a single file_path.
-        dataset_tag = dataset_tags[0]
-        print(f'Resetting decoder to dataset {dataset_tag}')
         
         # --------- Load single NWB file metadata --------- #
         self.trial_info, self.neural_array, self.fs_neural, self.audio_motifs, self.fs_audio = load_nwb_b1(dataset_tag)
