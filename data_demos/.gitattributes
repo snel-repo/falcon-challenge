@@ -1,0 +1,7 @@
+b1_models/models_info.csv filter=lfs diff=lfs merge=lfs -text
+b1_models/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642_metadata.json filter=lfs diff=lfs merge=lfs -text
+b1_models/z_r12r13_21_2021.06.26_held_in_calib.nwb_FFNN_20240604_092642.pt filter=lfs diff=lfs merge=lfs -text
+b1_models/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705_metadata.json filter=lfs diff=lfs merge=lfs -text
+b1_models/z_r12r13_21_2021.06.27_held_in_calib.nwb_FFNN_20240604_092705.pt filter=lfs diff=lfs merge=lfs -text
+b1_models/z_r12r13_21_2021.06.28_held_in_calib.nwb_FFNN_20240604_093216_metadata.json filter=lfs diff=lfs merge=lfs -text
+b1_models/z_r12r13_21_2021.06.28_held_in_calib.nwb_FFNN_20240604_093216.pt filter=lfs diff=lfs merge=lfs -text
