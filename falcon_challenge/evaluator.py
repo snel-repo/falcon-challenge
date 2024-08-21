@@ -659,35 +659,22 @@ class FalconEvaluator:
         for sess_idx in range(len(preds)):
             prd, tgt, msk = np.array(preds[sess_idx]), np.array(targets[sess_idx]), np.array(eval_mask[sess_idx])
             
-            is_tgt_flattened = prd.shape != tgt.shape
-            if is_tgt_flattened:
-                logger.warning(f"Target may already be flattened. Target shape: {tgt.shape} vs Prediction shape: {prd.shape}.")
             if prd.shape != msk.shape:
             # if prd.shape != tgt.shape or prd.shape != msk.shape:
                 raise ValueError(f"Targets and predictions have different lengths: {len(tgt)} vs {len(prd)}.")
-
-            # Reshape to normalize and compute error at the trial level:
-            if not is_tgt_flattened:
-                tgt = tgt.reshape(-1, trial_len, tgt.shape[-2], tgt.shape[-1])
-            prd = prd.reshape(-1, trial_len, prd.shape[-2], prd.shape[-1])
-            msk = msk.reshape(-1, trial_len, msk.shape[-2], msk.shape[-1])
             
-            samples, frequencies = prd.shape[1], prd.shape[-1]
-
-            error_per_trial = []
-            for trial in range(len(prd)):
+            is_tgt_flattened = prd.shape != tgt.shape
+            msk = msk.flatten()
+            if is_tgt_flattened:
+                logger.warning(f"Target may already be flattened. Target shape: {tgt.shape} vs Prediction shape: {prd.shape}.")
+            else:
+                tgt = tgt.flatten()
+                tgt = tgt[msk]
+            prd = prd.flatten()            
+            prd = prd[msk]
             
-                sess_sxx_eval_mask = msk[trial].reshape(samples, frequencies)
-                if not is_tgt_flattened:
-                    original_sxx_masked = tgt[trial].reshape(samples, frequencies)[sess_sxx_eval_mask]
-                else:
-                    original_sxx_masked = tgt[trial]
-                reconstructed_sxx_masked = prd[trial].reshape(samples, frequencies)[sess_sxx_eval_mask]
-            
-                # Calculate spectrogram reconstruction error
-                error_per_trial.append(mean_squared_error(normalize_signal(original_sxx_masked), normalize_signal(reconstructed_sxx_masked)))
-
-            error_per_session.append(np.mean(error_per_trial))
+            # Calculate spectrogram reconstruction error
+            error_per_session.append(mean_squared_error(normalize_signal(tgt), normalize_signal(prd)))
         
         base_metrics = {
             "MSE Mean": np.mean(error_per_session),
