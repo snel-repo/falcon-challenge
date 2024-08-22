@@ -644,7 +644,14 @@ class FalconEvaluator:
     @staticmethod
     def compute_metrics_spectrogram_distance(preds, targets, eval_mask):
         '''
-        preds, targets, eval_mask must have shapes [sessions x samples x 1 x frequencies]
+        When ran locally: preds, targets, eval_mask have shapes [sessions x samples x 1 x frequencies]
+        
+        When ran in evalAI: preds has shape [sessions x samples x 1 x frequencies]                            
+                            targets has shape [sessions x flattened]
+                            eval_mask has shape [sessions x samples x frequencies]
+        
+        * This mismatch has its origin in the limitation of evalAI to store large arrays due to space restrictions,
+            so the targets had to be masked and flattened in advance. We deal with the mismatch in the following logic.
         '''
         
         def normalize_signal(x):
@@ -653,28 +660,37 @@ class FalconEvaluator:
             """
             return (x-np.min(x))/(np.max(x)-np.min(x))    
           
+        # Spectrogram-trials lengths (across sessions)
+        trial_len_before_mask, trial_len_after_mask, frequencies = 880, 700, 158
+
         error_per_session = []
-        trial_len = 880
-        
         for sess_idx in range(len(preds)):
+            
             prd, tgt, msk = np.array(preds[sess_idx]), np.array(targets[sess_idx]), np.array(eval_mask[sess_idx])
-            
+            # Match array dimensionalities when ran locally or in evalAI: [samples x frequencies]
+            if len(prd.shape) > 2: prd = np.squeeze(prd, axis=1)
+            if len(tgt.shape) > 2: tgt = np.squeeze(tgt, axis=1)
+            if len(msk.shape) > 2: msk = np.squeeze(msk, axis=1)
+                
             if prd.shape != msk.shape:
-            # if prd.shape != tgt.shape or prd.shape != msk.shape:
-                raise ValueError(f"Targets and predictions have different lengths: {len(tgt)} vs {len(prd)}.")
-            
-            is_tgt_flattened = prd.shape != tgt.shape
-            msk = msk.flatten()
-            if is_tgt_flattened:
-                logger.warning(f"Target may already be flattened. Target shape: {tgt.shape} vs Prediction shape: {prd.shape}.")
+                raise ValueError(f"Predictions and masks have different lengths: {prd.shape} vs {msk.shape}.")
+
+            # When ran in evalAI, the targets are already masked and flattened.
+            if prd.shape != tgt.shape:
+                logger.warning(f"Target may already be masked and flattened. Targets {tgt.shape} vs Prediction {prd.shape}.")
             else:
-                tgt = tgt.flatten()
                 tgt = tgt[msk]
-            prd = prd.flatten()            
             prd = prd[msk]
+
+            # Independent trials have different noise levels that may affect normalization
+            # Reshape to normalize and compute MSE error at the trial level [trials x samples_per_trial x frequencies]
+            tgt = tgt.reshape(-1, trial_len_after_mask, frequencies)
+            prd = prd.reshape(-1, trial_len_after_mask, frequencies)
             
-            # Calculate spectrogram reconstruction error
-            error_per_session.append(mean_squared_error(normalize_signal(tgt), normalize_signal(prd)))
+            error_per_trial = [
+                mean_squared_error(normalize_signal(tgt[t]), normalize_signal(prd[t])) for t in range(len(prd))
+            ]
+            error_per_session.append(np.mean(error_per_trial))
         
         base_metrics = {
             "MSE Mean": np.mean(error_per_session),
