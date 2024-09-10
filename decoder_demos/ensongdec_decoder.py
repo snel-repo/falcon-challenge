@@ -64,6 +64,8 @@ class EnSongdecDecoder(BCIDecoder):
                 self.model_dataset_map[dataset_handles[i]] = model_ckpt_paths[i]
                 self.model_config_map[dataset_handles[i]] = model_cfg_paths[i]
         
+        print(f'MODEL DATASET MAPS: {self.model_dataset_map} {self.model_config_map}')
+        
     def reset(self, dataset_tags: List[Path] = [""]):
 
         # Batch size is enforced to be 1, so dataset_tags must contain a single file_path.
