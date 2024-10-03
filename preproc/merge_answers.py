@@ -37,6 +37,7 @@ def assemble_phase_answer_key(phase='minival', answer_key_dir='./data/answer_key
                 decoding_targets /= 10000000
                 decoding_targets = decoding_targets.astype(dtype='float16')
                 eval_targets = [decoding_targets[eval_mask]] # store less data
+                # ? JY can't remember whether the official answer key uses eval_targets = [decoding_targets[eval_mask]] or eval_targets = decoding_targets[eval_mask]
                 # eval_targets = [decoding_targets]
             elif dataset == 'h2':
                 eval_targets = [decoding_targets]
@@ -58,7 +59,7 @@ with open('./data/answer_key/minival.pkl', 'wb') as f:
 
 with open('./data/answer_key/eval.pkl', 'wb') as f:
     pickle.dump(eval_annotations, f)
-    
+
 #%%
 print(minival_annotations['h1'].keys())
 print(minival_annotations['h2'].keys())

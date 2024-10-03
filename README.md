@@ -10,7 +10,7 @@ pip install falcon-challenge
 ```
 
 To create Docker containers for submission, you must have Docker installed.
-See, e.g. https://docs.docker.com/desktop/install/linux-install/. 
+See, e.g. https://docs.docker.com/desktop/install/linux-install/.
 
 ## Getting started
 
@@ -19,14 +19,14 @@ The FALCON datasets are available on DANDI ([H1](https://dandiarchive.org/dandis
 
 Data from each dataset is broken down as follows:
 
-- Held-in 
-    - Data from the first several recording sessions. 
-    - All non-evaluation data is released and split into calibration (large portion) and minival (small portion) sets. 
+- Held-in
+    - Data from the first several recording sessions.
+    - All non-evaluation data is released and split into calibration (large portion) and minival (small portion) sets.
     - Held-in calibration data is intended to train decoders from scratch.
     - Minival data enables validation of held-in decoders and submission debugging.
-- Held-out: 
-    - Data from the latter several recording sessions. 
-    - A small portion of non-evaluation data is released for calibration. 
+- Held-out:
+    - Data from the latter several recording sessions.
+    - A small portion of non-evaluation data is released for calibration.
     - Held-out calibration data is intentionally small to discourage training decoders from scratch on this data and provides an opportunity for few-shot recalibration.
 
 Some of the sample code expects your data directory to be set up in `./data`. Specifically, the following hierarchy is expected:
@@ -53,10 +53,10 @@ Some of the sample code expects your data directory to be set up in `./data`. Sp
     - `held_out_calib`
     - `minival` (Copy dandiset minival folder into this folder) -->
 
-Each of the lowest level dirs holds the data files (in Neurodata Without Borders (NWB) format). Data from some sessions is distributed across multiple NWB files. Some data from each file is allocated to calibration, minival, and evaluation splits as appropriate. 
+Each of the lowest level dirs holds the data files (in Neurodata Without Borders (NWB) format). Data from some sessions is distributed across multiple NWB files. Some data from each file is allocated to calibration, minival, and evaluation splits as appropriate.
 
 ### Code
-This codebase contains starter code for implementing your own method for the FALCON challenge. 
+This codebase contains starter code for implementing your own method for the FALCON challenge.
 - The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
 - In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented! (Namely, you should have a `_decoder.py` file or class which conforms to `falcon_challenge.inferface` as well as a `_sample.py` file that is the entry point for running your decoder.)
@@ -66,7 +66,7 @@ For example, you can prepare and evaluate a linear decoder by running:
 python decoder_demos/sklearn_decoder.py --training_dir data/000954/sub-HumanPitt-held-in-calib/ --calibration_dir data/000954/sub-HumanPitt-held-out-calib/ --mode all --task h1
 # Should report: CV fit score, 0.26
 
-python decoder_demos/sklearn_sample.py --evaluation local --phase minival --split h1 
+python decoder_demos/sklearn_sample.py --evaluation local --phase minival --split h1
 # Should report: Held In Mean of 0.195
 ```
 
@@ -87,11 +87,11 @@ Please ensure that your submission runs locally before running remote evaluation
 
 To submit to the FALCON benchmark once your decoder Docker container is ready, follow the instructions on the [EvalAI submission tab]((https://eval.ai/web/challenges/challenge-page/2319/submission)). This will instruct you to first install EvalAI, then add your token, and finally push the submission. It should look something like:
 `
-evalai push mysubmission:latest --phase <phase-name> (dev or test)
+evalai push mysubmission:latest --phase --phase few-shot-<test/minival>-2319 --private
 `
 (Note that you will not see these instruction unless you have first created a team to submit. The phase should contain a specific challenge identifier. You may need to refresh the page before instructions will appear.)
 
-Please note that all submissions are subject to a 6 hour time limit. 
+Please note that all submissions are subject to a 6 hour time limit.
 
 ### Troubleshooting
 Docker:
@@ -100,4 +100,4 @@ Docker:
 - To do this, [add yourself to the `docker` group](https://docs.docker.com/engine/install/linux-postinstall/). Note you may [need vigr](https://askubuntu.com/questions/964040/usermod-says-account-doesnt-exist-but-adduser-says-it-does) to add your own user.
 
 EvalAI:
-- `pip install evalai` may fail on python 3.11, see: https://github.com/aio-libs/aiohttp/issues/6600. We recommend creating a separate env for submission in this case. 
+- `pip install evalai` may fail on python 3.11, see: https://github.com/aio-libs/aiohttp/issues/6600. We recommend creating a separate env for submission in this case.
