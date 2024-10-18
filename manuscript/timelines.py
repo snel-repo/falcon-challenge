@@ -10,9 +10,9 @@ from pynwb import NWBHDF5IO
 
 #%% 
 
-base_path = '/snel/home/bkarpo2/bin/falcon-challenge/data'
-track = 'b1'
-if track != 'b1': 
+track = 'm1-b'
+if track != 'b1' and track != 'm1-b': 
+    base_path = '/snel/home/bkarpo2/bin/falcon-challenge/data'
     held_in_files = glob.glob(os.path.join(base_path, track, '*held-in-calib*', '*.nwb'))
     held_out_files = glob.glob(os.path.join(base_path, track, '*held-out-calib*', '*.nwb'))
 
@@ -55,6 +55,19 @@ elif track == 'b1':
         datetime(2021,6,30),
         datetime(2021,7,1),
         datetime(2021,7,5),
+    ]
+elif track == 'm1-b':
+    format_held_in_dates = [
+        datetime(2012,12,6),
+        datetime(2012,12,7),
+        datetime(2012,12,10),
+        datetime(2012,12,12),
+    ]
+    format_held_out_dates = [
+        datetime(2012,12,13),
+        datetime(2012,12,14),
+        datetime(2012,12,18),
+        datetime(2012,12,19),
     ]
     
 

@@ -15,7 +15,7 @@ from falcon_challenge.evaluator import DATASET_HELDINOUT_MAP
 # oracle_results = '/snel/share/runs/falcon/linear_baseline_scores/sweep_results_h1_m1_m2.pkl'
 results = '/snel/share/runs/falcon/linear_baseline_scores/baseline_scores_all.pkl'
 base_path = '/snel/home/bkarpo2/bin/falcon-challenge/data'
-tracks = ['m1', 'm2', 'h1', 'h2', 'b1'] #, 
+tracks = ['b1'] #, 
 # tracks = ['h2']
 # history = [7, 30, 30]
 static_decoder = {
@@ -40,17 +40,17 @@ b1_dates = [
 
 b1_results = {
     'oracle': [
-               0.000490962457,
-               0.0004121234366,
-               0.000434505081,
-               0.0007059566652,
-               0.0005485180816,
-               0.000528492366
+               0.0006172111129,
+               0.0005180985214,
+               0.000546235208,
+               0.0008874613933,
+               0.0006895604189,
+               0.0006643953386
             ],
     'static': [
-        0.001314859509,
-        0.001844619461,
-        0.00205670849
+        0.001652644805,
+        0.002318245041,
+        0.002582313362
     ]
 }
 
@@ -184,7 +184,7 @@ for i, track in enumerate(tracks):
 
         axs[i][0].plot(held_in_days, held_in_oracle, 'x', color='b', linewidth=0.5, markersize=5)
         axs[i][0].plot(held_in_days[held_in_static_idx], held_in_static, 'o', color='k', linewidth=0.5, markersize=3, alpha=0.8)
-        axs[i][0].set_ylim(0, 0.0025)
+        axs[i][0].set_ylim(0, 0.003)
         axs[i][0].grid(alpha=0.3)
         axs[i][0].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=True, pad=-0.5)
         axs[i][0].tick_params(axis='y', which='both', left=False, right=False, labelleft=True, pad=-0.5)
@@ -201,7 +201,7 @@ for i, track in enumerate(tracks):
         axs[i][1].set_xticks(np.arange(min(held_out_days), max(held_out_days) + 1, (max(held_out_days) - min(held_out_days))//2))
         axs[i][0].set_title(f'{track.upper()} held-in')
         axs[i][1].set_title(f'{track.upper()} held-out')
-        axs[i][1].set_ylim(0, 0.0025)
+        axs[i][1].set_ylim(0, 0.003)
 
         print(f'{track.upper()} static start: {held_in_static}')
         print(f'{track.upper()} static max diff: {np.max(held_in_static - np.array(held_out_static))}')
@@ -267,7 +267,7 @@ for i, track in enumerate(tracks):
         print(f'{track.upper()} Held-In Static Summary: {np.mean(held_in_static):.2f} +/- {np.std(held_in_static):.2f}')
         print(f'{track.upper()} Held-Out Static Summary: {np.mean(held_out_static):.2f} +/- {np.std(held_out_static):.2f}')
 
-plt.savefig('/snel/home/bkarpo2/projects/falcon_figs/oracle_static_updndt.pdf', bbox_inches='tight')
+plt.savefig('/snel/home/bkarpo2/projects/falcon_figs/oracle_static_updb1.pdf', bbox_inches='tight')
 # %%
 # getting the numbers for oracle and static with the language model 
 held_in_static =  sess_cers_df.loc[(sess_cers_df.train_data == 'held_in_calib') & (sess_cers_df.test_data == 'held_in_eval')]['lm_wer_mean']
