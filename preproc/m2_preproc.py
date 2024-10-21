@@ -25,8 +25,10 @@ import matplotlib.pyplot as plt
 
 from dateutil.tz import tzlocal
 
+
 import pynwb
 from pynwb import NWBFile, TimeSeries
+from pynwb.ecephys import ElectricalSeries
 
 from decoder_demos.filtering import smooth
 from preproc.nwb_create_utils import (
@@ -35,7 +37,15 @@ from preproc.nwb_create_utils import (
     write_to_nwb
 )
 
-root = Path('./data/m2/raw')
+USE_FULLBAND = True
+if USE_FULLBAND:
+    try:
+        from brpylib.brpylib import NsxFile # Broadband # To run this, git clone git@github.com:BlackrockNeurotech/Python-Utilities.git and `pip install .` in that repo`
+    except ImportError:
+        raise ImportError("Failed to import brpylib. To run this, git clone git@github.com:BlackrockNeurotech/Python-Utilities.git and `pip install .` in that repo`")
+    root = Path('./data/m2/fullband') # preproc-ed to included full band alignment
+else:
+    root = Path('./data/m2/raw')
 out_root = Path('./data/m2/preproc_src')
 files = list(root.glob('*.mat'))
 KIN_LABELS = ['index', 'mrs']
@@ -128,12 +138,19 @@ def create_nwb_shell(path: Path, split, suffix='full', extra_note=""):
 def filt_single_trial(trial):
     # reduce raw
     assert len(trial['Channel']) == CHANNEL_EXPECTATION
+    if USE_FULLBAND and not 'GoodTrial' in trial or not isinstance(trial['GoodTrial'], int):
+        raise ValueError("Data is not preprocessed to include fullband properly.")
     return {
         'fingers': trial['FingerAnglesTIMRL'][:, TARGET_FINGERS],
         'spikes': trial['Channel'], # spike time to nearest ms
         'time': trial['ExperimentTime'], # Clock time since start of block. 0 on first step i.e. start of bin.
         'target': trial['TargetPos'][TARGET_FINGERS],
         'trial_num': trial['TrialNumber'],
+        # Fullband information
+        'has_fullband': trial['GoodTrial'] if isinstance(trial['GoodTrial'], int) else False,
+        'nev_file': str(trial['NEVFile']),
+        'cerebus_sample_start': trial['CerebusTimes'][0] if (trial['GoodTrial'] if isinstance(trial['GoodTrial'], int) else False) else None,
+        'cerebus_sample_end': trial['CerebusTimes'][-1] if (trial['GoodTrial'] if isinstance(trial['GoodTrial'], int) else False) else None,
     }
 
 def to_nwb(path: Path, ):
@@ -154,7 +171,15 @@ def to_nwb(path: Path, ):
         all_spikes = [[] for _ in range(CHANNEL_EXPECTATION)]
         cont_time = []
         start_time = 0
-        # breakpoint()
+
+        fullband_segments_data = []
+        fullband_segments_time = []
+        segment_sample_start = 0
+        segment_sample_end = 0
+        segment_time_start = 0
+        segment_time_end = 0
+        active_fullband = None
+        sample_nsx = None
         for i, trial_data in enumerate(payload):
             time = (trial_data['time'].astype(float) / 1000) # To ms
             if not start_time:
@@ -168,26 +193,37 @@ def to_nwb(path: Path, ):
             )
 
             bhvr = trial_data['fingers']
-            
-            # Per-trial Downsample to 20ms
-            # time = time[::math.ceil(FS * BIN_SIZE_MS / 1000)] # This effectively rounds up
-            # EDGE_PAD = 160 # reduce edge ringing, in ms
-            # y_padded = np.pad(bhvr, ((EDGE_PAD, EDGE_PAD), (0, 0)), mode='edge',)
-            # y_padded = smooth(y_padded, 120, 40) # Sam says Gaussian is fine
 
-            # y_resampled_padded = resample_poly(y_padded, math.ceil(FS / BIN_SIZE_MS), 1000)
-            # bhvr = y_resampled_padded[int(EDGE_PAD / BIN_SIZE_MS):int(-EDGE_PAD / BIN_SIZE_MS)]
             cont_bhvr.append(bhvr)
-            # all_vel.append(np.gradient(bhvr, axis=0))
-            # assert np.isclose(np.diff(time), BIN_SIZE_S).all(), "Expecting timestamps to be about 20ms apart"
             cont_time.append(time)
+            def commit_segment():
+                assert len(active_fullband['data']) == 1, "Expecting one contiguous chunk of NS6 recordings."
+                fullband_segments_data.append(active_fullband['data'][0][:, segment_sample_start:segment_sample_end])
+                # Note: length of time vector may not match FS due to clock drift. Empirically on order of 300ms over a session, surprisingly large...
+                fullband_segments_time.append(np.linspace(segment_time_start, segment_time_end, fullband_segments_data[-1].shape[1]))
+            if trial_data['has_fullband']:
+                cur_nsx = f"{path.parent}/{trial_data['nev_file'] + '.ns6'}"
+                if cur_nsx != sample_nsx:
+                    # Commit last segment
+                    if sample_nsx is not None:
+                        commit_segment()
+                    sample_nsx = cur_nsx
+                    nsx = NsxFile(datafile=sample_nsx)
+                    fs = nsx.basic_header['SampleResolution'] # record for later
+                    segment_sample_start = trial_data['cerebus_sample_start']
+                    segment_time_start = time[0]
+                    active_fullband = nsx.getdata()
+                    nsx.close()
+                segment_sample_end = trial_data['cerebus_sample_end'] # Keep latest sample noted
+                segment_time_end = time[-1]
 
             for j, spike in enumerate(trial_data['spikes']):
                 spike_data = spike['SpikeTimes']
                 if isinstance(spike_data, int):
                     spike_data = [spike_data]
                 all_spikes[j].extend(spike_data)
-
+        if active_fullband is not None:
+            commit_segment()
         for i, spikes in enumerate(all_spikes):
             nwbfile.add_unit(
                 id=i,
@@ -196,6 +232,20 @@ def to_nwb(path: Path, ):
                 obs_intervals=[[0., cont_time[-1][-1]]]
                 # obs_intervals=[[i[0], i[-1] + BIN_SIZE_S] for i in all_time]
             )
+
+        if fullband_segments_data:
+            electrode_region = nwbfile.create_electrode_table_region( # https://pynwb.readthedocs.io/en/stable/tutorials/domain/ecephys.html
+                region=list(range(CHANNEL_EXPECTATION)),  # reference row indices 0 to N-1
+                description="all electrodes",
+            )
+            ts = ElectricalSeries(
+                name='fullband',
+                data=np.concatenate(fullband_segments_data, axis=1).T,
+                electrodes=electrode_region,
+                timestamps=np.concatenate(fullband_segments_time), # The existence of multiple chunks precludes use of more compact start time / rate
+                conversion=1/4e6, # Per NSX v2.3 spec, unit is 1/4 uV
+            )
+            nwbfile.add_acquisition(ts)
         # trial_diffs = [all_time[i+1][0] - all_time[i][-1] for i in range(len(all_time) - 1)]
         # trial_diff_raw = [payload[i+1]['time'][0] - payload[i]['time'][-1] for i in range(len(payload) - 1)]
         # print(f"Max diff b/n consecutive trials: {max(trial_diffs):.4f}")
@@ -207,7 +257,7 @@ def to_nwb(path: Path, ):
         # diff_check = np.diff(all_time).max()
         # assert (diff_check > 0), "Expecting time to be monotonically increasing across trials."
         # print(f"Max diff b/n consecutive timebins: {diff_check}")
-        
+
         # Form continuous behavior and time
         cat_bhvr = np.concatenate(cont_bhvr, axis=0)
         cat_time = np.concatenate(cont_time, axis=0).round(3)
