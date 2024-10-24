@@ -86,7 +86,7 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
         - trial_change: boolean of shape (time,) true if the trial has changed
         - eval_mask: boolean array indicating whether to evaluate each time step, True if should
     """
-    if not dataset in [FalconTask.h1, FalconTask.h2, FalconTask.m1, FalconTask.m2]:
+    if not dataset in [FalconTask.h1, FalconTask.h2, FalconTask.m1, FalconTask.m2, FalconTask.b1]:
         raise ValueError(f"Unknown dataset {dataset}")
     with NWBHDF5IO(str(fn), 'r') as io:
         nwbfile = io.read()
@@ -100,7 +100,10 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
                 eval_mask = ~nwbfile.acquisition['Blacklist'].data[:].astype(bool)
                 timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * .02
             binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=timestamps)
-            return binned_units, kin, np.zeros(kin.shape[0]), eval_mask
+            trial_num = nwbfile.acquisition["TrialNum"].data[:]
+            trial_change = np.concatenate([[False], np.diff(trial_num) > 0])
+            # trial_change = np.zeros(kin.shape[0])
+            return binned_units, kin, trial_change, eval_mask
         elif dataset == FalconTask.h2: 
             binned_spikes = nwbfile.acquisition['binned_spikes'].data[()]
             time = nwbfile.acquisition['binned_spikes'].timestamps[()]
@@ -161,6 +164,35 @@ def load_nwb(fn: Union[str, Path], dataset: FalconTask = FalconTask.h1, bin_old=
             switch_inds = np.searchsorted(vel_timestamps, trial_info.start_time)
             trial_change[switch_inds] = True
             return binned_units, vel_data, trial_change, eval_mask
+        
+        elif dataset == FalconTask.b1: 
+            neural_array = np.array(nwbfile.get_acquisition('tx').data) # t x channels = (timesteps, 85) @30khz
+            spike_times = np.array(nwbfile.get_acquisition('tx').timestamps) # t = (timespteps) @30khz
+            audio_motifs = np.array(nwbfile.get_acquisition('vocalizations').data) # t = (timesteps) @25khz
+            audio_times = np.array(nwbfile.get_acquisition('vocalizations').timestamps) # t = (timesteps) @25khz
+            # Trial info
+            trial_info = (
+                        nwbfile.trials.to_dataframe()
+                        .reset_index()
+            )
+
+            # Spectrogram
+            spectrogram_targets = np.concatenate([x for x in trial_info['spectrogram_values'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
+            spectrogram_eval_mask = np.concatenate([x for x in trial_info['spectrogram_eval_mask'].values], axis=1).T # t x f = (timesteps, 158) @1Hz
+            # trial_change: Boolean vector containing neural sample when trial changes
+            n_trials, n_channels = len(trial_info), neural_array.shape[-1]
+            trial_length = round(trial_info['stop_time'][0]-trial_info['start_time'][0], 1) # Round to 1st decimal point
+            neural_samples_per_trial = neural_array.shape[0] // n_trials # Number of samples per trial
+            fs_neural = int(neural_samples_per_trial/trial_length)
+
+            first_trial_start = trial_info['start_time'][0] # Some files contain late trials in the recording
+            trial_change = np.zeros(neural_array.shape[0], dtype=bool)
+            trial_change_idxs = trial_info['stop_time'].apply(lambda x: int((x-first_trial_start) * fs_neural))
+            trial_change[trial_change_idxs] = 1
+            # trial_change = np.concatenate(trial_info['spectrogram_times'].values) == trial_info['spectrogram_times'].values[0][0] # t = (timesteps) @1Hz
+
+            return neural_array, spectrogram_targets, trial_change, spectrogram_eval_mask
+    
         else:
             raise NotImplementedError(f"Dataset {dataset} not implemented")
             breakpoint()

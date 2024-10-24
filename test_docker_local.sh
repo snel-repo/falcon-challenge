@@ -22,4 +22,5 @@ done
 docker run \
     -v $(pwd)/data:/dataset/evaluation_data \
     -e "EVALUATION_LOC=local" \
+    --gpus all \
     ${DOCKER_NAME}\

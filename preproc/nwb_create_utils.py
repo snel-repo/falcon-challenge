@@ -1,7 +1,7 @@
 from typing import List
 from pathlib import Path
 import numpy as np
-import pandas as pd 
+import pandas as pd
 from pynwb import NWBFile, NWBHDF5IO
 from pynwb import TimeSeries
 from pynwb.behavior import Position
@@ -24,7 +24,7 @@ def write_to_nwb(nwbfile: NWBFile, fn: Path):
     with NWBHDF5IO(str(fn), 'w') as io:
         io.write(nwbfile)
 
-def create_multichannel_timeseries(data_name, chan_names, data, timestamps=None, unit=''):
+def create_multichannel_timeseries(data_name, chan_names, data, timestamps=None, unit='', **kwargs):
     """Creates a BehavioralTimeSeries for multi-channel continuous data"""
     ts = BehavioralTimeSeries(name=data_name)
     for i, chan_name in enumerate(chan_names):
@@ -32,7 +32,8 @@ def create_multichannel_timeseries(data_name, chan_names, data, timestamps=None,
                              data=data[:,i],
                              unit=unit,
                              timestamps=timestamps,
-                             comments=f"columns=[{chan_name}]")
+                             comments=f"columns=[{chan_name}]",
+                             **kwargs)
 
     return ts
 
