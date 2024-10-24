@@ -44,6 +44,7 @@ if USE_FULLBAND:
     except ImportError:
         raise ImportError("Failed to import brpylib. To run this, git clone git@github.com:BlackrockNeurotech/Python-Utilities.git and `pip install .` in that repo`")
     root = Path('./data/m2/fullband') # preproc-ed to included full band alignment
+    blackrock_dir = Path('./data/m2/fullband')
 else:
     root = Path('./data/m2/raw')
 out_root = Path('./data/m2/preproc_src')
@@ -202,8 +203,12 @@ def to_nwb(path: Path, ):
                 # Note: length of time vector may not match FS due to clock drift. Empirically on order of 300ms over a session, surprisingly large...
                 fullband_segments_time.append(np.linspace(segment_time_start, segment_time_end, fullband_segments_data[-1].shape[1]))
             if trial_data['has_fullband']:
-                cur_nsx = f"{path.parent}/{trial_data['nev_file'] + '.ns6'}"
+                if blackrock_dir:
+                    cur_nsx = f"{blackrock_dir}/{trial_data['nev_file'] + '.ns6'}"
+                else:
+                    cur_nsx = f"{path.parent}/{trial_data['nev_file'] + '.ns6'}"
                 if cur_nsx != sample_nsx:
+                    print(cur_nsx)
                     # Commit last segment
                     if sample_nsx is not None:
                         commit_segment()
