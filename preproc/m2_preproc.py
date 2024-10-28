@@ -198,8 +198,9 @@ def to_nwb(path: Path, ):
             cont_bhvr.append(bhvr)
             cont_time.append(time)
             def commit_segment():
-                assert len(active_fullband['data']) == 1, "Expecting one contiguous chunk of NS6 recordings."
-                fullband_segments_data.append(active_fullband['data'][0][:, segment_sample_start:segment_sample_end])
+                fullband_data = np.concatenate(active_fullband['data'], 1) # Assuming drops are minor (though there is no way from nsx to tell)
+                # assert len(active_fullband['data']) == 1, "Expecting one contiguous chunk of NS6 recordings."
+                fullband_segments_data.append(fullband_data[:, segment_sample_start:segment_sample_end])
                 # Note: length of time vector may not match FS due to clock drift. Empirically on order of 300ms over a session, surprisingly large...
                 fullband_segments_time.append(np.linspace(segment_time_start, segment_time_end, fullband_segments_data[-1].shape[1]))
             if trial_data['has_fullband']:
@@ -220,7 +221,8 @@ def to_nwb(path: Path, ):
                     active_fullband = nsx.getdata()
                     nsx.close()
                 segment_sample_end = trial_data['cerebus_sample_end'] # Keep latest sample noted
-                segment_time_end = time[-1]
+                segment_time_end = time[-1] # TODO add segment checks to make sure we didn't cross else commit
+                # breakpoint()
 
             for j, spike in enumerate(trial_data['spikes']):
                 spike_data = spike['SpikeTimes']
