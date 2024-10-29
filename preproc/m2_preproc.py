@@ -24,7 +24,7 @@ from scipy.signal import resample_poly
 import matplotlib.pyplot as plt
 
 from dateutil.tz import tzlocal
-
+import torch
 
 import pynwb
 from pynwb import NWBFile, TimeSeries
@@ -198,11 +198,35 @@ def to_nwb(path: Path, ):
             cont_bhvr.append(bhvr)
             cont_time.append(time)
             def commit_segment():
-                fullband_data = np.concatenate(active_fullband['data'], 1) # Assuming drops are minor (though there is no way from nsx to tell)
-                # assert len(active_fullband['data']) == 1, "Expecting one contiguous chunk of NS6 recordings."
-                fullband_segments_data.append(fullband_data[:, segment_sample_start:segment_sample_end])
-                # Note: length of time vector may not match FS due to clock drift. Empirically on order of 300ms over a session, surprisingly large...
-                fullband_segments_time.append(np.linspace(segment_time_start, segment_time_end, fullband_segments_data[-1].shape[1]))
+                # In case there are multiple chunks of ns6 data, concatenate with NaNs in intermediate.
+                # https://support.blackrockneurotech.com/portal/en/kb/articles/concatenating-segmented-files
+                # breakpoint()
+                fullband_data = np.full(
+                    (len(active_fullband['elec_ids']),
+                     active_fullband['data_headers'][-1]['Timestamp'] + active_fullband['data_headers'][-1]['NumDataPoints']), np.nan, dtype=np.float32)
+                for i, chunk in enumerate(active_fullband['data_headers']):
+                    fullband_data[:, chunk['Timestamp']:chunk['Timestamp'] + chunk['NumDataPoints']] = active_fullband['data'][i]
+                fullband_segment_data = fullband_data[:, segment_sample_start:segment_sample_end]
+                fullband_segment_time = np.linspace(segment_time_start, segment_time_end, fullband_segment_data.shape[1])
+                # Now that we have the time alignment, go back and remove the nan intervals, so that we do not claim data where there is none, and we can store data in int16
+                non_nan_segments = []
+                non_nan_segment_times = []
+                segment_start = 0
+                segment_end = 0
+                for i in range(fullband_segment_data.shape[1]):
+                    if not np.isnan(fullband_segment_data[:, i]).all():
+                        segment_end = i
+                    else:
+                        if segment_end > segment_start:
+                            non_nan_segments.append(fullband_segment_data[:, segment_start:segment_end])
+                            non_nan_segment_times.append(fullband_segment_time[segment_start:segment_end])
+                        segment_start = i + 1
+                if segment_end > segment_start:
+                    non_nan_segments.append(fullband_segment_data[:, segment_start:segment_end].astype(np.int16))
+                    non_nan_segment_times.append(fullband_segment_time[segment_start:segment_end])
+                    # Note: length of time vector may not match FS due to clock drift. Empirically on order of 1s over 5-10 minutes, surprisingly large...
+                fullband_segments_data.extend(non_nan_segments)
+                fullband_segments_time.extend(non_nan_segment_times)
             if trial_data['has_fullband']:
                 if blackrock_dir:
                     cur_nsx = f"{blackrock_dir}/{trial_data['nev_file'] + '.ns6'}"
