@@ -57,7 +57,7 @@ Each of the lowest level dirs holds the data files (in Neurodata Without Borders
 
 ### Code
 This codebase contains starter code for implementing your own method for the FALCON challenge.
-- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`.
+- The `falcon_challenge` folder contains the logic for the evaluator. Submitted solutions must conform to the interface specified in `falcon_challenge.interface`. During `reset`, `predict`, and `observe` methods, your approach has access to a new timestep of neural observations. To access and make use of trial timing signals, implement the `on_done` method. Only within-trial data will be considered for evaluation, but you are welcome to use data from the entire available time period.
 - In `data_demos`, we provide notebooks that survey each dataset released as part of this challenge.
 - In `decoder_demos`, we provide sample decoders and baselines that are formatted to be ready for submission to the challenge. To use them, see the comments in the header of each file ending in `_sample.py`. Your solutions should look similar once implemented! (Namely, you should have a `_decoder.py` file or class which conforms to `falcon_challenge.inferface` as well as a `_sample.py` file that is the entry point for running your decoder.)
 
