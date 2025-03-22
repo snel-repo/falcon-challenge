@@ -34,10 +34,10 @@ DANDI_FOLDER_MAP = {
 DATASET_HELDINOUT_MAP = {
     'h1': {
         'held_in': [
-            'S0_set_1', 
-            'S0_set_2', 
-            'S1_set_1', 
-            'S1_set_2', 
+            'S0_set_1',
+            'S0_set_2',
+            'S1_set_1',
+            'S1_set_2',
             'S1_set_3',
             'S2_set_1',
             'S2_set_2',
@@ -49,18 +49,18 @@ DATASET_HELDINOUT_MAP = {
             'S5_set_2',
         ],
         'held_out': [
-            'S6_set_1', 
-            'S6_set_2', 
-            'S7_set_1', 
-            'S7_set_2', 
-            'S8_set_1', 
-            'S8_set_2', 
-            'S9_set_1', 
-            'S9_set_2', 
-            'S10_set_1', 
-            'S10_set_2', 
-            'S11_set_1', 
-            'S11_set_2', 
+            'S6_set_1',
+            'S6_set_2',
+            'S7_set_1',
+            'S7_set_2',
+            'S8_set_1',
+            'S8_set_2',
+            'S9_set_1',
+            'S9_set_2',
+            'S10_set_1',
+            'S10_set_2',
+            'S11_set_1',
+            'S11_set_2',
             'S12_set_1',
             'S12_set_2',
         ],
@@ -71,33 +71,33 @@ DATASET_HELDINOUT_MAP = {
     },
     'h2': {
         'held_in': [
-            '2022.05.18', 
-            '2022.05.23', 
-            '2022.05.25', 
-            '2022.06.01', 
-            '2022.06.03', 
-            '2022.06.06', 
-            '2022.06.08', 
-            '2022.06.13', 
-            '2022.06.15', 
-            '2022.06.22', 
-            '2022.09.01', 
-            '2022.09.29', 
+            '2022.05.18',
+            '2022.05.23',
+            '2022.05.25',
+            '2022.06.01',
+            '2022.06.03',
+            '2022.06.06',
+            '2022.06.08',
+            '2022.06.13',
+            '2022.06.15',
+            '2022.06.22',
+            '2022.09.01',
+            '2022.09.29',
             '2022.10.06',
-            '2022.10.18', 
-            '2022.10.25', 
-            '2022.10.27', 
-            '2022.11.01', 
-            '2022.11.03', 
+            '2022.10.18',
+            '2022.10.25',
+            '2022.10.27',
+            '2022.11.01',
+            '2022.11.03',
             '2022.12.08',
-            '2022.12.15', 
+            '2022.12.15',
             '2023.02.28',
         ],
         'held_out': [
-            '2023.04.17', 
-            '2023.05.31', 
-            '2023.06.28', 
-            '2023.08.16', 
+            '2023.04.17',
+            '2023.05.31',
+            '2023.06.28',
+            '2023.08.16',
             '2023.10.09'
         ]
     },
@@ -111,6 +111,13 @@ DATASET_HELDINOUT_MAP = {
     },
 }
 
+def h2_relabel_hotfix(dandi_tag):
+    if dandi_tag.startswith('ses'):
+        evaluator_tag = dandi_tag.split('_')[1]
+        evaluator_tag = evaluator_tag[:4] + '.' + evaluator_tag[4:6] + '.' + evaluator_tag[6:]
+        return evaluator_tag
+    return dandi_tag
+
 # Used to label test server data file names to look for
 # These act as a _reduction_ set of the full list of datafiles considered, to specific sessions. Relevant for H1/M2.
 def reduce_key(key):
@@ -119,7 +126,7 @@ def reduce_key(key):
     if key.startswith('L_'):
         return key
     if key.startswith('S'):
-        return key.split('_')[0]    
+        return key.split('_')[0]
     return key
 
 HELD_IN_KEYS = {
@@ -143,7 +150,7 @@ RECOMMENDED_BATCH_SIZES = {
     FalconTask.m1: 4,
     FalconTask.h2: 1,
     FalconTask.m2: 7, # max
-    FalconTask.b1: 1, 
+    FalconTask.b1: 1,
 }
 
 BIN_SIZES = {
@@ -239,10 +246,11 @@ def evaluate(
             dataset_tgt = split_annotations[dataset]['data']
             dataset_mask = split_annotations[dataset]['mask']
             dataset_pred = dataset_pred[:dataset_mask.shape[0]] # In case excess timesteps are predicted due to batching, reduce
-            
+            if 'h2' in datasplit:
+                dataset = h2_relabel_hotfix(dataset)
             if dataset in DATASET_HELDINOUT_MAP[datasplit]['held_in']:
                 if 'h2' not in datasplit and 'b1' not in datasplit:
-                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
+                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_in'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_in'].append(dataset_pred)
@@ -250,7 +258,7 @@ def evaluate(
                 mask_dict['held_in'].append(dataset_mask)
             elif dataset in DATASET_HELDINOUT_MAP[datasplit]['held_out']:
                 if not 'h2' in datasplit and 'b1' not in datasplit:
-                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID 
+                    # For splits with multiple datasets per session (H1 and M2), we need to map predictions, targets, and masks for each dataset to the session ID
                     session_id = reduce_key(dataset)
                     dset_len_dict['held_out'][session_id].append(dataset_mask.shape[0])
                 pred_dict['held_out'].append(dataset_pred)
@@ -258,7 +266,7 @@ def evaluate(
                 mask_dict['held_out'].append(dataset_mask)
             else:
                 raise ValueError(f"Dataset {dataset} submitted but not found in held-in or held-out list of split {datasplit}.")
-        
+
         for in_or_out in pred_dict:
 
             if len(pred_dict[in_or_out]) < len(DATASET_HELDINOUT_MAP[datasplit][in_or_out]):
@@ -266,7 +274,7 @@ def evaluate(
 
             if 'b1' in datasplit:
                 # B1 computes metrics across sessions independently. Don't concatenate.
-                pred, tgt, mask = pred_dict[in_or_out], tgt_dict[in_or_out], mask_dict[in_or_out]            
+                pred, tgt, mask = pred_dict[in_or_out], tgt_dict[in_or_out], mask_dict[in_or_out]
             elif 'h2' in datasplit:
                 pred = pred_dict[in_or_out]
                 tgt = tgt_dict[in_or_out]
@@ -276,7 +284,7 @@ def evaluate(
                 tgt = np.concatenate(tgt_dict[in_or_out])
                 dset_lens = dset_len_dict[in_or_out]
                 mask = np.concatenate(mask_dict[in_or_out])
-            
+
             try:
                 if 'b1' in datasplit:
                     metrics = FalconEvaluator.compute_metrics_spectrogram_distance(pred, tgt, mask)
@@ -301,11 +309,11 @@ class EvalDataset(Dataset):
         datafiles: str names, for cuing models which dataset is being evaluated
         trial_mode: serve trialized data (padded) or just parallelize among datafiles
     """
-    def __init__(self, 
-                 data: List[np.ndarray], 
-                 trial_change: List[np.ndarray], 
-                 targets: List[np.ndarray], 
-                 eval_mask: List[np.ndarray], 
+    def __init__(self,
+                 data: List[np.ndarray],
+                 trial_change: List[np.ndarray],
+                 targets: List[np.ndarray],
+                 eval_mask: List[np.ndarray],
                  datafiles: List[str],
                  trial_mode=False):
         self.data = data
@@ -317,16 +325,16 @@ class EvalDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, idx):
         return (
-            self.data[idx], 
-            self.targets[idx], 
-            self.trial_change[idx], 
-            self.eval_mask[idx], 
+            self.data[idx],
+            self.targets[idx],
+            self.trial_change[idx],
+            self.eval_mask[idx],
             idx # needed to index for datafiles which are not natively loaded for pytorch dataloader
         )
-    
+
     def get_datafile(self, idx):
         return self.datafiles[idx]
 
@@ -364,7 +372,7 @@ class FalconEvaluator:
         self.num_workers = dataloader_workers
         self.dataset: FalconTask = getattr(FalconTask, split)
         self.cfg = FalconConfig(self.dataset)
-        
+
         self.bin_size = BIN_SIZES[self.dataset]
 
     @staticmethod
@@ -401,12 +409,12 @@ class FalconEvaluator:
         if len(handles) == 0:
             raise FileNotFoundError(f"No files found in {self.dataset.name} for phase {phase}. Note test phase data is only available on EvalAI remote.")
         return handles
-    
+
     def predict_files(self, decoder: BCIDecoder, eval_files: List):
         # returns triple dict, keyed by datafile hash and contains preds, targets, and eval_mask respective. also returns lists compute_time and neural_time
         # TODO this does not return uniquely identifiable data if eval_files is partial, e.g. if we only has set 2 of a day with 2 sets, we'll happily just provide partial predictions.
         # Pre-loop before starting batch loads
-        
+
         file_neural_data = []
         file_trial_change = []
         file_targets = []
@@ -417,16 +425,16 @@ class FalconEvaluator:
         for datafile in datafiles:
             if not datafile.exists():
                 raise FileNotFoundError(f"File {datafile} not found.")
-        
+
             neural_data, decoding_targets, trial_change, eval_mask = load_nwb(datafile, dataset=self.dataset)
-            
+
             file_neural_data.append(neural_data)
             file_trial_change.append(trial_change)
             file_targets.append(decoding_targets)
             file_eval_mask.append(eval_mask)
 
             all_neural_times.append(neural_data.shape[0] * self.bin_size)
-    
+
         dataset = EvalDataset(
             data=file_neural_data,
             trial_change=file_trial_change,
@@ -434,12 +442,12 @@ class FalconEvaluator:
             eval_mask=file_eval_mask,
             datafiles=datafiles,
         )
-        
+
         all_preds = defaultdict(list)
         all_targets = defaultdict(list)
         all_eval_mask = defaultdict(list)
         all_compute_times = []
-        
+
         simple_collater_partial = partial(simple_collater, task=self.dataset)
         dataloader = DataLoader(
             dataset, shuffle=False,
@@ -450,43 +458,43 @@ class FalconEvaluator:
         )
         # from time import time
         # for neural_data, decoding_targets, trial_change, eval_mask, datafile in tqdm(dataset):
-        
+
         for neural_data, decoding_targets, trial_change, eval_mask, datafile_idx in tqdm(dataloader):
             neural_data: np.ndarray
             decoding_targets: np.ndarray
             trial_change: np.ndarray
             eval_mask: np.ndarray
             datafile_idx: np.ndarray
-            
+
             decoder.reset(dataset_tags=[dataset.datafiles[idx] for idx in datafile_idx])
-            
+
             trial_preds = []
             # loop_times = []
             # breakpoint()
 
             # B1 predicts using a whole-trial worth of neural data and neural_observations and eval_mask have different sampling rates.
             if self.dataset == FalconTask.b1:
-                
+
                 trial_neural_observations = []
                 # neural_data and eval_mask have different sampling rates in B1
                 for neural_observations, trial_delta_obs in zip(neural_data, trial_change):
-                    
+
                     if not trial_delta_obs[0]:
                         trial_neural_observations.append(neural_observations) # Samples x 1 x channels
-                    else: 
+                    else:
                         trial_neural_observations.append(neural_observations)
                         trial_neural_observations = np.array(trial_neural_observations).transpose(1, 2, 0)
-                        
+
                         start_time = time()
                         # decoder.predict expects a whole-trial worth of neural data and returns a wholde-trial worth of reconstructed audio.
                         trial_preds.append(decoder.predict(np.array(trial_neural_observations)))
                         end_time = time()
                         all_compute_times.append(end_time - start_time)
-                        
+
                         trial_neural_observations = []
             else:
                 for neural_observations, trial_delta_obs, step_mask in zip(neural_data, trial_change, eval_mask):
-                    
+
                     neural_observations: np.ndarray
                     trial_delta_obs: np.ndarray
                     step_mask: np.ndarray
@@ -508,7 +516,7 @@ class FalconEvaluator:
                         all_compute_times.append(end_time - start_time)
                         assert step_prediction.shape[1] == self.cfg.out_dim, f"Prediction shape mismatch: {step_prediction.shape[1]} vs {self.cfg.out_dim}."
                         trial_preds.append(step_prediction)
-                    
+
                     # if step_mask.any():
                     #     trial_preds.append(decoder.predict(neural_observations))
                     # else:
@@ -517,7 +525,7 @@ class FalconEvaluator:
                 # loop_times.append(time() - loop_start)
             # loop_times = np.array(loop_times)
             # print(f"Loop {len(loop_times)}: {loop_times.mean()} +/- {loop_times.std()}")
-            
+
             if self.dataset == FalconTask.b1:
                 datafile_hash = self.cfg.hash_dataset(dataset.get_datafile(datafile_idx[0]))
                 trial_preds = np.concatenate(trial_preds, axis=1).transpose()[:, np.newaxis, :]
@@ -549,14 +557,14 @@ class FalconEvaluator:
         return metrics
 
     def evaluate(
-            self, 
-            decoder: BCIDecoder, 
-            phase: str, 
-            held_out_only: bool = False, 
+            self,
+            decoder: BCIDecoder,
+            phase: str,
+            held_out_only: bool = False,
             specific_keys: List = []
         ):
         r"""
-            Note: Locally, this can produce metrics, but locally and remotely it should also write a submission file 
+            Note: Locally, this can produce metrics, but locally and remotely it should also write a submission file
             that the actual evaluator on remote uses. The evaluation is done separately on remote.
 
             held_out_only: Only run predictions on held out
@@ -569,10 +577,10 @@ class FalconEvaluator:
         if decoder.batch_size > RECOMMENDED_BATCH_SIZES[self.dataset]:
             logger.warning(f"Decoder batch size {decoder.batch_size} is larger than limit {RECOMMENDED_BATCH_SIZES[self.dataset]} for {self.dataset}, clipping down.")
             decoder.set_batch_size(RECOMMENDED_BATCH_SIZES[self.dataset])
-        
+
         np.random.seed(0)
         # ! TODO ideally seed other libraries as well...? Is that our responsibility?
-        
+
         eval_files = self.get_eval_files(phase=phase)
         metrics = {}
         prediction_env_var = "PREDICTION_PATH" if self.eval_remote else "PREDICTION_PATH_LOCAL"
@@ -582,7 +590,7 @@ class FalconEvaluator:
         gt_path = os.environ.get("GT_PATH", './local_gt.pkl')
         if not gt_path:
             raise ValueError("GT_PATH not set in remote env which expects it. Cannot forward to separate evaluate runscript.")
-            
+
         if phase == 'test':
             eval_files_held_in = [f for f in eval_files if any(k in f.name for k in HELD_IN_KEYS[self.dataset])]
             eval_files_held_out = [f for f in eval_files if any(k in f.name for k in HELD_OUT_KEYS[self.dataset])]
@@ -599,7 +607,7 @@ class FalconEvaluator:
                 all_targets.update(all_targets_held_in)
                 all_eval_mask.update(all_eval_mask_held_in)
 
-        else:            
+        else:
             all_preds, all_targets, all_eval_mask, all_compute_times, all_neural_times = self.predict_files(decoder, eval_files)
         # Indirect remote setup to satisfy EvalAI interface. Save metrics / comparison to file.
         if USE_PKLS:
@@ -615,7 +623,7 @@ class FalconEvaluator:
             truth_payload = {self.dataset.name: inner_tgt_spoof}
         else:
             pass
-            
+
         if USE_PKLS:
             Path(prediction_path).parent.mkdir(parents=True, exist_ok=True)
             with open(prediction_path, 'wb') as f:
@@ -628,7 +636,7 @@ class FalconEvaluator:
                 print("Sleeping before exiting for remote eval - feel free to interrupt for local eval.", flush=True)
                 # Gunjan, EvalAI contact says that current static code eval has an issue where the submission dump is only polled by the EvalAI worker comparison script every 5 minutes
                 # Sleep so it's definitely available
-                sleep(300) 
+                sleep(300)
             else:
                 return evaluate(
                     test_annotation_file=gt_path,
@@ -640,38 +648,38 @@ class FalconEvaluator:
             for k, v in metrics.items():
                 logger.info("{}: {}".format(k, v))
 
-    
+
     @staticmethod
     def compute_metrics_spectrogram_distance(preds, targets, eval_mask):
         '''
         When ran locally: preds, targets, eval_mask have shapes [sessions x samples x 1 x frequencies]
-        
-        When ran in evalAI: preds has shape [sessions x samples x 1 x frequencies]                            
+
+        When ran in evalAI: preds has shape [sessions x samples x 1 x frequencies]
                             targets has shape [sessions x flattened]
                             eval_mask has shape [sessions x samples x frequencies]
-        
+
         * This mismatch has its origin in the limitation of evalAI to store large arrays due to space restrictions,
             so the targets had to be masked and flattened in advance. We deal with the mismatch in the following logic.
         '''
-        
+
         def normalize_signal(x):
             """"
             Normalizes signal x between 0 and 1.
             """
-            return (x-np.min(x))/(np.max(x)-np.min(x))    
-          
+            return (x-np.min(x))/(np.max(x)-np.min(x))
+
         # Spectrogram-trials lengths (across sessions)
         trial_len_before_mask, trial_len_after_mask, frequencies = 880, 700, 158
 
         error_per_session = []
         for sess_idx in range(len(preds)):
-            
+
             prd, tgt, msk = np.array(preds[sess_idx]), np.array(targets[sess_idx]), np.array(eval_mask[sess_idx])
             # Match array dimensionalities when ran locally or in evalAI: [samples x frequencies]
             if len(prd.shape) > 2: prd = np.squeeze(prd, axis=1)
             if len(tgt.shape) > 2: tgt = np.squeeze(tgt, axis=1)
             if len(msk.shape) > 2: msk = np.squeeze(msk, axis=1)
-                
+
             if prd.shape != msk.shape:
                 raise ValueError(f"Predictions and masks have different lengths: {prd.shape} vs {msk.shape}.")
 
@@ -686,19 +694,19 @@ class FalconEvaluator:
             # Reshape to normalize and compute MSE error at the trial level [trials x samples_per_trial x frequencies]
             tgt = tgt.reshape(-1, trial_len_after_mask, frequencies)
             prd = prd.reshape(-1, trial_len_after_mask, frequencies)
-            
+
             error_per_trial = [
                 mean_squared_error(normalize_signal(tgt[t]), normalize_signal(prd[t])) for t in range(len(prd))
             ]
             error_per_session.append(np.mean(error_per_trial))
-        
+
         base_metrics = {
             "MSE Mean": np.mean(error_per_session),
             "MSE Std.": np.std(error_per_session)
         }
-        
+
         return base_metrics
-    
+
     @staticmethod
     def compute_metrics_regression(preds, targets, eval_mask, dset_lens, verbose=False): # Verbose drop-in
         dsets = sorted(dset_lens.keys())
@@ -709,7 +717,7 @@ class FalconEvaluator:
         preds = preds[eval_mask]
         if not targets.shape[0] == preds.shape[0]:
             raise ValueError(f"Targets and predictions have different lengths: {targets.shape[0]} vs {preds.shape[0]}.")
-        r2_scores = [r2_score(targets[dset_bounds[i]:dset_bounds[i+1]], preds[dset_bounds[i]:dset_bounds[i+1]], 
+        r2_scores = [r2_score(targets[dset_bounds[i]:dset_bounds[i+1]], preds[dset_bounds[i]:dset_bounds[i+1]],
                               multioutput='variance_weighted') for i in range(len(dset_bounds) - 1)]
         base_metrics = {
             "R2 Mean": np.mean(r2_scores),
@@ -729,13 +737,13 @@ class FalconEvaluator:
     def compute_metrics_edit_distance(preds, targets, eval_mask):
         if len(preds) != len(targets):
             raise ValueError(f"Targets and predictions have different lengths: {len(targets)} vs {len(preds)}.")
-        
+
         def _to_words(s):
             s = s.replace(">", " ")  # Remove space token when computing WER
             s = re.sub(r"([~,!?])", r" \1", s)
             s = s.split(" ")
             return s
-        
+
         cers = []
         wers = []
         for sess_idx, (sess_preds, sess_tgts) in enumerate(zip(preds, targets)):
