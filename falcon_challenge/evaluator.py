@@ -112,8 +112,8 @@ DATASET_HELDINOUT_MAP = {
 }
 
 def h2_relabel_hotfix(dandi_tag):
-    if dandi_tag.startswith('ses'):
-        evaluator_tag = dandi_tag.split('_')[1]
+    if dandi_tag.startswith('ses'): # e.g. ses-20220518
+        evaluator_tag = dandi_tag.split('-')[1]
         evaluator_tag = evaluator_tag[:4] + '.' + evaluator_tag[4:6] + '.' + evaluator_tag[6:]
         return evaluator_tag
     return dandi_tag
